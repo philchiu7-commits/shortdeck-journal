@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Short Deck Journal</title>
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ShortDeck">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+
+<!-- ===== Opponents list ===== -->
+<section id="view-opponents">
+  <header class="vhead">
+    <h1>Opponents</h1>
+    <button id="opp-edit" class="iconbtn textbtn" title="Reorder &amp; group">Edit</button>
+    <button id="opp-add" class="iconbtn" title="New opponent">＋</button>
+  </header>
+  <input id="opp-search" type="search" placeholder="Search name, look…" autocomplete="off">
+  <div class="showexp-row">
+  </div>
+  <div id="opp-new" class="panel hidden">
+    <input id="opp-new-name" placeholder="Name / nickname" autocomplete="off">
+    <input id="opp-new-group" placeholder="Group (e.g. Friday game)" list="groups" autocomplete="off">
+    <button id="opp-new-save" class="primary">Add opponent</button>
+  </div>
+  <div id="opp-list" class="list"></div>
+</section>
+
+<!-- ===== Opponent detail ===== -->
+<section id="view-opp" class="hidden">
+  <header class="vhead sticky">
+    <button class="backbtn" data-back>‹</button>
+    <h1 id="od-name"></h1>
+    <button id="od-edit" class="iconbtn" title="Edit">✎</button>
+  </header>
+  <div id="od-meta" class="muted sub2"></div>
+  <div id="od-ptype" class="ptypebar"></div>
+  <div class="cardpanel">
+    <div class="cardpanel-head"><span class="ptitle">Front-page card</span>
+      <button id="od-card-edit" class="linkbtn">Edit</button></div>
+    <div id="od-card-preview" class="chiprow cardchips"></div>
+  </div>
+  <div id="od-editform" class="panel hidden">
+    <input id="od-e-name" placeholder="Name" autocomplete="off">
+    <input id="od-e-group" placeholder="Group" list="groups" autocomplete="off">
+    <input id="od-e-physical" placeholder="Looks like… (for re-identifying)" autocomplete="off">
+    <div class="row">
+      <button id="od-e-save" class="primary">Save</button>
+      <button id="od-e-merge" class="secondary">Merge…</button>
+      <button id="od-e-del" class="danger">Delete</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">Reads</div>
+    <div id="od-readsugg" class="list"></div>
+    <div id="od-tags"></div>
+  </div>
+  <div class="panel">
+    <div class="cardpanel-head"><span class="ptitle">Exploits</span>
+      <button id="od-exploit-tmpl" class="linkbtn">＋ Template</button></div>
+    <div class="noterow">
+      <textarea id="od-exploit" rows="1" placeholder="How to beat this player…"></textarea>
+      <button id="od-exploit-add" class="secondary">Add</button>
+    </div>
+    <div id="od-exsugg" class="list"></div>
+    <div id="od-exploits" class="list"></div>
+  </div>
+  <div class="panel">
+    <div class="cardpanel-head"><span class="ptitle">Notes</span>
+      <button id="od-notes-convert" class="linkbtn">Convert all → hands</button></div>
+    <div class="noterow">
+      <textarea id="od-note" rows="1" placeholder="Add a note…"></textarea>
+      <button id="od-note-add" class="secondary">Add</button>
+    </div>
+    <div id="od-notes" class="list"></div>
+  </div>
+  <div class="panel">
+    <div class="cardpanel-head"><span class="ptitle">Ranges</span><span class="muted sub2" id="od-rangehint"></span></div>
+    <div id="od-rangegrid"></div>
+    <div id="od-rangelegend" class="rglegend"></div>
+  </div>
+  <div class="panel">
+    <div class="cardpanel-head"><span class="ptitle">Hands</span>
+      <button id="od-hf-clear" class="linkbtn hidden">Clear filters</button></div>
+    <div id="od-handfilters" class="handfilters"></div>
+    <div id="od-hands" class="list"></div>
+  </div>
+</section>
+
+<!-- ===== Hand entry ===== -->
+<section id="view-hand" class="hidden">
+  <div class="handline">
+    <div id="he-line" class="linetext muted">New hand — tap a villain</div>
+    <button id="he-undo" class="undobtn">Undo</button>
+  </div>
+  <div id="he-notehint" class="notehint hidden">
+    <span id="he-notehint-text"></span>
+    <button id="he-notehint-clear" class="chip mini" title="Clear the note">✕</button>
+  </div>
+
+  <div class="hgroup"><div id="he-mode" class="seg"></div></div>
+
+  <!-- compact context bar: ante · eff stack -->
+  <div class="ctxbar">
+    <span class="ctxfield"><label>Ante</label><input id="he-ante" type="number" placeholder="–" inputmode="numeric" title="Every seat antes; the button posts double"></span>
+    <span class="ctxfield"><label>Eff</label><input id="he-effstack" type="number" placeholder="–" inputmode="numeric"></span>
+    <button id="he-squidhave-btn" class="ctxpick hidden" data-squidpick="have">🦑<i>–</i></button>
+    <button id="he-squidleft-btn" class="ctxpick hidden" data-squidpick="left">Left<i>–</i></button>
+  </div>
+
+  <div id="he-chipsonly">
+    <div class="hgroup">
+      <div class="glabelrow"><span class="glabel">Villains</span>
+        <button id="he-lineup-btn" class="linkbtn">Lineup</button></div>
+      <input id="he-vsearch" class="vsearch" type="search" placeholder="🔍 Search villains…" autocomplete="off">
+      <div id="he-villains" class="chiprow scroll"></div>
+    </div>
+
+    <div class="hgroup">
+      <div class="posrow"><span class="poslabel">Hero</span><div id="he-heropos" class="chiprow tight"></div></div>
+      <div id="he-vposrows"></div>
+    </div>
+  </div>
+
+  <div id="he-table" class="hidden">
+    <div id="he-felt"></div>
+    <div id="he-seatassign"></div>
+    <div id="he-tablesetup"></div>
+  </div>
+
+  <div class="hgroup actionpad">
+    <button id="he-openact" class="actopen">＋ Add action</button>
+    <div id="he-actlist" class="actlist hidden"></div>
+  </div>
+
+  <div class="hgroup">
+    <div class="glabel">Board &amp; cards</div>
+    <div id="he-cards" class="cardsrow"></div>
+  </div>
+
+  <div class="savebar">
+    <button id="he-save" class="primary">Save</button>
+  </div>
+</section>
+
+<!-- ===== Table (tonight's lineup) ===== -->
+<section id="view-table" class="hidden">
+  <header class="vhead">
+    <h1>Table</h1>
+    <button id="tbl-edit" class="iconbtn textbtn" title="Edit lineup">Edit</button>
+  </header>
+  <div id="tbl-sub" class="muted sub2"></div>
+  <div id="tbl-list" class="list"></div>
+</section>
+
+<!-- ===== Hand detail ===== -->
+<section id="view-handview" class="hidden">
+  <header class="vhead">
+    <button class="backbtn" data-back>‹</button>
+    <h1>Hand</h1>
+    <button id="hv-edit" class="iconbtn" title="Edit">✎</button>
+  </header>
+  <div id="hv-text" class="handview"></div>
+  <button id="hv-delete" class="danger">Delete hand</button>
+</section>
+
+<!-- ===== Data / backup ===== -->
+<section id="view-data" class="hidden">
+  <header class="vhead"><h1>Data</h1></header>
+  <div class="panel">
+    <div class="ptitle">Storage</div>
+    <div id="data-storage" class="muted sub2"></div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">Auto-backup</div>
+    <div id="data-autobackup" class="muted sub2"></div>
+    <div class="row">
+      <button id="data-autosave" class="secondary">Save auto-backup to file</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ptitle">Manual backup</div>
+    <div id="data-backupnag" class="muted sub2"></div>
+    <div class="row">
+      <button id="data-export" class="secondary">Export JSON</button>
+      <button id="data-import" class="secondary">Import JSON</button>
+    </div>
+    <div class="row">
+      <button id="data-copy" class="secondary">Copy JSON to clipboard</button>
+      <button id="data-showjson" class="secondary">Show JSON</button>
+    </div>
+    <div class="row">
+      <button id="data-paste-import" class="secondary">Paste JSON to import</button>
+    </div>
+    <input id="data-importfile" type="file" accept=".json,application/json" class="hidden">
+  </div>
+  <div id="data-stats" class="panel muted sub2"></div>
+</section>
+
+</main>
+
+<datalist id="groups"></datalist>
+
+<nav id="tabbar">
+  <button data-tab="opponents"><span class="ticon">☺</span>Opponents</button>
+  <button data-tab="hand" class="bigtab"><span class="ticon">＋</span>Hand</button>
+  <button data-tab="table"><span class="ticon">◎</span>Table</button>
+  <button data-tab="data"><span class="ticon">⇅</span>Data</button>
+</nav>
+
+<div id="sheet-backdrop" class="hidden"></div>
+<div id="sheet" class="hidden"></div>
+<div id="toast" class="hidden"></div>
+
+<script src="vocab.js"></script>
+<script src="pinyin.js"></script>
+<script src="db.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

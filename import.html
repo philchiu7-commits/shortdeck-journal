@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Short Deck Journal — Hand Import Bookmarklet</title>
+<style>
+  body { font: 15px/1.55 -apple-system, system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #0d0f14; color: #eef0f4; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  h2 { font-size: 15px; margin: 24px 0 6px; color: #79c0ff; }
+  p, li { color: #c9ced8; }
+  code { background: #1a1d23; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  a.bkmk { display: inline-block; margin: 12px 0; padding: 14px 22px; background: linear-gradient(180deg, #5b9cff, #6f7bff); color: #0a0d12; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; box-shadow: 0 3px 12px rgba(91,156,255,.28); }
+  pre { background: #14171e; border: 1px solid #2b3140; border-radius: 8px; padding: 10px; font-size: 11px; overflow-x: auto; }
+  .note { background: #1c2333; border-left: 3px solid #5b9cff; padding: 10px 14px; margin: 12px 0; border-radius: 6px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Import Hand → Short Deck Journal</h1>
+<p>Grab a hand off any hnlbds.com share URL and drop it straight into your journal.</p>
+<p style="font-size:13px; color: #8a91a2;">Bulk-importing many hands at once? Use the <a href="convert.html" style="color:#79c0ff;">converter/queue page</a> instead.</p>
+
+<a class="bkmk" id="bkmk" href="#">📎 Import to Journal — drag me to bookmarks</a>
+
+<div class="note">
+  <b>Desktop</b>: drag the button above into your bookmarks bar.<br>
+  <b>iPhone Safari</b>: tap the button, add the (broken) page to bookmarks, then edit the bookmark and paste the code below into the URL field.
+</div>
+
+<h2>Bookmarklet code (for manual paste)</h2>
+<pre id="src"></pre>
+
+<h2>How to use</h2>
+<ol>
+  <li>Open a poker hand-share URL (starts with <code>sp2.hnlbds.com</code>).</li>
+  <li>Wait for the replay to render (~2s).</li>
+  <li>Tap the "Import to Journal" bookmark.</li>
+  <li>Journal opens with the hand pre-populated; review player matches and hit <b>Import hand</b>.</li>
+</ol>
+
+<h2>What gets captured</h2>
+<ul>
+  <li>All 8-9 players with their names, seat positions, and starting stacks.</li>
+  <li>Blinds, ante, straddle.</li>
+  <li>Every preflop / postflop action with sizes.</li>
+  <li>Any revealed hole cards + board.</li>
+  <li>Winners.</li>
+</ul>
+<p>Existing opponents (by exact name) are matched automatically; unknowns get created as new opponents so you can start tagging reads immediately.</p>
+
+<script>
+const APP = "https://philchiu7-commits.github.io/shortdeck-journal/";
+// Keep this src single-line-friendly for a valid javascript: URL.
+const SRC = `(function(){try{var r=(window.DataManager&&DataManager.record)||null;if(!r){alert('No hand data on this page. Wait for the replay to load, then try again.');return;}var S=['h','s','d','c'],RK={2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'T',11:'J',12:'Q',13:'K',14:'A'};function d(t){if(!t)return null;var s=(t>>4)&15,r=t&15;return (RK[r]||'')+(S[s]||'');}var SL={1:'SB',2:'BB',3:'STD',4:'U8',5:'U7',6:'U7',7:'U7',8:'HJ',9:'CO',10:'BN',11:'U8',12:'U7'};var stdA=(r.actions||[]).find(function(a){return a.type===13;});var players=r.players.map(function(p){return {seat:p.seatNo,name:p.nickName||p.userName||('Seat '+p.seatNo),chips:p.beginChips,cards:(p.handCards||[]).map(d).filter(Boolean),pos:SL[p.seatLabel]||null};});var ACT={5:'check',6:'call',7:'raise',8:'jam',9:'fold'};var idx={};players.forEach(function(p,i){idx[p.seat]=i;});var street='pre',seen=0,actions=[];for(var i=0;i<r.actions.length;i++){var a=r.actions[i];if([1,2,3,4,12,13].indexOf(a.type)>=0)continue;if(a.boardCards&&a.boardCards.length>seen){seen=a.boardCards.length;street=seen<=3?'flop':seen===4?'turn':'river';}var act=ACT[a.type];if(!act)continue;var vi=idx[a.seatNo];if(vi==null)continue;actions.push({street:street,actor:'v'+vi,act:act,size:(act==='raise'||act==='jam'||act==='bet')&&a.totalBetChips?('$'+a.totalBetChips):null});}var rec={kind:'hand-import',source:'hnlbds',tableId:r.tableId,roundId:r.roundId,blinds:{sb:r.smallBlind||0,bb:r.bigiBlind||0,std:stdA?(stdA.betChips||0):0},ante:r.ante||0,board:(r.boardCards||[]).map(d).filter(Boolean),villains:players,actions:actions,winners:(r.results&&r.results[0]&&r.results[0].winners||[]).map(function(w){return {chips:w.winChips,cards:(w.cards||[]).map(d).filter(Boolean)};}),beginTime:r.beginTime,endTime:r.endTime};var json=JSON.stringify(rec);var b64=btoa(unescape(encodeURIComponent(json)));window.open('${APP}#imp/'+b64,'_blank');}catch(e){alert('Import failed: '+e.message);}})();`;
+const HREF = "javascript:" + encodeURIComponent(SRC);
+document.getElementById("bkmk").href = HREF;
+document.getElementById("src").textContent = HREF;
+</script>
+
+</body>
+</html>

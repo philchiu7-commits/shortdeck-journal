@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Short Deck Journal — HNLBDS Converter</title>
+<style>
+  :root { --bg:#0d0f14; --panel:#14171e; --panel2:#1a1d23; --line:#2b3140; --text:#eef0f4; --muted:#8a91a2; --accent:#5b9cff; --dup:#e0a63a; --danger:#ff6b6b; }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.55 -apple-system, system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 18px 16px 60px; background: var(--bg); color: var(--text); }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 22px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
+  p, li { color: #c9ced8; }
+  code { background: var(--panel2); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  a.bkmk { display: inline-block; margin: 10px 0; padding: 12px 20px; background: linear-gradient(180deg,#5b9cff,#6f7bff); color:#0a0d12; text-decoration:none; border-radius: 10px; font-weight: 700; font-size: 15px; box-shadow: 0 3px 12px rgba(91,156,255,.28); }
+  .note { background: #1c2333; border-left: 3px solid var(--accent); padding: 10px 14px; margin: 10px 0; border-radius: 6px; font-size: 13px; color: #c9ced8; }
+  .note.warn { background: #2b220a; border-left-color: var(--dup); color: #f0d9a3; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 10px; overflow-x: auto; color: #b8bccb; max-height: 220px; }
+  .qhead { display: flex; align-items: baseline; gap: 8px; margin: 20px 0 8px; }
+  .qhead h2 { flex: 1; margin: 0; }
+  .qcount { font-size: 12px; color: var(--muted); }
+  .queue { display: flex; flex-direction: column; gap: 6px; }
+  .qrow { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+  .qrow.dup { opacity: .55; }
+  .qidx { font-weight: 700; color: var(--muted); font-size: 11px; min-width: 24px; }
+  .qmeta { flex: 1; overflow: hidden; }
+  .qtitle { font-weight: 600; color: var(--text); }
+  .qsub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qbadge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #4a3319; color: var(--dup); font-weight: 700; text-transform: uppercase; }
+  .qdel { background: none; border: 0; color: var(--danger); cursor: pointer; font-size: 18px; padding: 4px 8px; }
+  .qempty { color: var(--muted); font-style: italic; padding: 20px 0; text-align: center; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+  button.primary, button.secondary, button.danger { padding: 12px 16px; border: 0; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button.primary { background: linear-gradient(180deg,#5b9cff,#6f7bff); color: #0a0d12; }
+  button.primary:disabled { opacity: .4; cursor: not-allowed; }
+  button.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  button.danger { background: transparent; color: var(--danger); border: 1px solid #5a2626; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1a4d2e; color: #a3f5c0; padding: 10px 18px; border-radius: 8px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,.4); z-index: 100; }
+  .toast.err { background: #4d1a1a; color: #f5a3a3; }
+</style>
+</head>
+<body>
+
+<h1>HNLBDS Converter</h1>
+<p class="sub">Collect hnlbds.com hands, then bulk-import them all into your journal in one shot.</p>
+
+<h2>Bookmarklet</h2>
+<a class="bkmk" id="bkmk" href="#">📥 Add hand to queue</a>
+<div class="note">
+  <b>Desktop</b>: drag button to bookmarks bar.<br>
+  <b>iPhone</b>: tap → Add to bookmarks → edit that bookmark → paste the code below into its URL.
+</div>
+<details>
+  <summary style="cursor:pointer; color: var(--muted); font-size: 12px; margin-bottom: 8px;">Show bookmarklet code (for manual paste)</summary>
+  <pre id="src"></pre>
+</details>
+
+<div class="qhead">
+  <h2>Queue</h2>
+  <span class="qcount" id="qcount"></span>
+</div>
+
+<div class="btns">
+  <button class="primary" id="btn-send" disabled>Send all to journal</button>
+  <button class="secondary" id="btn-copy" disabled>Copy JSON</button>
+  <button class="danger" id="btn-clear" disabled>Clear queue</button>
+</div>
+
+<div class="note warn" id="dup-warn" style="display:none;">
+  Some hands may already be imported (matching tableId+roundId). The journal will skip those automatically.
+</div>
+
+<div class="queue" id="queue"></div>
+
+<script>
+const APP = "https://philchiu7-commits.github.io/shortdeck-journal/";
+const KEY = "hnlbdsQueue";
+
+// Extractor for the bookmarklet — mirrors import.html but sends to convert.html#add/…
+const SRC = `(function(){try{var r=(window.DataManager&&DataManager.record)||null;if(!r){alert('No hand data on this page. Wait for the replay to load, then try again.');return;}var S=['h','s','d','c'],RK={2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'T',11:'J',12:'Q',13:'K',14:'A'};function d(t){if(!t)return null;var s=(t>>4)&15,r=t&15;return (RK[r]||'')+(S[s]||'');}var SL={1:'SB',2:'BB',3:'STD',4:'U8',5:'U7',6:'U7',7:'U7',8:'HJ',9:'CO',10:'BN',11:'U8',12:'U7'};var stdA=(r.actions||[]).find(function(a){return a.type===13;});var players=r.players.map(function(p){return {seat:p.seatNo,name:p.nickName||p.userName||('Seat '+p.seatNo),chips:p.beginChips,cards:(p.handCards||[]).map(d).filter(Boolean),pos:SL[p.seatLabel]||null};});var ACT={5:'check',6:'call',7:'raise',8:'jam',9:'fold'};var idx={};players.forEach(function(p,i){idx[p.seat]=i;});var street='pre',seen=0,actions=[];for(var i=0;i<r.actions.length;i++){var a=r.actions[i];if([1,2,3,4,12,13].indexOf(a.type)>=0)continue;if(a.boardCards&&a.boardCards.length>seen){seen=a.boardCards.length;street=seen<=3?'flop':seen===4?'turn':'river';}var act=ACT[a.type];if(!act)continue;var vi=idx[a.seatNo];if(vi==null)continue;actions.push({street:street,actor:'v'+vi,act:act,size:(act==='raise'||act==='jam'||act==='bet')&&a.totalBetChips?('$'+a.totalBetChips):null});}var rec={kind:'hand-import',source:'hnlbds',tableId:r.tableId,roundId:r.roundId,blinds:{sb:r.smallBlind||0,bb:r.bigiBlind||0,std:stdA?(stdA.betChips||0):0},ante:r.ante||0,board:(r.boardCards||[]).map(d).filter(Boolean),villains:players,actions:actions,winners:(r.results&&r.results[0]&&r.results[0].winners||[]).map(function(w){return {chips:w.winChips,cards:(w.cards||[]).map(d).filter(Boolean)};}),beginTime:r.beginTime,endTime:r.endTime};var json=JSON.stringify(rec);var b64=btoa(unescape(encodeURIComponent(json)));window.open('${APP}convert.html#add/'+b64,'_blank');}catch(e){alert('Import failed: '+e.message);}})();`;
+const HREF = "javascript:" + encodeURIComponent(SRC);
+document.getElementById("bkmk").href = HREF;
+document.getElementById("src").textContent = HREF;
+
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
+  catch (e) { return []; }
+}
+function saveQueue(q) { localStorage.setItem(KEY, JSON.stringify(q)); }
+function toast(msg, err) {
+  const t = document.createElement("div");
+  t.className = "toast" + (err ? " err" : "");
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+function fmtChips(n) { return n >= 1000 ? (n/1000).toFixed(n%1000===0?0:1) + "K" : String(n); }
+
+function render() {
+  const q = loadQueue();
+  const wrap = document.getElementById("queue");
+  document.getElementById("qcount").textContent = q.length ? `${q.length} hand${q.length===1?"":"s"}` : "empty";
+  document.getElementById("btn-send").disabled = !q.length;
+  document.getElementById("btn-copy").disabled = !q.length;
+  document.getElementById("btn-clear").disabled = !q.length;
+  // dup detection (within queue itself)
+  const seen = new Set(), dupIdx = new Set();
+  q.forEach((r, i) => {
+    const key = r.tableId + "/" + r.roundId;
+    if (seen.has(key)) dupIdx.add(i); else seen.add(key);
+  });
+  document.getElementById("dup-warn").style.display = dupIdx.size ? "block" : "none";
+  if (!q.length) {
+    wrap.innerHTML = `<div class="qempty">Open a hand on sp2.hnlbds.com and tap the bookmarklet to add it.</div>`;
+    return;
+  }
+  wrap.innerHTML = q.map((r, i) => {
+    const b = r.blinds || {};
+    const names = (r.villains || []).map(v => v.name).join(", ");
+    const board = (r.board || []).filter(Boolean).join(" ") || "—";
+    const meta = `SB ${b.sb||"?"}/BB ${b.bb||"?"}${b.std?"/STD "+b.std:""} · ${(r.actions||[]).length} actions · board ${esc(board)}`;
+    return `<div class="qrow${dupIdx.has(i)?" dup":""}">
+      <span class="qidx">#${i+1}</span>
+      <div class="qmeta">
+        <div class="qtitle">Table ${esc(r.tableId||"?")} · Round ${esc(r.roundId||"?")}</div>
+        <div class="qsub">${meta}</div>
+        <div class="qsub">${esc(names)}</div>
+      </div>
+      ${dupIdx.has(i) ? `<span class="qbadge">dup</span>` : ""}
+      <button class="qdel" data-del="${i}" title="Remove">✕</button>
+    </div>`;
+  }).join("");
+}
+
+function handleHash() {
+  const m = location.hash.match(/^#add\/(.+)$/);
+  if (!m) return;
+  try {
+    const json = decodeURIComponent(escape(atob(m[1])));
+    const rec = JSON.parse(json);
+    const q = loadQueue();
+    q.push(rec);
+    saveQueue(q);
+    history.replaceState(null, "", location.pathname);
+    toast(`Added · Round ${rec.roundId||"?"} (${q.length} in queue)`);
+  } catch (e) {
+    toast("Bad payload: " + e.message, true);
+  }
+  render();
+}
+
+document.getElementById("queue").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-del]");
+  if (!b) return;
+  const i = +b.dataset.del;
+  const q = loadQueue();
+  q.splice(i, 1);
+  saveQueue(q);
+  render();
+});
+document.getElementById("btn-clear").addEventListener("click", () => {
+  if (!confirm("Clear the whole queue?")) return;
+  saveQueue([]);
+  render();
+});
+document.getElementById("btn-copy").addEventListener("click", async () => {
+  const q = loadQueue();
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(q, null, 2));
+    toast("Copied JSON to clipboard");
+  } catch (e) {
+    toast("Copy failed: " + e.message, true);
+  }
+});
+document.getElementById("btn-send").addEventListener("click", () => {
+  const q = loadQueue();
+  if (!q.length) return;
+  const json = JSON.stringify(q);
+  const b64 = btoa(unescape(encodeURIComponent(json)));
+  // Keep the queue — journal dedups by tableId+roundId, and this lets the user retry
+  // if navigation fails. Use "Clear queue" once the import completes.
+  location.href = `${APP}#bulk/${b64}`;
+});
+
+window.addEventListener("hashchange", handleHash);
+handleHash();
+render();
+</script>
+
+</body>
+</html>
