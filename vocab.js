@@ -6,7 +6,8 @@
         id     = stable kebab-case, NEVER renamed once used (saved on opponents).
         cat    = "preflop" | "postflop" | "sizing" | "live".
         label  = short display text (≤ 22 chars fits the chip rows).
-        kind   = optional: "scale" (0–100 slider) | "position" (pick a seat).
+        kind   = optional: "scale" (0–100 slider) | "position" (pick a seat)
+                 | "choice" (pick one of `options`, e.g. ["tight","normal","wide"]).
      2. Optionally list it in READ_SUBCATS so it sits in a named row.
      3. Optionally add EXPLOIT_RULES[id] = { yes: "…", no: "…" } for an
         auto-suggested exploit, and/or a PILL_READS entry for a felt pill.
@@ -38,8 +39,10 @@ const SUITS = [
    unless `kind` says otherwise. Keep this list small — add as real reads come up. */
 const TENDENCY_TAGS = [
   // preflop — entering the pot
-  { id: "limps-wide",        cat: "preflop",  label: "Limps wide" },            // yes = limps most hands; no = limps are strong
-  { id: "limp-raise-nuts",   cat: "preflop",  label: "Limp-raise = nuts" },     // yes = LRR only AA/KK/AK; no = LRR light
+  { id: "limp-width",        cat: "preflop",  label: "Limp", kind: "choice", options: ["tight", "normal", "wide"] },
+  { id: "lrr-bluff",         cat: "preflop",  label: "Has LRR bluff?" },        // yes = limp-reraises light too; no = LRR only AA/KK/AK
+  { id: "lrr-latest-v",      cat: "preflop",  label: "Latest LRR value", kind: "position" },   // seat of his last value limp-reraise
+  { id: "lrr-latest-b",      cat: "preflop",  label: "Latest LRR bluff", kind: "position" },   // seat of his last bluff limp-reraise
   { id: "opens-premium",     cat: "preflop",  label: "Raises = premium" },      // yes = first-in raise is AA–JJ/AK; no = raises wide
   { id: "iso-raises-limps",  cat: "preflop",  label: "Iso-raises limps" },
   { id: "limp-caller",       cat: "preflop",  label: "Limps then calls" },      // limps, then calls any iso/raise
@@ -66,6 +69,12 @@ const TENDENCY_TAGS = [
   { id: "bluff-xt-f",        cat: "postflop", label: "Bluff XT F" },
   { id: "bluff-xt-t",        cat: "postflop", label: "Bluff XT T" },
   { id: "bluff-xt-r",        cat: "postflop", label: "Bluff XT R" },
+  { id: "xr-value-f",        cat: "postflop", label: "xR value F" },            // check-raises strong hands on this street
+  { id: "xr-value-t",        cat: "postflop", label: "xR value T" },
+  { id: "xr-value-r",        cat: "postflop", label: "xR value R" },
+  { id: "xr-bluff-f",        cat: "postflop", label: "xR bluff F" },            // check-raises as a bluff on this street
+  { id: "xr-bluff-t",        cat: "postflop", label: "xR bluff T" },
+  { id: "xr-bluff-r",        cat: "postflop", label: "xR bluff R" },
   { id: "merged",            cat: "postflop", label: "Merged" },
   { id: "polar",             cat: "postflop", label: "Polar" },
   // postflop — singles
@@ -77,6 +86,14 @@ const TENDENCY_TAGS = [
   { id: "pays-off-fh",       cat: "postflop", label: "Pays off FH vs flush" },  // forgets flush > full house
   { id: "bluffs-rivers",     cat: "postflop", label: "Bluffs rivers" },         // no = big river bets = nuts
   { id: "protected-block",   cat: "postflop", label: "Protected block" },       // yes = medium/protection; no = polar
+  { id: "checks-range-oop",  cat: "postflop", label: "Checks range OOP?" },     // yes = never leads OOP, check is uncapped; no = leads strong, checks are weak
+  { id: "xr-oop-v",          cat: "postflop", label: "Has xR OOP value?" },     // check-raises strong hands OOP
+  { id: "xr-oop-b",          cat: "postflop", label: "Has xR OOP bluff?" },     // check-raises as a bluff OOP
+  { id: "barrels-light",     cat: "postflop", label: "Can barrel light" },      // fires turn/river bluffs without equity
+  // postflop — bluff lines he takes (bet/check per street: B = bet, X = check)
+  { id: "bluff-line-bxb",    cat: "postflop", label: "BXB" },                   // bet flop, check turn, bet river as a bluff
+  { id: "bluff-line-xb",     cat: "postflop", label: "XB" },                    // check flop, bet turn as a bluff
+  { id: "bluff-line-xxb",    cat: "postflop", label: "XXB" },                   // check flop, check turn, bet river as a bluff
   // sizing
   { id: "size-up-draws",     cat: "sizing",   label: "Size up with draws" },    // 3-colour read (green/yellow/red)
   { id: "small-with-weak",   cat: "sizing",   label: "Small = weak" },
@@ -110,12 +127,14 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
    (READ_GROUPS in app.js) and scale reads render separately. */
 const READ_SUBCATS = {
   preflop: [
-    { label: "Limping",   ids: ["limps-wide", "limp-raise-nuts", "limp-caller", "iso-raises-limps"] },
+    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "lrr-latest-v", "lrr-latest-b", "limp-caller", "iso-raises-limps"] },
     { label: "Raising",   ids: ["opens-premium", "calls-raises-wide", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
   ],
   postflop: [
     { label: "Cbet & Float", ids: ["over-cbet", "floats-wide", "barrels-off"] },
     { label: "Hand strength", ids: ["chases-draws", "overplays-tp", "pays-off-fh", "bluffs-rivers", "protected-block"] },
+    { label: "OOP",           ids: ["checks-range-oop", "xr-oop-v", "xr-oop-b"] },
+    { label: "Bluff lines",   ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light"] },
   ],
   sizing: [
     { label: "Postflop sizing", ids: ["size-up-draws", "small-with-weak", "overbets-nuts"] },
@@ -130,10 +149,10 @@ const READ_SUBCATS = {
    "no" = confirmed absent (only where the absence is itself exploitable).
    Suggestions surface in the Exploits panel; Phil accepts or dismisses each. */
 const EXPLOIT_RULES = {
-  "limps-wide":        { yes: "Iso-raise his limps big with hands that dominate a wide limping range (AK, AQ, KQ, TT+) — he limps trash and folds or calls light.",
-                         no:  "His limps are strong — don't iso light; limp behind with playable hands and fold junk to his limp-raise." },
-  "limp-raise-nuts":   { yes: "Fold everything but AA/KK to his limp-reraise — it's the top of his range every time.",
-                         no:  "His limp-reraise is wide — call in position with pairs and suited broadways, or 4-bet AK/QQ+." },
+  "limp-width":        { wide:  "Iso-raise his limps big with hands that dominate a wide limping range (AK, AQ, KQ, TT+) — he limps trash and folds or calls light.",
+                         tight: "His limps are strong — don't iso light; limp behind with playable hands and fold junk to his limp-raise." },
+  "lrr-bluff":         { yes: "His limp-reraise is not always the nuts — call in position with pairs and suited broadways, or 4-bet AK/QQ+.",
+                         no:  "Fold everything but AA/KK to his limp-reraise — it's the top of his range every time." },
   "opens-premium":     { yes: "Only continue vs his raise with hands that flop big against AA–JJ/AK (pairs to set-mine, suited connectors); fold AQ/KQ-type hands.",
                          no:  "He raises wide first-in — 3-bet him with AK/AQ/TT+ and call with anything suited-connected in position." },
   "iso-raises-limps":  { yes: "Limp-reraise your strong hands behind his iso; limp only hands that can stand a raise.",
@@ -156,6 +175,16 @@ const EXPLOIT_RULES = {
   "bluffs-rivers":     { yes: "Bluff-catch rivers wider — his river bets are often air.",
                          no:  "Fold to his big river bets without a near-nutted hand — he doesn't bluff there." },
   "protected-block":   { yes: "Raise his small river bets — they're medium-strength protection bets that fold to pressure." },
+  "checks-range-oop":  { yes: "His OOP check is his whole range, not weakness — don't auto-stab; bet for value, check back medium hands.",
+                         no:  "He leads his strong hands OOP, so his checks are weak — stab them with any two." },
+  "barrels-light":     { yes: "Call down lighter vs his turn/river barrels — he fires without equity.",
+                         no:  "His second and third barrels are real — fold marginal hands to turn/river bets." },
+  "bluff-line-bxb":    { yes: "His bet-check-bet line is often a bluff — call rivers with bluff-catchers after he checks the turn." },
+  "bluff-line-xb":     { yes: "His check-then-bet on the turn is often a bluff — call or raise with medium hands." },
+  "bluff-line-xxb":    { yes: "His check-check-bet river is often a bluff — bluff-catch rivers after two checks." },
+  "xr-oop-v":          { yes: "Bet-fold marginal hands when he checks OOP — he check-raises his strong hands rather than leading." },
+  "xr-oop-b":          { yes: "He check-raise bluffs OOP — call his check-raises with top pair+ and strong draws, 3-bet flop with big hands.",
+                         no:  "His OOP check-raises are always value — fold one pair to them." },
   "size-up-draws":     { any: "Sizing tells: big bet on wet boards = draw, small = made hand. Read the size, not the story." },
   "small-with-weak":   { yes: "Raise his small bets — small = weak. Fold to his big bets without the nuts." },
   "overbets-nuts":     { yes: "Fold to his overbets without a nutted hand — big = value, never a bluff." },
@@ -179,7 +208,7 @@ const PILL_READS = [
   { id: "chases-draws",      state: "yes", pill: "Chases draws",  tone: "red"    },
   { id: "calls-raises-wide", state: "yes", pill: "Wide caller",   tone: "red"    },
   { id: "limp-caller",       state: "yes", pill: "Limp-caller",   tone: "red"    },
-  { id: "limps-wide",        state: "yes", pill: "Wide limper",   tone: "purple" },
+  { id: "limp-width",        state: "wide", pill: "Wide limper",  tone: "purple" },
   { id: "over-folds-3bet",   state: "yes", pill: "Overfolds 3B",  tone: "purple" },
   { id: "opens-premium",     state: "no",  pill: "Wide raiser",   tone: "purple" },
   { id: "barrels-off",       state: "no",  pill: "Gives up turn", tone: "amber"  },
@@ -191,9 +220,13 @@ const PILL_READS = [
   { id: "3bets-light",       state: "yes", pill: "Light 3-bettor",tone: "teal"   },
   { id: "jams-pre-light",    state: "yes", pill: "Jams pre",      tone: "teal"   },
   { id: "bluffs-rivers",     state: "yes", pill: "River bluffer", tone: "teal"   },
+  { id: "lrr-bluff",         state: "yes", pill: "LRR bluffs",    tone: "teal"   },
+  { id: "xr-oop-b",          state: "yes", pill: "xR bluffer",    tone: "teal"   },
+  { id: "barrels-light",     state: "yes", pill: "Barrels light", tone: "teal"   },
   { id: "barrels-off",       state: "yes", pill: "Barrels off",   tone: "teal"   },
   { id: "opens-premium",     state: "yes", pill: "Nit raiser",    tone: "gray"   },
-  { id: "limp-raise-nuts",   state: "yes", pill: "LRR = nuts",    tone: "gray"   },
+  { id: "lrr-bluff",         state: "no",  pill: "LRR = nuts",    tone: "gray"   },
+  { id: "limp-width",        state: "tight", pill: "Tight limper", tone: "gray"   },
   { id: "overbets-nuts",     state: "yes", pill: "Big = value",   tone: "blue"   },
   { id: "small-with-weak",   state: "yes", pill: "Small = weak",  tone: "blue"   },
   { id: "tilts",             state: "yes", pill: "Tilter",        tone: "purple" },

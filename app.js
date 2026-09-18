@@ -26,8 +26,8 @@ let pendingReadWrite = null;      // scale-slider write waiting on the debounce 
 const oppById = (id) => OPP.find((o) => o.id === id);
 
 /* ---------- reads: intensity-scaled tendency toggles ----------
-   Cycle: off → yes → yes! (strong) → no → no! (strong) → off. Draw-size and
-   limp-wide-scale keep the 3-colour scale. Legacy tags (over-folds-cbet →
+   Cycle: off → yes → yes! (strong) → no → no! (strong) → off. Draw-size keeps
+   the 3-colour scale; "choice" reads (limp-width) pick one of their options. Legacy tags (over-folds-cbet →
    over-cbet:no, gives-up-turn → barrels-off:no, etc.) migrate on boot. */
 const READ_CYCLE = {
   "size-up-draws":   ["green", "yellow", "red"],
@@ -39,6 +39,10 @@ const isScaleRead = (id) => SCALE_READS.has(id);
 const POSITION_READS = new Set(
   (typeof TENDENCY_TAGS !== "undefined" ? TENDENCY_TAGS : []).filter((t) => t.kind === "position").map((t) => t.id));
 const isPositionRead = (id) => POSITION_READS.has(id);
+const CHOICE_READS = Object.fromEntries(
+  (typeof TENDENCY_TAGS !== "undefined" ? TENDENCY_TAGS : []).filter((t) => t.kind === "choice").map((t) => [t.id, t.options || []]));
+const isChoiceRead = (id) => !!CHOICE_READS[id];
+const cap1 = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 const STATE_CLASS = {
   yes: "sgreen", "yes!": "sgreen sstrong",
   no: "sred", "no!": "sred sstrong",
@@ -76,6 +80,9 @@ const readChip = (id, state) => {
   if (isPositionRead(id)) {
     return `<span class="chip mini on sgreen" title="${esc(lbl)}: ${esc(state)}">${esc(lbl)} · ${esc(state)}</span>`;
   }
+  if (isChoiceRead(id)) {
+    return `<span class="chip mini on sscale" title="${esc(lbl)}: ${esc(state)}">${esc(lbl)} · ${esc(cap1(state))}</span>`;
+  }
   return `<span class="chip mini on ${STATE_CLASS[state] || ""}">${esc(lbl)}</span>`;
 };
 /* Postflop reads shown as "Label + bubbles" rows; each bubble is its own toggle. */
@@ -86,6 +93,8 @@ const READ_GROUPS = [
   { cat: "postflop", label: "Bluff till", bubbles: [["bluff-till-f", "F"], ["bluff-till-t", "T"], ["bluff-till-r", "R"]] },
   { cat: "postflop", label: "Bluff raise", bubbles: [["bluff-raise-f", "F"], ["bluff-raise-t", "T"], ["bluff-raise-r", "R"]] },
   { cat: "postflop", label: "Bluff XT",   bubbles: [["bluff-xt-f", "F"], ["bluff-xt-t", "T"], ["bluff-xt-r", "R"]] },
+  { cat: "postflop", label: "xR value",   bubbles: [["xr-value-f", "F"], ["xr-value-t", "T"], ["xr-value-r", "R"]] },
+  { cat: "postflop", label: "xR bluff",   bubbles: [["xr-bluff-f", "F"], ["xr-bluff-t", "T"], ["xr-bluff-r", "R"]] },
   { cat: "postflop", label: "Range",      bubbles: [["merged", "Merged"], ["polar", "Polar"]] },
 ];
 const GROUPED_IDS = new Set(READ_GROUPS.flatMap((g) => g.bubbles.map((b) => b[0])));
@@ -1770,6 +1779,12 @@ function renderOppDetail(id) {
         <span class="prlbl">${esc(lbl)}</span>
         <select class="prselect" data-posselect="${id}">${opts}</select>
       </label>`;
+    }
+    if (isChoiceRead(id)) {
+      const active = readIsActive(id, st);
+      const opts = CHOICE_READS[id].map((v) =>
+        `<button class="chip mini${st === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("");
+      return `<div class="choiceread${active ? " on" : ""}"><span class="prlbl">${esc(lbl)}</span><div class="choiceopts">${opts}</div></div>`;
     }
     if (isScaleRead(id)) {
       const v = Math.max(0, Math.min(100, Number(st) || 0));
@@ -4179,6 +4194,17 @@ function bindStatic() {
       const o = oppById(curOppId);
       const id = clr.dataset.scaleclear;
       delete oppReads(o)[id];
+      o.updatedAt = Date.now();
+      await dbPut("opponents", o);
+      renderOppDetail(curOppId);
+      return;
+    }
+    const ch = e.target.closest("[data-choice]");
+    if (ch) {
+      const o = oppById(curOppId);
+      const reads = oppReads(o);
+      const id = ch.dataset.choice, v = ch.dataset.val;
+      if (reads[id] === v) delete reads[id]; else reads[id] = v;   // same option again = clear
       o.updatedAt = Date.now();
       await dbPut("opponents", o);
       renderOppDetail(curOppId);
