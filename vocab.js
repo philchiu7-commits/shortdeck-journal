@@ -97,7 +97,10 @@ const TENDENCY_TAGS = [
   { id: "bluff-line-bxb",    cat: "postflop", label: "BXB" },                   // bet flop, check turn, bet river as a bluff
   { id: "bluff-line-xb",     cat: "postflop", label: "XB" },                    // check flop, bet turn as a bluff
   { id: "bluff-line-xxb",    cat: "postflop", label: "XXB" },                   // check flop, check turn, bet river as a bluff
-  // sizing
+  // sizing — preflop
+  { id: "open-big-strong",   cat: "sizing",   label: "Open big = strong" },     // bigger open (5a–6a) = premium; small = speculative
+  { id: "3bet-big-strong",   cat: "sizing",   label: "3bet big = strong" },     // bigger 3bet = nuts; small 3bet = light / bluff
+  // sizing — postflop
   { id: "size-up-draws",     cat: "sizing",   label: "Size up with draws" },    // 3-colour read (green/yellow/red)
   { id: "small-with-weak",   cat: "sizing",   label: "Small = weak" },
   { id: "overbets-nuts",     cat: "sizing",   label: "Sizes up with nuts" },
@@ -140,6 +143,7 @@ const READ_SUBCATS = {
     { label: "Bluff lines",   ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light"] },
   ],
   sizing: [
+    { label: "Preflop sizing",  ids: ["open-big-strong", "3bet-big-strong"] },
     { label: "Postflop sizing", ids: ["size-up-draws", "small-with-weak", "overbets-nuts"] },
   ],
   live: [
@@ -191,6 +195,8 @@ const EXPLOIT_RULES = {
   "xr-oop-v":          { yes: "Bet-fold marginal hands when he checks OOP — he check-raises his strong hands rather than leading." },
   "xr-oop-b":          { yes: "He check-raise bluffs OOP — call his check-raises with top pair+ and strong draws, 3-bet flop with big hands.",
                          no:  "His OOP check-raises are always value — fold one pair to them." },
+  "open-big-strong":   { yes: "His open size leaks his hand — fold to his big opens without a premium, attack his small opens with 3-bets." },
+  "3bet-big-strong":   { yes: "His 3-bet size leaks his hand — fold to his big 3-bets, call or 4-bet his small ones." },
   "size-up-draws":     { any: "Sizing tells: big bet on wet boards = draw, small = made hand. Read the size, not the story." },
   "small-with-weak":   { yes: "Raise his small bets — small = weak. Fold to his big bets without the nuts." },
   "overbets-nuts":     { yes: "Fold to his overbets without a nutted hand — big = value, never a bluff." },
