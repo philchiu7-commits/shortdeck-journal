@@ -1,9 +1,9 @@
 /* Service worker: cache the app shell so it runs offline once installed. */
-const CACHE = "shortdeck-v2";
+const CACHE = "shortdeck-v3";
 const ASSETS = [
   ".", "index.html", "style.css", "app.js", "db.js", "vocab.js", "pinyin.js",
   "import.html", "convert.html",
-  "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png",
+  "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png",
 ];
 
 self.addEventListener("install", (e) => {
@@ -17,7 +17,24 @@ self.addEventListener("activate", (e) => {
     Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
   ).then(() => self.clients.claim()));
 });
+// Stale-while-revalidate for same-origin GETs: serve the cached copy instantly,
+// then refresh it from the network in the background. So a deploy that bumps app
+// assets but NOT the CACHE name still self-heals one reload later; a CACHE bump is
+// only needed to force an immediate purge. Cross-origin / non-GET fall through.
 self.addEventListener("fetch", (e) => {
-  if (e.request.method !== "GET") return;
-  e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
+  const req = e.request;
+  if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
+  e.respondWith(
+    caches.open(CACHE).then(async (c) => {
+      const cached = await c.match(req, { ignoreSearch: true });
+      const net = fetch(req)
+        .then((res) => { if (res && res.ok && res.type === "basic") c.put(req, res.clone()); return res; })
+        .catch(() => cached);
+      // Serving the cached copy resolves respondWith immediately; keep the SW
+      // alive with waitUntil so the background refresh's c.put actually persists
+      // (iOS can otherwise kill the worker right after respondWith settles).
+      if (cached) { e.waitUntil(net); return cached; }
+      return net;
+    })
+  );
 });

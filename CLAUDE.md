@@ -40,7 +40,7 @@ server. To test a change against fresh assets in the preview:
   tab shows tonight's seat-ring lineup (same `tableLineup` meta as hand
   entry's Lineup sheet) with each opponent's front-page card chips; its
   renderer is `renderTableTab` (`renderTable` is the hand-entry felt).
-- `app.js` — all UI + business logic, ~2900 lines. Renderers are named
+- `app.js` — all UI + business logic, ~4650 lines. Renderers are named
   `render*` and are cheap to re-run; state lives in module globals (`draft`,
   `sheetGroup`, etc.). Sheets are one shared `#sheet` element; dispatch by
   `sheetGroup` string (`"__act__"`, `"__seat__"`, …).
@@ -48,7 +48,9 @@ server. To test a change against fresh assets in the preview:
   union-merge on import (reads/exploits/notes from both devices survive;
   newer record wins conflicts) via `mergeOppRecords`. **v30+ also merges
   opponents by exact name match** so bulk imports don't dupe existing
-  profiles. Hands/sessions stay plain newer-wins by id.
+  profiles. Hands/sessions stay plain newer-wins by id — so edit any given hand or
+  session on only one device between backups; a concurrent edit on the other
+  device is silently overwritten by whichever export is imported later.
 - `vocab.js` — positions, tendency-tag ids, action tokens, sizes, card list.
   **Tag ids are stable — never rename.** Adding a tag = safe; renaming an id
   breaks every opponent's saved reads. The header comment documents how Phil
@@ -92,10 +94,11 @@ server. To test a change against fresh assets in the preview:
   blinds: {ante}, seats, effstack, mode: "chips"|"table", ...}`.
 - The **structured `actions[]` token stream** is the format the v2 exploit
   engine will consume (VPIP-ish, fold-to-cbet, 3bet freq per villain) and
-  what `handText()` serializes for LLM summaries. Don't collapse it into a
-  string.
+  what `handText()` *would* serialize for LLM summaries (that serializer
+  is defined but currently unused — kept for a planned summary export).
+  Don't collapse it into a string.
 
-## Hand entry — recent shape (v54)
+## Hand entry — recent shape
 
 Main page: mode toggle, ctxbar (Ante/Eff), villains, positions,
 board+cards, Save — **plus one gradient "＋ Add action" pill** that opens a

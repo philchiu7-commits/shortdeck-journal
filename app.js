@@ -6,6 +6,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g,
 
 /* ---------- in-memory caches (source of truth is IndexedDB) ---------- */
 let OPP = [], HANDS = [];
+let _statsCache = null;   // oppStats() memo — invalidated on every HANDS mutation
 let curOppId = null, curHandId = null;
 let editNoteId = null, editExploitId = null;
 let storageDurable = false;
@@ -198,7 +199,6 @@ function villainStreetActs(h, actor) {
    showdown hands — the sample is biased and small. Lower thresholds fire
    noise. See project_poker_journal_v2_engine_spec.md. */
 const READ_SIGNALS = [
-  { id: "limp-caller",      state: "yes", th: 5 },
   { id: "3bets-light",      state: "yes", th: 5 },
   { id: "barrels-off",      state: "no",  th: 5 },   // was: gives-up-turn
   { id: "barrels-off",      state: "yes", th: 5 },
@@ -208,8 +208,8 @@ const READ_SIGNALS = [
   { id: "station-t",        state: "yes", th: 5 },
   { id: "station-r",        state: "yes", th: 5 },
 ];
-function derivedReads(o) {
-  const hands = HANDS.filter((h) => (h.villainIds || []).includes(o.id));
+function derivedReads(o, hands) {
+  hands = hands || HANDS.filter((h) => (h.villainIds || []).includes(o.id));
   const cnt = {};
   const bump = (k) => (cnt[k] = (cnt[k] || 0) + 1);
   const aggr = (arr) => arr.some((a) => a === "bet" || a === "raise");
@@ -218,7 +218,6 @@ function derivedReads(o) {
     if (idx < 0) continue;
     const s = villainStreetActs(h, "v" + idx);
     const raisedPre = s.pre.some((a) => ["raise", "3bet", "4bet", "5bet"].includes(a));
-    if (s.pre.includes("limp")) bump("limp-caller:yes");
     if (s.pre.includes("3bet")) bump("3bets-light:yes");
     if (s.flop.includes("bet") && (s.turn.includes("check") || s.turn.includes("fold"))) bump("barrels-off:no");
     if (aggr(s.flop) && aggr(s.turn) && aggr(s.river)) bump("barrels-off:yes");
@@ -233,26 +232,13 @@ function derivedReads(o) {
   return READ_SIGNALS.map((sig) => {
     const key = sig.id + ":" + sig.state;
     const c = cnt[key] || 0;
-    if (c < sig.th || reads[sig.id] || dismissed.has(key) || !TAG_BY_ID[sig.id]) return null;
+    if (c < sig.th || reads[sig.id] || dismissed.has(key) || !TAG_BY_ID[sig.id] || RETIRED_TAG_IDS.has(sig.id)) return null;
     const suffix = sig.state === "no" ? " (NO)" : "";
     return { tagId: sig.id, state: sig.state, key, count: c, label: TAG_BY_ID[sig.id].label + suffix };
   }).filter(Boolean).sort((a, b) => b.count - a.count);
 }
 
 /* FEATURE 2 — predictive defaults for hand entry, from history. */
-function predictOppPos(oppId) {
-  const c = {};
-  for (const h of HANDS) {
-    if (!(h.villainIds || []).includes(oppId)) continue;
-    const v = (h.villains || []).find((x) => x.opponentId === oppId);
-    if (v && v.pos) c[v.pos] = (c[v.pos] || 0) + 1;
-  }
-  const ent = Object.entries(c);
-  if (!ent.length) return null;
-  const total = ent.reduce((s, [, n]) => s + n, 0);
-  ent.sort((a, b) => b[1] - a[1]);
-  return (total >= 3 && ent[0][1] / total >= 0.6) ? ent[0][0] : null;   // only a confident mode
-}
 function predictEffStack() {
   const withStack = HANDS.filter((h) => h.effStack).sort((a, b) => b.ts - a.ts);
   return withStack.length ? String(withStack[0].effStack) : "";
@@ -288,6 +274,7 @@ async function mergeOpponents(fromId, intoId) {
 
 async function refreshCache() {
   [OPP, HANDS] = await Promise.all(["opponents", "hands"].map(dbAll));
+  _statsCache = null;
 }
 
 /* Legacy read migration: fold removed tags onto their surviving axis-mate. */
@@ -355,6 +342,7 @@ async function migrateDupBoardCards() {
 }
 
 async function migrateLegacyReads() {
+  if (await metaGet("mig.legacyReads")) return;   // one-shot: skip the full-table rewrite on every boot
   for (const o of OPP) {
     const r = oppReads(o);
     let dirty = false;
@@ -379,6 +367,7 @@ async function migrateLegacyReads() {
     }
     if (dirty) { o.updatedAt = Date.now(); await dbPut("opponents", o); }
   }
+  await metaSet("mig.legacyReads", 1);
 }
 
 /* ---------- small utils ---------- */
@@ -391,13 +380,15 @@ function fmtWhen(ts) {
 }
 function toast(msg, ms) {
   const t = $("toast");
+  t.onclick = null; t.style.cursor = "";              // a plain toast is never a leftover tappable (undo/reload/nag) button
   t.textContent = msg;
   t.classList.toggle("wide", msg.length > 24);        // wrap longer messages
   t.classList.remove("hidden");
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.add("hidden"), ms || (msg.length > 40 ? 3200 : 1800));
 }
-const suitOf = (c) => SUITS.find((s) => s.id === c[c.length - 1]);
+const UNK_SUIT = { cls: "cx", sym: "?" };                      // bad/rank-only card → render unstyled, never throw
+const suitOf = (c) => SUITS.find((s) => s.id === c[c.length - 1]) || UNK_SUIT;
 const cardHTML = (c) => c ? `<span class="${suitOf(c).cls}">${c.slice(0, -1)}${suitOf(c).sym}</span>` : "";
 const cardsStr = (cs) => (cs || []).filter(Boolean).join("");
 /* Card as a little tile (hand view + rows). `prev` = earlier-street board card, dimmed. */
@@ -436,7 +427,7 @@ function actVerb(a) {
 function actParts(a, raw = false) {
   let verb = actVerb(a), sz = a.size ? sizeLabel(a.size, raw) : null;
   if (sz === "Jam") { verb = "jams"; sz = null; }
-  return { verb, sz, to: !!sz && verb !== "bets" && !/%|pot|over/i.test(sz) };
+  return { verb, sz, to: !!sz && verb !== "bets" && !/%|pot|over/i.test(a.size || "") };
 }
 function actPhrase(a, raw = false) {
   const { verb, sz, to } = actParts(a, raw);
@@ -493,6 +484,7 @@ function route() {
   ({ opponents: renderOpponents, opp: () => renderOppDetail(arg), hand: renderHandEntry,
      table: renderTableTab, handview: () => renderHandView(arg), data: renderData })[v]();
   window.scrollTo(0, 0);
+  maybeNagBackup();                          // data lives only on this phone — prompt a backup if stale
 }
 
 /* ================= Hands-panel filters (per opponent detail) =================
@@ -563,8 +555,6 @@ function handMatchesFilters(h, oppId) {
   return true;
 }
 const POS_BUCKETS_ALL = ["BTN", "CO", "HJ", "MP", "EP"];
-const posBuckets = (allHands) => POS_BUCKETS_ALL.filter((b) =>
-  true);
 const POT_BUCKETS = ["Limped", "SRP", "3BP", "4BP+"];
 const SQUID_BUCKETS = ["nS", "w1S", "w2S+"];
 const ROLE_BUCKETS = ["PFR", "PFC", "Limp"];
@@ -589,7 +579,7 @@ function renderHandFilters(oppId, allHands) {
   const row = (label, dim, vals) =>
     `<div class="hfrow"><span class="hflbl">${label}</span><div class="chiprow tight">${vals.map((v) => chip(dim, v, v)).join("")}</div></div>`;
   $("od-handfilters").innerHTML =
-    row("Pos", "pos", posBuckets(allHands)) +
+    row("Pos", "pos", POS_BUCKETS_ALL) +
     row("Pot", "pot", POT_BUCKETS) +
     row("Squid", "squid", SQUID_BUCKETS) +
     row("Role", "role", ROLE_BUCKETS) +
@@ -631,9 +621,9 @@ let rangeBucket = "BTN", rangeSit = "open", rangeBrush = "raise";
    the villain's FIRST preflop action: a raise → vsraise, a limp → vslimp,
    nothing → open. The villain's own first action is normalised to the
    situation's vocabulary (any raise after a raise = 3bet; BN check = limp). */
-function rangeEvidence(oppId) {
+function rangeEvidence(oppId, hands) {
   const ev = {};
-  for (const h of HANDS) {
+  for (const h of (hands || HANDS)) {
     const idx = (h.villains || []).findIndex((v) => v.opponentId === oppId);
     if (idx < 0) continue;
     const v = h.villains[idx];
@@ -839,7 +829,7 @@ async function commitOneImport(rec, map) {
   };
   const win = handWinner(hand); hand.showdown = !!win && win.how === "showdown";
   await dbPut("hands", hand);
-  HANDS.push(hand);
+  HANDS.push(hand); _statsCache = null;
   return { ok: true, hand };
 }
 
@@ -1010,11 +1000,11 @@ function rangeApply(oppId, cls, mode, act) {
   else { if (r[cls] === act) return false; r[cls] = act; }
   return true;
 }
-function renderRanges(oppId) {
+function renderRanges(oppId, hands) {
   const o = oppById(oppId);
   if (!o) return;
   const ranges = o.ranges || {};
-  const evAll = rangeEvidence(oppId);
+  const evAll = rangeEvidence(oppId, hands);
   const sit = RANGE_SIT_BY_ID[rangeSit] || RANGE_SITS[0];
   rangeSit = sit.id;
   if (rangeBrush !== "hands" && !sit.acts.some(([a]) => a === rangeBrush)) rangeBrush = sit.acts[0][0];
@@ -1127,12 +1117,13 @@ function bindRangeGrid() {
 /* ================= Opponents list ================= */
 
 function oppStats() {
+  if (_statsCache) return _statsCache;
   const m = {};
   for (const h of HANDS) for (const vid of h.villainIds || []) {
     m[vid] = m[vid] || { count: 0, last: 0 };
     m[vid].count++; m[vid].last = Math.max(m[vid].last, h.ts);
   }
-  return m;
+  return (_statsCache = m);
 }
 
 function updateGroupsDatalist() {
@@ -1252,13 +1243,22 @@ function openPlayerTypeSheet(oppId) {
      </div>`);
 }
 
-/* Search blob incl. pinyin so romanized typing matches Chinese names. */
-function oppMatches(o, nq) {
-  if (!nq) return true;
+/* Search blob incl. pinyin so romanized typing matches Chinese names.
+   Cached per opponent (keyed by id) and rebuilt only when an identity field
+   changes — toPinyin ran on every opponent on every keystroke otherwise. */
+const _searchBlobCache = new Map();
+function searchBlob(o) {
+  const c = _searchBlobCache.get(o.id);
+  if (c && c.n === o.name && c.g === o.group && c.p === o.physical) return c.blob;
   const p = toPinyin(o.name);
   const blob = [o.name, o.physical, o.group, p.full, p.initials]
     .join(" ").toLowerCase().replace(/\s+/g, "");
-  return blob.includes(nq);
+  _searchBlobCache.set(o.id, { n: o.name, g: o.group, p: o.physical, blob });
+  return blob;
+}
+function oppMatches(o, nq) {
+  if (!nq) return true;
+  return searchBlob(o).includes(nq);
 }
 
 function renderOpponents() {
@@ -1285,8 +1285,10 @@ function renderOpponents() {
     });
   $("opp-edit").classList.toggle("on", oppEditMode);
   $("opp-edit").textContent = oppEditMode ? "Done" : "Edit";
+  const byGroup = {};
+  for (const o of list) (byGroup[o.group || ""] ||= []).push(o);
   $("opp-list").innerHTML = list.length ? groups.map((g) => {
-    const members = list.filter((o) => (o.group || "") === g);
+    const members = byGroup[g] || [];
     const collapsed = collapsedGroups.has(g);
     const rows = members.map((o) => oppRowHTML(o, stats[o.id])).join("");
     const showHead = groups.length > 1 || g || oppEditMode;
@@ -1755,6 +1757,7 @@ function renderOppDetail(id) {
   if (!o) { location.hash = "#opponents"; return; }
   if (curOppId !== id) { editNoteId = null; editExploitId = null; }
   curOppId = id;
+  const mine = HANDS.filter((h) => (h.villainIds || []).includes(id));   // this villain's hands — scanned once, reused across the whole detail render
   $("od-name").textContent = o.name;
   $("od-meta").textContent = [o.group, o.physical].filter(Boolean).join(" · ");
   // Player-type picker + pill: color-themes the opponent's list row and puts
@@ -1843,7 +1846,7 @@ function renderOppDetail(id) {
   }).join("");
 
   // FEATURE 1 — reads inferred from this opponent's logged hands
-  const dReads = derivedReads(o);
+  const dReads = derivedReads(o, mine);
   const showD = showDerivedReads[id];
   const dHTML = dReads.length
     ? `<div class="sugghead" data-toggle-dreads>
@@ -1939,7 +1942,7 @@ function renderOppDetail(id) {
       }).join("") : "")
     : "";
 
-  const allHands = HANDS.filter((h) => (h.villainIds || []).includes(id)).sort((a, b) => b.ts - a.ts);
+  const allHands = mine.slice().sort((a, b) => b.ts - a.ts);
   renderHandFilters(id, allHands);
   const hands = handFiltersActive() ? allHands.filter((h) => handMatchesFilters(h, id)) : allHands;
   // Hands where we saw the cards lead; no-cards hands (stats-only) go in a
@@ -1960,7 +1963,7 @@ function renderOppDetail(id) {
   $("od-hands").innerHTML = (seenHTML + noCardsHTML) ||
     (allHands.length ? `<div class="empty">No hands match these filters. ${allHands.length} total — try clearing.</div>` : `<div class="empty">No hands logged.</div>`);
 
-  renderRanges(id);
+  renderRanges(id, mine);
 }
 
 /* ================= Hand rendering (rows + full text) ================= */
@@ -1974,48 +1977,6 @@ function actionStr(h, a) {
   const raw = isRawSize(h);
   const sz = a.size ? (raw ? String(a.size).replace(/^\$/, "") : a.size) : "";
   return `${actorLabel(h, a.actor)} ${a.act}${sz ? " " + sz : ""}`;
-}
-function handSummary(h) {
-  if (h.note) return h.note;
-  const raw = isRawSize(h);
-  const bits = [];
-  for (const st of STREETS) {
-    const acts = (h.actions || []).filter((a) => a.street === st);
-    if (!acts.length) continue;
-    const s = acts.map((a) => `${actorLabel(h, a.actor)} ${actPhrase(a, raw)}`).join(", ");
-    bits.push(st === "pre" ? s : st.toUpperCase() + ": " + s);
-  }
-  return bits.join("  ·  ") || cardsStr(h.board) || "—";
-}
-/* A villain's defining action in a hand: their most aggressive one, later
-   streets breaking ties — "raises pot (flop)" beats a preflop "calls". */
-const ACT_RANK = { jam: 6, "5bet": 5, "4bet": 5, "3bet": 4, raise: 3, bet: 2, call: 1, limp: 1, check: 0, fold: 0 };
-function definingAct(h, actor) {
-  let best = null;
-  for (const a of (h.actions || []).filter((x) => x.actor === actor)) {
-    const r = (ACT_RANK[a.act] ?? 0) + (a.size === "Jam" ? 4 : 0);
-    if (!best || r >= best.r) best = { a, r };
-  }
-  return best?.a || null;
-}
-/* Action sequence for a villain on their last street: "XxR" = check, check, raise. */
-function actionSeq(h, actor) {
-  const allActs = (h.actions || []).filter((x) => x.actor === actor);
-  if (!allActs.length) return null;
-  const lastStreet = allActs[allActs.length - 1].street;
-  const seq = allActs.filter((a) => a.street === lastStreet)
-    .map((a) => ACT_ABBR[a.act] || a.act.slice(0, 1).toUpperCase())
-    .join("");
-  return seq && lastStreet !== "pre" ? seq + ` (${lastStreet})` : seq;
-}
-/* Compact action code for list rows: "R40K", "3B4x", "B50%", "Jam (turn)". */
-const ACT_ABBR = { fold: "F", check: "X", call: "C", limp: "L", bet: "B", raise: "R", "3bet": "3B", "4bet": "4B", "5bet": "5B", jam: "Jam" };
-function abbrevAct(a, raw = false) {
-  const street = a.street !== "pre" ? ` (${a.street})` : "";
-  if (a.act === "jam" || a.size === "Jam") return "Jam" + street;
-  const sz = a.size ? sizeLabel(a.size, raw) : "";
-  const code = ACT_ABBR[a.act] || a.act;
-  return code + (sz ? (/^\d/.test(sz) ? "" : " ") + sz : "") + street;
 }
 /* Plain-English hand-history line for a list row — reads like a live-poker
    log: "Pre: raise 40K, 3-bet 120K, call · Flop K♠7♥2♣: check, bet 160K,
@@ -2113,7 +2074,10 @@ function handHistoryLineHTML(h, focusActor) {
    lead with THAT villain's position + hole cards; on the general feed, lead
    with the villain lineup. Bottom line: compressed street-by-street action. */
 function handRowHTML(h, oppId) {
-  const res = heroResult(h);
+  const win = handWinner(h);   // computed once — reused for the hero-result dot and the villain won-badge below
+  const res = !win ? (h.result || null)
+    : (h.hero === false ? null
+       : (win.winners.includes("hero") ? (win.winners.length > 1 ? "chop" : "won") : "lost"));
   const dot = res ? `<span class="dot ${res}"></span>` : "";
   // Table-state squid count (how many are up) — used on the general feed.
   const squid = h.squid?.have != null ? `<span class="hr-squid">${h.squid.have}🦑</span>` : "";
@@ -2124,8 +2088,7 @@ function handRowHTML(h, oppId) {
       const v = h.villains[i];
       // On a player's own rows show THAT player's squid count, not the table state.
       const vsquid = v.squid != null ? `<span class="hr-squid">${v.squid}🦑</span>` : "";
-      const win = h.hero === false ? handWinner(h) : null;
-      const won = win && win.winners.includes("v" + i)
+      const won = h.hero === false && win && win.winners.includes("v" + i)
         ? `<span class="hh-won">won${win.how === "showdown" ? " @ showdown" : ""}</span>` : "";
       const bits = [
         v.pos ? `<span class="hv-pos">${esc(v.pos)}</span>` : "",
@@ -2405,8 +2368,8 @@ function actorForPos(pos) {
   return o.type === "hero" ? "hero" : o.type === "villain" ? "v" + o.idx : null;
 }
 /* Evenly-spaced slot positions around the felt oval for n seats.
-   Slot 0 = bottom-centre; walks clockwise so ring [SB, BB, ..., BN] places
-   BN to SB's right (viewer POV) — matches real-table deal order. */
+   Slot 0 = bottom-centre; walks clockwise so the ring [U9…U4, HJ, CO, BN]
+   places BN to the first UTG seat's right (viewer POV) — deal order. */
 function slotsFor(n) {
   const cx = 50, cy = 50, rx = 39, ry = 44;
   const slots = [];
@@ -2554,8 +2517,22 @@ function undo() {
   const s = undoStack.pop();
   if (s) { draft = JSON.parse(s); draftChanged(); }
 }
-function draftChanged() {
+let _draftSaveT = null, _draftDirty = false;
+/* Persist the hand draft. draftChanged() debounces this ~400ms so a fast run of
+   pad taps doesn't serialize + write the draft on every tap; render stays sync. */
+function persistDraft() {
+  _draftSaveT = null; _draftDirty = false;
   metaSet("draftHand", JSON.parse(JSON.stringify(draft)));
+}
+function flushDraft() {   // run a queued draft write now (pagehide/hidden) so the last edit survives suspend
+  if (!_draftDirty) return;
+  clearTimeout(_draftSaveT);
+  persistDraft();
+}
+function draftChanged() {
+  _draftDirty = true;
+  clearTimeout(_draftSaveT);
+  _draftSaveT = setTimeout(persistDraft, 400);
   renderHandEntry();
 }
 /* Is Hero part of this hand? Table mode: only if seated. Chips mode: the "You" toggle. */
@@ -2575,8 +2552,8 @@ function currentActor() {
   let a = draft.actor;
   if (!draft.heroIn && a === "hero") a = null;
   // No actor picked yet? Use position-based first-to-act so chips mode
-  // opens on the correct seat (was falling to v0, which broke HU where the
-  // SB acts first preflop — bug #7).
+  // opens on the correct seat: firstToAct() = UTG, who acts first on every
+  // street in ante-only short deck (was falling to v0 — bug #7).
   if (!a) {
     const f = firstToAct(draft.street);
     if (f) return f;
@@ -2866,8 +2843,6 @@ function lineText(d) {
 }
 
 /* ---- turn order + street completion (positions drive who's next) ---- */
-/* Acting order: preflop = UTG→…→blinds→straddle (POSITIONS as listed);
-   postflop = blinds first, button last. */
 /* Short deck (ante-only, button double ante): UTG acts first on every street, BN last. */
 const ORDER_POST = POSITIONS;
 const actOrderFor = () => POSITIONS;
@@ -3434,7 +3409,8 @@ function renderActionPad() {
     } else {
       btns = sizesFor(last).map((s) => {
         const amt = base.now > 0 ? chipAmt(s) : 0;
-        return `<button class="sizebtn" data-size="${s}"><span class="sz">${s}</span>${amt ? `<span class="amt">${potStr(amt)}</span>` : ""}</button>`;
+        const lbl = /%$/.test(s) ? "B" + s.replace(/%$/, "") : s;   // pot-% shown as B33…B100
+        return `<button class="sizebtn" data-size="${s}"><span class="sz">${lbl}</span>${amt ? `<span class="amt">${potStr(amt)}</span>` : ""}</button>`;
       }).join("");
     }
     $("he-sizes").innerHTML =
@@ -3981,7 +3957,7 @@ async function saveHand() {
   rec.result = hIn ? heroResult(rec) : null;
   await dbPut("hands", rec);
   const i = HANDS.findIndex((h) => h.id === rec.id);
-  if (i >= 0) HANDS[i] = rec; else HANDS.push(rec);
+  if (i >= 0) HANDS[i] = rec; else HANDS.push(rec); _statsCache = null;
 
   undoStack = [];
   const primary = oppById(rec.villainIds[0]);
@@ -4000,6 +3976,8 @@ let _backupNaggedAt = 0;
 async function maybeNagBackup() {
   const now = Date.now();
   if (now - _backupNaggedAt < 3600e3) return;                 // hourly re-nag cap
+  const t0 = $("toast");
+  if (t0.onclick && !t0.classList.contains("hidden")) return; // don't stomp a live save-undo / SW-update toast — retry next route
   const ts = await metaGet("lastExportAt");
   if (ts && now - ts < 864e5) return;                         // backed up <24h ago
   _backupNaggedAt = now;
@@ -4043,7 +4021,7 @@ function showSaveToast(msg) {
     const { draft: prev, handId } = lastSaveUndo;
     lastSaveUndo = null;
     await dbDel("hands", handId);
-    HANDS = HANDS.filter((h) => h.id !== handId);
+    HANDS = HANDS.filter((h) => h.id !== handId); _statsCache = null;
     draft = prev;
     t.classList.add("hidden"); t.style.cursor = ""; t.onclick = null; t.classList.remove("wide"); t.textContent = "";
     await metaSet("draftHand", JSON.parse(JSON.stringify(draft)));
@@ -4174,7 +4152,7 @@ function bindStatic() {
       <div class="sheetnote">Pick the profile to keep — ${esc(cur.name)}'s hands, reads, notes &amp; exploits move there, then ${esc(cur.name)} is deleted.</div>
       <div class="mergelist">${others.map((o) =>
         `<button class="mergeitem" data-mergeinto="${o.id}"><span class="mnm">${esc(o.name)}</span>` +
-        `<span class="msub muted">${[o.group, handCount(o.id) + "h"].filter(Boolean).join(" · ")}</span></button>`).join("")}</div>`);
+        `<span class="msub muted">${[esc(o.group), handCount(o.id) + "h"].filter(Boolean).join(" · ")}</span></button>`).join("")}</div>`);
   };
   $("sheet").addEventListener("click", async (e) => {
     if (e.target.closest("[data-sheetclose]")) { hideSheet(); return; }
@@ -4322,7 +4300,7 @@ function bindStatic() {
       };
       rec.result = null; rec.showdown = false;
       await dbPut("hands", rec);
-      HANDS.push(rec);
+      HANDS.push(rec); _statsCache = null;
       n.handId = rec.id;
     }
     o.updatedAt = Date.now();
@@ -4471,7 +4449,7 @@ function bindStatic() {
   $("hv-delete").onclick = async () => {
     if (!confirm("Delete this hand?")) return;
     await dbDel("hands", curHandId);
-    HANDS = HANDS.filter((h) => h.id !== curHandId);
+    HANDS = HANDS.filter((h) => h.id !== curHandId); _statsCache = null;
     history.back();
   };
 
@@ -4631,15 +4609,40 @@ async function boot() {
     clearTimeout($("od-tags")?._scaleT);
     dbPut("opponents", o);
   };
-  window.addEventListener("pagehide", flushPendingRead);
+  // On suspend, flush every debounced write at once: scale-read, hand draft, snapshot.
+  const flushOnHide = () => { flushPendingRead(); flushDraft(); flushAutoSnapshot(); };
+  window.addEventListener("pagehide", flushOnHide);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushPendingRead();
+    if (document.visibilityState === "hidden") flushOnHide();
   });
   route();
   // ensure an auto-backup exists on first boot (or if it's stale)
   const snap = await metaGet("autoSnapshot");
   if (!snap || Date.now() - snap.ts > 60000) scheduleAutoSnapshot();
-  if ("serviceWorker" in navigator)
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    // Was a SW already controlling this page at load? If so, a later
+    // controllerchange is a real update; if not, the first one is just this
+    // page's own SW taking control on first install — not an "update".
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      // Installed iOS PWAs resume from background rather than cold-loading, so
+      // poll for a fresh service worker each time the app returns to the front.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") reg.update().catch(() => {});
+      });
+    }).catch(() => {});
+    // A new SW took control. controllerchange can land mid-hand; the draft is
+    // persisted but scroll/nav state isn't, so offer a one-tap reload rather
+    // than forcing one out from under Phil.
+    let _swUpdated = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || _swUpdated) return;   // first-install control-grab isn't an update
+      _swUpdated = true;
+      const t = $("toast");
+      toast("Updated — tap to reload", 3600000);
+      t.style.cursor = "pointer";                 // set AFTER toast() (which clears stale handlers)
+      t.onclick = () => location.reload();
+    });
+  }
 }
 boot();

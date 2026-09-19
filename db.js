@@ -81,25 +81,63 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID()
 
 /* ---------- export / import ---------- */
 
+/* At-table context worth restoring onto a fresh/second device (lineup, seats,
+   ante default, group UI state). Deliberately EXCLUDES autoSnapshot (a full DB
+   dump — would nest) and draftHand (transient crash-recovery only). */
+const EXPORT_META_KEYS = ["tableLineup", "lineupSeats", "defaultBlinds", "pinnedGroup", "collapsedGroups", "openSizeStats"];
 async function exportData() {
-  const [opponents, hands, sessions] = await Promise.all(
-    ["opponents", "hands", "sessions"].map(dbAll));
-  return { app: "shortdeck-journal", version: 1, exportedAt: Date.now(), opponents, hands, sessions };
+  const [opponents, hands, sessions, metaRows] = await Promise.all(
+    ["opponents", "hands", "sessions", "meta"].map(dbAll));
+  const meta = metaRows.filter((r) => EXPORT_META_KEYS.includes(r.key));
+  return { app: "shortdeck-journal", version: 1, exportedAt: Date.now(), opponents, hands, sessions, meta };
 }
 
 /* Silent auto-backup: after any mutation, stash a fresh full export snapshot
    into meta.autoSnapshot. Debounced so rapid edits don't hammer IDB. Doesn't
    write a file (iOS Safari can't without a tap) — that's what "Save auto-
    backup" does. */
-let _snapPending = null;
+let _snapPending = null;   // debounce timer id
+let _snapArmed = false;    // a mutation is waiting for its snapshot
 async function autoSnapshot() {
   const data = await exportData();
   const meta = { ts: Date.now(), counts: { opponents: data.opponents.length, hands: data.hands.length, sessions: data.sessions.length } };
-  await metaSet("autoSnapshot", { ...meta, data });
+  try {
+    await metaSet("autoSnapshot", { ...meta, data });
+  } catch (e) {
+    // The whole-DB snapshot is the first write to fail under storage pressure.
+    // The mutation's own dbPut already persisted the real data, so don't crash —
+    // warn so Phil exports a real backup before a genuine journal write throws.
+    if (e && e.name === "QuotaExceededError" && typeof toast === "function")
+      toast("Storage full — export a backup now", 6000);
+  }
+}
+/* Run at idle so the whole-DB serialize never blocks a table interaction; fall
+   back to a microtask-ish timeout where requestIdleCallback is unavailable. */
+const _idle = typeof requestIdleCallback === "function"
+  ? (fn) => requestIdleCallback(fn, { timeout: 2000 })
+  : (fn) => setTimeout(fn, 0);
+/* Take the queued snapshot exactly once: whoever reaches here first — the idle
+   callback or a pagehide flush — claims it by clearing _snapArmed; the loser no-ops. */
+function _runSnap() {
+  if (!_snapArmed) return;
+  _snapArmed = false;
+  return autoSnapshot().catch(() => {});
 }
 function scheduleAutoSnapshot() {
+  _snapArmed = true;
   clearTimeout(_snapPending);
-  _snapPending = setTimeout(() => { _snapPending = null; autoSnapshot().catch(() => {}); }, 400);
+  // Long debounce (~2.5s): the snapshot is only a redundant restore copy — the
+  // mutation's dbPut already persisted the data, and boot re-arms if it's >60s stale.
+  _snapPending = setTimeout(() => { _snapPending = null; _idle(_runSnap); }, 2500);
+}
+/* Force a queued snapshot to run now — called from the app's pagehide/hidden
+   flush so a pending snapshot isn't lost when the PWA is backgrounded. _snapArmed
+   stays set until the snapshot actually runs, so a flush landing in the post-debounce
+   idle window still catches it (the idle callback then finds nothing to do). */
+function flushAutoSnapshot() {
+  if (!_snapArmed) return;
+  clearTimeout(_snapPending); _snapPending = null;
+  return _runSnap();
 }
 /* Share/download an already-prepared export blob. Returns false on user cancel.
    Tries Web Share (iOS/Android native sheet) first, falls back to an <a download>
@@ -145,7 +183,14 @@ async function shareBackupData(data) {
 async function exportJSON() { return shareBackupData(await exportData()); }
 
 const normName = (s) => (s || "").trim().toLowerCase();
-const dedupeById = (arr) => { const seen = new Set(); return arr.filter((x) => x && x.id && !seen.has(x.id) && seen.add(x.id)); };
+const dedupeById = (arr) => {   // id-less notes/exploits (hand-authored/legacy JSON) keyed by ts+text so a merge never silently drops them
+  const seen = new Set();
+  return arr.filter((x) => {
+    if (!x) return false;
+    const k = x.id || ("ts" + (x.ts || 0) + "|" + (x.text || ""));
+    return !seen.has(k) && seen.add(k);
+  });
+};
 const recReads = (o) => o.reads && typeof o.reads === "object" ? o.reads
   : (Array.isArray(o.tags) ? Object.fromEntries(o.tags.map((id) => [id, "yes"])) : {});
 
@@ -190,8 +235,8 @@ async function importJSON(data) {
   const existing = await dbAll("opponents");
   const nameCount = {};
   for (const o of existing) nameCount[normName(o.name)] = (nameCount[normName(o.name)] || 0) + 1;
-  const nameToId = {};                       // only names unique among existing profiles
-  for (const o of existing) if (nameCount[normName(o.name)] === 1) nameToId[normName(o.name)] = o.id;
+  const nameToId = {};                       // only NON-BLANK names unique among existing profiles
+  for (const o of existing) { const n = normName(o.name); if (n && nameCount[n] === 1) nameToId[n] = o.id; }
   const existingIds = new Set(existing.map((o) => o.id));
   const remap = {};                          // incoming id -> surviving id
 
@@ -209,7 +254,8 @@ async function importJSON(data) {
       counts.merged++;
       continue;
     }
-    const matchId = nameToId[normName(rec.name)];
+    const rn = normName(rec.name);
+    const matchId = rn ? nameToId[rn] : null; // never name-merge blank-named records
     if (matchId) {                           // new id but known name — fold into the existing profile
       const into = await dbGet("opponents", matchId);
       mergeOppRecords(into, rec);
@@ -219,7 +265,7 @@ async function importJSON(data) {
     } else {                                 // genuinely new opponent
       await dbPut("opponents", rec);
       existingIds.add(rec.id);
-      nameToId[normName(rec.name)] = rec.id; // later same-name incoming folds into this one too
+      if (rn) nameToId[rn] = rec.id;         // later same-name incoming folds into this one too (blanks never)
       counts.opponents++;
     }
   }
@@ -238,6 +284,14 @@ async function importJSON(data) {
     if (!rec.id) continue;
     const cur = await dbGet("sessions", rec.id);
     if (!cur || (rec.updatedAt || rec.ts || 0) > (cur.updatedAt || cur.ts || 0)) { await dbPut("sessions", rec); counts.sessions++; }
+  }
+  // At-table context (lineup/seats/ante/group UI) — via metaSet so the
+  // localStorage survival mirror is seeded too. Only exportData's whitelist appears here.
+  // Restore-if-absent: seeds a fresh/second device but never overwrites a device
+  // already holding its own live lineup/seats/UI (importJSON "never wipes existing").
+  for (const r of data.meta || []) {
+    if (!r || !r.key) continue;
+    if ((await metaGet(r.key)) == null) await metaSet(r.key, r.value);
   }
   return counts;
 }

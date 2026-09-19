@@ -63,7 +63,7 @@ main {
 .row > * { flex: 1; }
 input, textarea, select {
   background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-  border-radius: 10px; padding: 11px; font: inherit; width: 100%; margin-bottom: 8px;
+  border-radius: 10px; padding: 11px; font: inherit; font-size: 16px; width: 100%; margin-bottom: 8px;   /* 16px: iOS zooms text fields <16px on focus */
 }
 input:focus, textarea:focus { outline: 1px solid var(--accent); }
 /* no up/down steppers on number fields — you just type the amount */
@@ -193,6 +193,7 @@ button.danger {
 .bubble:active { transform: scale(.96); }
 .chip.heroic.on { background: #163521; color: var(--green); border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
 .chip.mini { padding: 5px 9px; font-size: 12px; }
+.posrow .chip.mini { min-height: 40px; padding: 8px 12px; font-size: 13px; display: inline-flex; align-items: center; }  /* at-table hot path: real hit area */
 .tagcat { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 10px 0 6px; }
 .tagcat:first-child { margin-top: 0; }
 
@@ -240,7 +241,7 @@ textarea.noteedit { margin-bottom: 0; }
 .confcycle.off { background: var(--panel2); color: var(--muted); border-color: var(--line); }
 .readsub { margin: 6px 0 8px; }
 .readsub .rslabel { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 3px; }
-.chiprow.tight { gap: 4px; }
+.chiprow.tight { gap: 6px; }
 
 /* front-page card: preview panel + abbreviated exploit chips */
 .cardpanel {
@@ -258,7 +259,7 @@ textarea.noteedit { margin-bottom: 0; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .abbrin {
-  flex: none; width: 96px; margin: 0; padding: 5px 8px; font-size: 13px;
+  flex: none; width: 96px; margin: 0; padding: 5px 8px; font-size: 16px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--text);
 }
 
@@ -356,7 +357,7 @@ textarea.noteedit { margin-bottom: 0; }
 .sizebtn.sizecustom { flex-direction: row; gap: 4px; }
 .sizebtn.sizecustom input {
   width: 100%; min-width: 0; margin: 0; padding: 4px 2px; border: 0; background: none;
-  text-align: center; font-size: 14px; color: var(--text);
+  text-align: center; font-size: 16px; color: var(--text);
 }
 
 /* ---- table mode ---- */
@@ -431,7 +432,7 @@ textarea.noteedit { margin-bottom: 0; }
 .seatedit-fld > span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .seatedit-fld input {
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-  padding: 8px 10px; color: var(--text); font-size: 15px; font-weight: 700; width: 100%; box-sizing: border-box;
+  padding: 8px 10px; color: var(--text); font-size: 16px; font-weight: 700; width: 100%; box-sizing: border-box;
 }
 .seatedit-cards { display: flex; gap: 4px; }
 .cslot.mini { width: 34px; height: 46px; font-size: 14px; }
@@ -478,7 +479,7 @@ textarea.noteedit { margin-bottom: 0; }
 .ctxfield label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
 .ctxfield input {
   width: 100%; min-width: 0; margin: 0; padding: 1px 0; border: 0; background: none;
-  font-size: 15px; font-weight: 700; color: var(--text);
+  font-size: 16px; font-weight: 700; color: var(--text);
 }
 .ctxpick {
   display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1 1 0; min-width: 52px;
@@ -613,7 +614,7 @@ textarea.noteedit { margin-bottom: 0; }
 .himcards { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--accent); }
 .himctrl { display: flex; gap: 8px; align-items: center; }
 .himcreate { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); flex: none; }
-.himctrl select { margin: 0; padding: 6px 8px; font-size: 12px; flex: 1; }
+.himctrl select { margin: 0; padding: 6px 8px; font-size: 16px; flex: 1; }
 .himbulklist { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; max-height: 55vh; overflow-y: auto; }
 .himbulkrow { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); font-size: 13px; }
 .himbulkrow.dup { opacity: .55; }
@@ -699,7 +700,7 @@ textarea.noteedit { margin-bottom: 0; }
 .vsearch {
   width: 100%; margin: 0 0 8px; padding: 9px 12px; box-sizing: border-box;
   background: var(--panel2); border: 1px solid var(--line); border-radius: 10px;
-  color: var(--text); font-size: 15px;
+  color: var(--text); font-size: 16px;
 }
 .chipdiv { flex: none; width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
 .chipnote { color: var(--muted); font-size: 13px; align-self: center; padding: 0 4px; }

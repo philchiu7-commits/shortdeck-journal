@@ -39,11 +39,11 @@ def in_spade(dx, dy):
     return False
 
 
-def icon(path, S):
+def icon(path, S, cy=0.47, scale=1.0):
     px = bytearray(S * S * 3)
     for y in range(S):
         for x in range(S):
-            dx, dy = x / S - 0.5, y / S - 0.47
+            dx, dy = (x / S - 0.5) / scale, (y / S - cy) / scale
             color = BLUE if in_spade(dx, dy) else BG
             i = (y * S + x) * 3
             px[i], px[i + 1], px[i + 2] = color
@@ -55,3 +55,8 @@ if __name__ == "__main__":
     icon("icon-512.png", 512)
     icon("icon-192.png", 192)
     icon("apple-touch-icon.png", 180)
+    # Maskable variant: spade centered (cy=0.5) and shrunk to ~80% (scale<1
+    # divides each pixel's offset, so fewer pixels fall inside the shape → a
+    # smaller spade) so an OS circle/squircle mask never clips it; the solid BG
+    # bleeds to every edge. Apex radius ~0.256 < the 0.40 maskable safe zone.
+    icon("icon-maskable-512.png", 512, cy=0.5, scale=0.8)

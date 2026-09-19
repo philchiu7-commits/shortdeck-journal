@@ -24,7 +24,7 @@ const SIZED_ACTS = ["bet", "raise", "3bet", "4bet", "5bet"];
 const SIZES_OPEN = ["3a", "4a", "5a", "6a", "Jam"];        // open raise: in antes (fallback when no ante set)
 const SIZES_3BET = ["2.5x", "3x", "4x", "Jam"];            // 3bet: multipliers
 const SIZES_4BET = ["2x", "2.5x", "3x", "Jam"];            // 4bet/5bet: multipliers
-const SIZES_POST = ["33%", "50%", "66%", "75%", "pot", "Jam"];
+const SIZES_POST = ["33%", "50%", "66%", "100%", "Jam"];        // postflop bet/raise: pot-% shown as B33…B100, Jam = all-in
 
 /* 36-card deck: 2–5 removed. Order high → low drives the range grid axes. */
 const RANKS = "AKQJT9876";
@@ -46,7 +46,9 @@ const TENDENCY_TAGS = [
   { id: "opens-premium",     cat: "preflop",  label: "Raises = premium" },      // yes = first-in raise is AA–JJ/AK; no = raises wide
   { id: "iso-raises-limps",  cat: "preflop",  label: "Iso-raises limps" },
   { id: "limp-caller",       cat: "preflop",  label: "Limps then calls" },      // limps, then calls any iso/raise
-  { id: "calls-raises-wide", cat: "preflop",  label: "Calls raises wide" },     // any suited / connected vs a raise
+  { id: "lc-pp",             cat: "preflop",  label: "Limp-calls PP" },         // limps then calls a raise with pocket pairs → set-mining (SD flops a set ~17%)
+  { id: "cc-width",          cat: "preflop",  label: "CC", kind: "choice", options: ["tight", "normal", "wide"] },  // cold-calls a raise (facing an open): how wide
+  { id: "calls-raises-wide", cat: "preflop",  label: "Calls raises wide" },     // RETIRED (kept for label) — superseded by cc-width's graded tight/normal/wide
   { id: "3bets-light",       cat: "preflop",  label: "3bets light" },
   { id: "over-folds-3bet",   cat: "preflop",  label: "Over-folds to 3bet" },
   { id: "jams-pre-light",    cat: "preflop",  label: "Jams pre light" },        // gets it in pre with AK / TT+ / any pair
@@ -125,7 +127,7 @@ const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]))
 const TAG_CATS = ["preflop", "postflop", "sizing", "live"];
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
-const RETIRED_TAG_IDS = new Set([]);
+const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide"]);   // too general — use lc-pp / cc-width instead
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 
 /* Sub-cluster single-read chips within each category. Any tag not listed
@@ -133,8 +135,8 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
    (READ_GROUPS in app.js) and scale reads render separately. */
 const READ_SUBCATS = {
   preflop: [
-    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "lrr-latest-v", "lrr-latest-b", "limp-caller", "iso-raises-limps"] },
-    { label: "Raising",   ids: ["opens-premium", "calls-raises-wide", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
+    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "lrr-latest-v", "lrr-latest-b", "lc-pp", "iso-raises-limps"] },
+    { label: "Raising",   ids: ["opens-premium", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
   ],
   postflop: [
     { label: "Cbet & Float", ids: ["over-cbet", "floats-wide", "barrels-off"] },
@@ -164,8 +166,9 @@ const EXPLOIT_RULES = {
                          no:  "He raises wide first-in — 3-bet him with AK/AQ/TT+ and call with anything suited-connected in position." },
   "iso-raises-limps":  { yes: "Limp-reraise your strong hands behind his iso; limp only hands that can stand a raise.",
                          no:  "He never punishes limps — over-limp wide and see cheap multiway flops." },
-  "limp-caller":       { yes: "Iso his limps with a big size and value-bet thin postflop — he limps then calls with a capped range." },
-  "calls-raises-wide": { yes: "Raise bigger for value (5–6 antes) — he pays with suited/connected junk; barrel hard on boards that miss connectors." },
+  "lc-pp":             { yes: "His limp-call range is pocket pairs set-mining — cbet flops freely to fold out the ~83% that whiffed a set, but shut down and fold to a check-raise on low/paired boards: that's the set." },
+  "cc-width":          { wide:  "He cold-calls raises with a wide, capped range (suited/connected junk, weak broadways, small pairs — no premiums, those 3-bet). Size your opens up: he flats and pays off dominated. Postflop he's a value target, not a bluff target — bet bigger and thinner, but don't run big bluffs into a range this wide; it just calls.",
+                         tight: "His cold-call range is tight and strong (pairs to set-mine, AK, big broadways) — steal more preflop (a narrow calling range over-folds to iso/3bet) but believe his postflop continues; don't stack off into a low/paired board that hits his set-miners." },
   "3bets-light":       { yes: "4-bet or jam AK/QQ+ vs his 3-bet, flat with pairs to trap — his 3-bets are not the nuts.",
                          no:  "Fold to his 3-bet without AA/KK/AK — he only re-raises premiums." },
   "over-folds-3bet":   { yes: "3-bet his opens wider, especially with blockers (Ax, Kx) — he folds too much preflop." },
@@ -218,8 +221,8 @@ const PILL_READS = [
   { id: "station-t",         state: "yes", pill: "T station",     tone: "red"    },
   { id: "station-f",         state: "yes", pill: "F station",     tone: "red"    },
   { id: "chases-draws",      state: "yes", pill: "Chases draws",  tone: "red"    },
-  { id: "calls-raises-wide", state: "yes", pill: "Wide caller",   tone: "red"    },
-  { id: "limp-caller",       state: "yes", pill: "Limp-caller",   tone: "red"    },
+  { id: "cc-width",          state: "wide", pill: "Wide caller",  tone: "red"    },
+  { id: "lc-pp",             state: "yes", pill: "Set-miner",     tone: "purple" },
   { id: "limp-width",        state: "wide", pill: "Wide limper",  tone: "purple" },
   { id: "over-folds-3bet",   state: "yes", pill: "Overfolds 3B",  tone: "purple" },
   { id: "opens-premium",     state: "no",  pill: "Wide raiser",   tone: "purple" },

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Short Deck Journal</title>
 <meta name="theme-color" content="#0f1115">
 <link rel="manifest" href="manifest.webmanifest">
@@ -20,7 +20,7 @@
   <header class="vhead">
     <h1>Opponents</h1>
     <button id="opp-edit" class="iconbtn textbtn" title="Reorder &amp; group">Edit</button>
-    <button id="opp-add" class="iconbtn" title="New opponent">＋</button>
+    <button id="opp-add" class="iconbtn" title="New opponent" aria-label="New opponent">＋</button>
   </header>
   <input id="opp-search" type="search" placeholder="Search name, look…" autocomplete="off">
   <div class="showexp-row">
@@ -36,9 +36,9 @@
 <!-- ===== Opponent detail ===== -->
 <section id="view-opp" class="hidden">
   <header class="vhead sticky">
-    <button class="backbtn" data-back>‹</button>
+    <button class="backbtn" data-back aria-label="Back">‹</button>
     <h1 id="od-name"></h1>
-    <button id="od-edit" class="iconbtn" title="Edit">✎</button>
+    <button id="od-edit" class="iconbtn" title="Edit" aria-label="Edit opponent">✎</button>
   </header>
   <div id="od-meta" class="muted sub2"></div>
   <div id="od-ptype" class="ptypebar"></div>
@@ -102,7 +102,7 @@
   </div>
   <div id="he-notehint" class="notehint hidden">
     <span id="he-notehint-text"></span>
-    <button id="he-notehint-clear" class="chip mini" title="Clear the note">✕</button>
+    <button id="he-notehint-clear" class="chip mini" title="Clear the note" aria-label="Clear the note">✕</button>
   </div>
 
   <div class="hgroup"><div id="he-mode" class="seg"></div></div>
@@ -163,9 +163,9 @@
 <!-- ===== Hand detail ===== -->
 <section id="view-handview" class="hidden">
   <header class="vhead">
-    <button class="backbtn" data-back>‹</button>
+    <button class="backbtn" data-back aria-label="Back">‹</button>
     <h1>Hand</h1>
-    <button id="hv-edit" class="iconbtn" title="Edit">✎</button>
+    <button id="hv-edit" class="iconbtn" title="Edit" aria-label="Edit hand">✎</button>
   </header>
   <div id="hv-text" class="handview"></div>
   <button id="hv-delete" class="danger">Delete hand</button>
