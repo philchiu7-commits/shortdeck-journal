@@ -291,7 +291,14 @@ async function importJSON(data) {
   // already holding its own live lineup/seats/UI (importJSON "never wipes existing").
   for (const r of data.meta || []) {
     if (!r || !r.key) continue;
-    if ((await metaGet(r.key)) == null) await metaSet(r.key, r.value);
+    if ((await metaGet(r.key)) != null) continue;
+    let value = r.value;
+    // tableLineup holds opponent ids; apply the same name-merge remap the hands
+    // import uses, so a merged opponent's seat isn't restored under a pre-merge
+    // id that now points at nothing.
+    if (hasRemap && r.key === "tableLineup" && Array.isArray(value))
+      value = value.map((id) => remap[id] || id);
+    await metaSet(r.key, value);
   }
   return counts;
 }
