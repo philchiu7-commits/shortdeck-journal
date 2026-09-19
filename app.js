@@ -777,7 +777,13 @@ async function commitOneImport(rec, map) {
   for (const m of map) {
     let oppId = m.matchId;
     const rawName = (m.name || "").trim();
-    if (m.create || !oppId) {
+    // The bulk sheet resolves every hand's villains before the first one is
+    // written, so without this re-check one villain spawns a profile per hand.
+    if ((m.create || !oppId) && rawName) {
+      const live = OPP.find((o) => (o.name || "").trim().toLowerCase() === rawName.toLowerCase());
+      if (live) oppId = live.id;
+    }
+    if (!oppId) {
       const opp = { id: uid(), name: rawName, group: "", reads: {}, exploits: [], notes: [], aliases: [], updatedAt: Date.now() };
       await dbPut("opponents", opp);
       OPP.push(opp);
@@ -817,11 +823,16 @@ async function commitOneImport(rec, map) {
     id: uid(),
     ts: (rec.beginTime ? rec.beginTime * 1000 : Date.now()),
     updatedAt: Date.now(),
-    hero: false, heroPos: null, heroCards: null,
+    // hnlbds records are all-villain (Phil was railing); dx records name the
+    // seat he was in, so honour rec.hero rather than filing himself as an opponent.
+    hero: !!rec.hero,
+    heroPos: rec.hero?.pos || null,
+    heroCards: (rec.hero?.cards || []).some(Boolean) ? rec.hero.cards : null,
     villains, villainIds,
     board: rec.board || [],
     actions,
     blinds: { ante: rec.blinds?.ante || rec.ante || null },
+    seats: rec.seats || null,
     effStack: null,
     note: rec.tableId ? `Imported · table ${rec.tableId}${rec.roundId ? ` #${rec.roundId}` : ""}` : "Imported",
     imported: { source: rec.source || "external", tableId: rec.tableId, roundId: rec.roundId, noK: (rec.source || "") === "hnlbds" },
