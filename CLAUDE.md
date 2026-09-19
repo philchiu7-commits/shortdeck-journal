@@ -53,6 +53,9 @@ server. To test a change against fresh assets in the preview:
   **Tag ids are stable — never rename.** Adding a tag = safe; renaming an id
   breaks every opponent's saved reads. The header comment documents how Phil
   adds a read (id + cat + label, optional EXPLOIT_RULES / PILL_READS entry).
+  Read kinds: default yes/no cycle, `scale` (slider), `position` (seat
+  dropdown), `choice` (one-of-N chips via `options`, e.g. `limp-width`).
+  Street triads (F/T/R rows) are declared in `READ_GROUPS` in app.js.
 - `sw.js` — install/activate/fetch. Uses `cache: "reload"` on install so
   phones fetch fresh assets on version bump.
 - `pinyin.js` — Chinese-name search helper for the opponents list.
