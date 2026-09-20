@@ -95,6 +95,7 @@ const READ_GROUPS = [
   { cat: "postflop", label: "Raise nuts", bubbles: [["raise-nuts-f", "F"], ["raise-nuts-t", "T"], ["raise-nuts-r", "R"]] },
   { cat: "postflop", label: "Bluff till", bubbles: [["bluff-till-f", "F"], ["bluff-till-t", "T"], ["bluff-till-r", "R"]] },
   { cat: "postflop", label: "Bluff raise", bubbles: [["bluff-raise-f", "F"], ["bluff-raise-t", "T"], ["bluff-raise-r", "R"]] },
+  { cat: "postflop", label: "Bluff raise w/", bubbles: [["br-fdsd", "FD/SD"], ["br-worst", "Worst"]] },
   { cat: "postflop", label: "Bluff XT",   bubbles: [["bluff-xt-f", "F"], ["bluff-xt-t", "T"], ["bluff-xt-r", "R"]] },
   { cat: "postflop", label: "xR value",   bubbles: [["xr-value-f", "F"], ["xr-value-t", "T"], ["xr-value-r", "R"]] },
   { cat: "postflop", label: "xR bluff",   bubbles: [["xr-bluff-f", "F"], ["xr-bluff-t", "T"], ["xr-bluff-r", "R"]] },
@@ -1789,13 +1790,11 @@ function renderOppDetail(id) {
     const st = reads[id];
     if (isPositionRead(id)) {
       const active = readIsActive(id, st);
-      const all = st === "ALL";
       const opts = ['<option value="">–</option>']
         .concat(POSITIONS.map((p) => `<option value="${p}"${st === p ? " selected" : ""}>${p}</option>`))
         .join("");
       return `<div class="posread${active ? " on" : ""}" title="${esc(lbl)}">
         <span class="prlbl">${esc(lbl)}</span>
-        <button type="button" class="prall${all ? " on" : ""}" data-posall="${id}">All</button>
         <select class="prselect" data-posselect="${id}">${opts}</select>
       </div>`;
     }
@@ -4188,17 +4187,6 @@ function bindStatic() {
       const o = oppById(curOppId);
       const id = clr.dataset.scaleclear;
       delete oppReads(o)[id];
-      o.updatedAt = Date.now();
-      await dbPut("opponents", o);
-      renderOppDetail(curOppId);
-      return;
-    }
-    const pa = e.target.closest("[data-posall]");
-    if (pa) {
-      const o = oppById(curOppId);
-      const reads = oppReads(o);
-      const id = pa.dataset.posall;
-      if (reads[id] === "ALL") delete reads[id]; else reads[id] = "ALL";   // toggle "all positions"
       o.updatedAt = Date.now();
       await dbPut("opponents", o);
       renderOppDetail(curOppId);

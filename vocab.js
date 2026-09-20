@@ -41,6 +41,7 @@ const TENDENCY_TAGS = [
   // preflop — entering the pot
   { id: "limp-width",        cat: "preflop",  label: "Limp", kind: "choice", options: ["tight", "normal", "wide"] },
   { id: "lrr-bluff",         cat: "preflop",  label: "Has LRR bluff?" },        // yes = limp-reraises light too; no = LRR only AA/KK/AK
+  { id: "can-ls-light",      cat: "preflop",  label: "Can limp-shove light" },  // limps then jams all-in over a raise light, not just AA/KK
   { id: "lrr-latest-v",      cat: "preflop",  label: "Latest LRR value", kind: "position" },   // seat of his last value limp-reraise
   { id: "lrr-latest-b",      cat: "preflop",  label: "Latest LRR bluff", kind: "position" },   // seat of his last bluff limp-reraise
   { id: "opens-premium",     cat: "preflop",  label: "Raises = premium" },      // yes = first-in raise is AA–JJ/AK; no = raises wide
@@ -75,6 +76,8 @@ const TENDENCY_TAGS = [
   { id: "bluff-raise-f",     cat: "postflop", label: "Bluff raise F" },
   { id: "bluff-raise-t",     cat: "postflop", label: "Bluff raise T" },
   { id: "bluff-raise-r",     cat: "postflop", label: "Bluff raise R" },
+  { id: "br-fdsd",           cat: "postflop", label: "Bluff raise FD/SD" },  // bluff-raises with a flush/straight draw (semi-bluff, has equity)
+  { id: "br-worst",          cat: "postflop", label: "Bluff raise worst" },  // bluff-raises his worst hands / pure air (no equity)
   { id: "bluff-xt-f",        cat: "postflop", label: "Bluff XT F" },
   { id: "bluff-xt-t",        cat: "postflop", label: "Bluff XT T" },
   { id: "bluff-xt-r",        cat: "postflop", label: "Bluff XT R" },
@@ -142,7 +145,7 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
    (READ_GROUPS in app.js) and scale reads render separately. */
 const READ_SUBCATS = {
   preflop: [
-    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "lrr-latest-v", "lrr-latest-b", "lc-pp", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b"] },
+    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "lc-pp", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b"] },
     { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
   ],
   postflop: [
