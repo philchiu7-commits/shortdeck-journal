@@ -109,6 +109,7 @@ const TENDENCY_TAGS = [
   { id: "bluff-line-xb",     cat: "postflop", label: "XB" },                    // check flop, bet turn as a bluff
   { id: "bluff-line-xxb",    cat: "postflop", label: "XXB" },                   // check flop, check turn, bet river as a bluff
   { id: "bluff-missed-draws", cat: "postflop", label: "Bluffs missed draws" },  // fires when his draw bricks instead of giving up
+  { id: "bluffs-air",         cat: "postflop", label: "Bluffs air" },           // bluffs with zero equity, never had a draw to begin with
   // sizing — preflop
   { id: "open-big-strong",   cat: "sizing",   label: "Open big = strong" },     // bigger open (5a–6a) = premium; small = speculative
   { id: "3bet-big-strong",   cat: "sizing",   label: "3bet big = strong" },     // bigger 3bet = nuts; small 3bet = light / bluff
@@ -137,7 +138,7 @@ const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]))
 const TAG_CATS = ["preflop", "postflop", "sizing", "live"];
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
-const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide"]);   // too general — use lc-pp / cc-width instead
+const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps"]);   // too general / cluttered picker
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 
 /* Sub-cluster single-read chips within each category. Any tag not listed
@@ -145,14 +146,14 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
    (READ_GROUPS in app.js) and scale reads render separately. */
 const READ_SUBCATS = {
   preflop: [
-    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "can-ls-light", "lc-pp", "iso-raises-limps", "lrr-latest-v", "lrr-latest-b", "iso-earliest-v", "iso-earliest-b"] },
+    { label: "Limping",   ids: ["limp-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "iso-earliest-v", "iso-earliest-b", "lc-pp"] },
     { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
   ],
   postflop: [
     { label: "Cbet & Float", ids: ["over-cbet", "floats-wide", "barrels-off"] },
     { label: "Hand strength", ids: ["chases-draws", "overplays-tp", "pays-off-fh", "bluffs-rivers", "protected-block"] },
     { label: "OOP",           ids: ["checks-range-oop", "xr-oop-v", "xr-oop-b"] },
-    { label: "Bluff lines",   ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light", "bluff-missed-draws"] },
+    { label: "Bluff lines",   ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light", "bluff-missed-draws", "bluffs-air"] },
   ],
   sizing: [
     { label: "Preflop sizing",  ids: ["open-big-strong", "3bet-big-strong"] },
