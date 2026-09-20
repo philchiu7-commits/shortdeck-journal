@@ -182,9 +182,10 @@ button.danger {
 .chip.on.sred.sstrong,   .bubble.on.sred.sstrong   { background: var(--bad);  color: #170606; box-shadow: 0 0 0 2px #ff9a9a inset, 0 0 10px rgba(255,90,90,.5); }
 
 /* grouped reads: a label followed by F/T/R (etc.) bubble toggles */
-.readgroup { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+.readgroup { display: flex; align-items: center; gap: 10px; margin: 7px 0; flex-wrap: wrap; }
 .rglabel { font-size: 14px; color: var(--text); width: 96px; flex: none; }
-.bubbles { display: flex; gap: 6px; }
+.bubbles { display: flex; gap: 6px; flex-wrap: wrap; }
+.tallyn { margin-left: 4px; font-size: 10px; opacity: .75; }
 .bubble {
   min-width: 42px; padding: 7px 4px; text-align: center;
   background: var(--panel2); color: var(--muted); border: 1px solid var(--line);

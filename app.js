@@ -43,6 +43,15 @@ const isPositionRead = (id) => POSITION_READS.has(id);
 const CHOICE_READS = Object.fromEntries(
   (typeof TENDENCY_TAGS !== "undefined" ? TENDENCY_TAGS : []).filter((t) => t.kind === "choice").map((t) => [t.id, t.options || []]));
 const isChoiceRead = (id) => !!CHOICE_READS[id];
+const TALLY_READS = Object.fromEntries(
+  (typeof TENDENCY_TAGS !== "undefined" ? TENDENCY_TAGS : []).filter((t) => t.kind === "tally").map((t) => [t.id, t.options || []]));
+const isTallyRead = (id) => !!TALLY_READS[id];
+/* Tally reads store {option: count}; the leading option is whichever has the highest count. */
+const tallyLeader = (counts) => {
+  const entries = Object.entries(counts || {}).filter(([, n]) => n > 0);
+  if (!entries.length) return null;
+  return entries.reduce((a, b) => (b[1] > a[1] ? b : a));
+};
 const cap1 = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 const STATE_CLASS = {
   yes: "sgreen", "yes!": "sgreen sstrong",
@@ -84,6 +93,11 @@ const readChip = (id, state) => {
   }
   if (isChoiceRead(id)) {
     return `<span class="chip mini on sscale" title="${esc(lbl)}: ${esc(state)}">${esc(lbl)} · ${esc(cap1(state))}</span>`;
+  }
+  if (isTallyRead(id)) {
+    const lead = tallyLeader(state);
+    if (!lead) return "";
+    return `<span class="chip mini on sscale" title="${esc(lbl)}: ${esc(lead[0])} (${lead[1]})">${esc(lbl)} · ${esc(lead[0])}</span>`;
   }
   return `<span class="chip mini on ${STATE_CLASS[state] || ""}">${esc(lbl)}</span>`;
 };
@@ -1172,6 +1186,7 @@ const readIsActive = (id, state) => {
   if (state == null || state === "") return false;
   if (isScaleRead(id)) return Number(state) > 0;
   if (isPositionRead(id)) return !!String(state).trim();
+  if (isTallyRead(id)) return !!tallyLeader(state);
   return true;
 };
 const readIsShown = (o, id) => readIsActive(id, oppReads(o)[id]);
@@ -1848,6 +1863,16 @@ function renderOppDetail(id) {
         `<label class="prtag${readIsActive(pair.b, reads[pair.b]) ? " on" : ""}">B${posSelect(pair.b)}</label></div>`);
       return structRow(TAG_BY_ID[id].label, `<div class="prpair">${posSelect(id)}</div>`);
     }
+    if (isTallyRead(id)) {
+      const counts = reads[id] || {};
+      const lead = tallyLeader(counts);
+      const opts = TALLY_READS[id].map((v) => {
+        const n = counts[v] || 0;
+        return `<button class="chip mini${lead && lead[0] === v ? " on sscale" : ""}" data-tally="${id}" data-val="${esc(v)}">${esc(cap1(v))}${n ? `<span class="tallyn">${n}</span>` : ""}</button>`;
+      }).join("");
+      const clr = lead ? `<button class="chip mini scaleclr" data-tallyclear="${id}" title="Clear">✕</button>` : "";
+      return structRow(TAG_BY_ID[id].label, `<div class="bubbles">${opts}${clr}</div>`);
+    }
     const opts = CHOICE_READS[id].map((v) =>
       `<button class="chip mini${reads[id] === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("");
     return structRow(TAG_BY_ID[id].label, `<div class="bubbles">${opts}</div>`);
@@ -1864,13 +1889,13 @@ function renderOppDetail(id) {
     const isSingle = (t) => t.cat === cat && !GROUPED_IDS.has(t.id) && !isScaleRead(t.id) && !RETIRED_TAG_IDS.has(t.id);
     const subHTML = subgroups.map((sg) => {
       // Split each subgroup: plain yes/no reads form a compact chip cloud, while
-      // graded reads (choice + position) drop to aligned "label + controls" rows
-      // so heavy dropdown boxes no longer zig-zag between small chips.
+      // graded reads (choice + position + tally) drop to aligned "label + controls"
+      // rows so heavy dropdown boxes no longer zig-zag between small chips.
       const chipIds = [], rowIds = [];
       sg.ids.forEach((id) => {
         const t = TAG_BY_ID[id];
         if (!t || !isSingle(t)) return;
-        (isPositionRead(id) || isChoiceRead(id) ? rowIds : chipIds).push(id);
+        (isPositionRead(id) || isChoiceRead(id) || isTallyRead(id) ? rowIds : chipIds).push(id);
       });
       const chips = chipIds.map((id) => readBtn(id, TAG_BY_ID[id].label, false)).join("");
       const rows = rowIds.map(structFor).join("");
@@ -4228,6 +4253,28 @@ function bindStatic() {
       const o = oppById(curOppId);
       const id = clr.dataset.scaleclear;
       delete oppReads(o)[id];
+      o.updatedAt = Date.now();
+      await dbPut("opponents", o);
+      renderOppDetail(curOppId);
+      return;
+    }
+    const tclr = e.target.closest("[data-tallyclear]");
+    if (tclr) {
+      const o = oppById(curOppId);
+      const id = tclr.dataset.tallyclear;
+      delete oppReads(o)[id];
+      o.updatedAt = Date.now();
+      await dbPut("opponents", o);
+      renderOppDetail(curOppId);
+      return;
+    }
+    const tl = e.target.closest("[data-tally]");
+    if (tl) {
+      const o = oppById(curOppId);
+      const reads = oppReads(o);
+      const id = tl.dataset.tally, v = tl.dataset.val;
+      const counts = reads[id] && typeof reads[id] === "object" ? reads[id] : (reads[id] = {});
+      counts[v] = (counts[v] || 0) + 1;
       o.updatedAt = Date.now();
       await dbPut("opponents", o);
       renderOppDetail(curOppId);

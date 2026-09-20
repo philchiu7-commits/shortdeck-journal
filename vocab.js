@@ -7,7 +7,9 @@
         cat    = "preflop" | "postflop" | "sizing" | "live".
         label  = short display text (≤ 22 chars fits the chip rows).
         kind   = optional: "scale" (0–100 slider) | "position" (pick a seat)
-                 | "choice" (pick one of `options`, e.g. ["tight","normal","wide"]).
+                 | "choice" (pick one of `options`, e.g. ["tight","normal","wide"])
+                 | "tally" (pick one of `options` repeatedly; each tap increments
+                   that option's count, e.g. tracking which bet size he uses most).
      2. Optionally list it in READ_SUBCATS so it sits in a named row.
      3. Optionally add EXPLOIT_RULES[id] = { yes: "…", no: "…" } for an
         auto-suggested exploit, and/or a PILL_READS entry for a felt pill.
@@ -117,6 +119,13 @@ const TENDENCY_TAGS = [
   { id: "size-up-draws",     cat: "sizing",   label: "Size up with draws" },    // 3-colour read (green/yellow/red)
   { id: "small-with-weak",   cat: "sizing",   label: "Small = weak" },
   { id: "overbets-nuts",     cat: "sizing",   label: "Sizes up with nuts" },
+  // sizing — tally which pot-% size he uses, per street, value vs bluff
+  { id: "size-flop-v",       cat: "sizing",   label: "Flop V",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-turn-v",       cat: "sizing",   label: "Turn V",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-river-v",      cat: "sizing",   label: "River V", kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-flop-b",       cat: "sizing",   label: "Flop B",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-turn-b",       cat: "sizing",   label: "Turn B",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-river-b",      cat: "sizing",   label: "River B", kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
   // live
   { id: "tilts",             cat: "live",     label: "Tilts after losses" },
   { id: "timing-tells",      cat: "live",     label: "Timing tells" },
@@ -158,6 +167,7 @@ const READ_SUBCATS = {
   sizing: [
     { label: "Preflop sizing",  ids: ["open-big-strong", "3bet-big-strong"] },
     { label: "Postflop sizing", ids: ["size-up-draws", "small-with-weak", "overbets-nuts"] },
+    { label: "Sizings", ids: ["size-flop-v", "size-turn-v", "size-river-v", "size-flop-b", "size-turn-b", "size-river-b"] },
   ],
   live: [
     { label: "Physical / timing", ids: ["timing-tells", "snap-call-weak", "talks-when-strong"] },
