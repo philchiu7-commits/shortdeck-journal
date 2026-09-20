@@ -98,6 +98,7 @@ const READ_GROUPS = [
   { cat: "postflop", label: "Bluff XT",   bubbles: [["bluff-xt-f", "F"], ["bluff-xt-t", "T"], ["bluff-xt-r", "R"]] },
   { cat: "postflop", label: "xR value",   bubbles: [["xr-value-f", "F"], ["xr-value-t", "T"], ["xr-value-r", "R"]] },
   { cat: "postflop", label: "xR bluff",   bubbles: [["xr-bluff-f", "F"], ["xr-bluff-t", "T"], ["xr-bluff-r", "R"]] },
+  { cat: "postflop", label: "Flop V mw",  bubbles: [["flop-vmw-lead", "Lead"], ["flop-vmw-xr", "xR"]] },
   { cat: "postflop", label: "Range",      bubbles: [["merged", "Merged"], ["polar", "Polar"]] },
 ];
 const GROUPED_IDS = new Set(READ_GROUPS.flatMap((g) => g.bubbles.map((b) => b[0])));

@@ -84,6 +84,8 @@ const TENDENCY_TAGS = [
   { id: "xr-bluff-f",        cat: "postflop", label: "xR bluff F" },            // check-raises as a bluff on this street
   { id: "xr-bluff-t",        cat: "postflop", label: "xR bluff T" },
   { id: "xr-bluff-r",        cat: "postflop", label: "xR bluff R" },
+  { id: "flop-vmw-lead",     cat: "postflop", label: "Flop V mw lead" },  // multiway: leads out with a value hand on the flop
+  { id: "flop-vmw-xr",       cat: "postflop", label: "Flop V mw xR" },    // multiway: check-raises a value hand on the flop
   { id: "merged",            cat: "postflop", label: "Merged" },
   { id: "polar",             cat: "postflop", label: "Polar" },
   // postflop — singles
@@ -103,6 +105,7 @@ const TENDENCY_TAGS = [
   { id: "bluff-line-bxb",    cat: "postflop", label: "BXB" },                   // bet flop, check turn, bet river as a bluff
   { id: "bluff-line-xb",     cat: "postflop", label: "XB" },                    // check flop, bet turn as a bluff
   { id: "bluff-line-xxb",    cat: "postflop", label: "XXB" },                   // check flop, check turn, bet river as a bluff
+  { id: "bluff-missed-draws", cat: "postflop", label: "Bluffs missed draws" },  // fires when his draw bricks instead of giving up
   // sizing — preflop
   { id: "open-big-strong",   cat: "sizing",   label: "Open big = strong" },     // bigger open (5a–6a) = premium; small = speculative
   { id: "3bet-big-strong",   cat: "sizing",   label: "3bet big = strong" },     // bigger 3bet = nuts; small 3bet = light / bluff
@@ -146,7 +149,7 @@ const READ_SUBCATS = {
     { label: "Cbet & Float", ids: ["over-cbet", "floats-wide", "barrels-off"] },
     { label: "Hand strength", ids: ["chases-draws", "overplays-tp", "pays-off-fh", "bluffs-rivers", "protected-block"] },
     { label: "OOP",           ids: ["checks-range-oop", "xr-oop-v", "xr-oop-b"] },
-    { label: "Bluff lines",   ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light"] },
+    { label: "Bluff lines",   ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light", "bluff-missed-draws"] },
   ],
   sizing: [
     { label: "Preflop sizing",  ids: ["open-big-strong", "3bet-big-strong"] },
