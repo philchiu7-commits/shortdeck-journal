@@ -1,5 +1,6 @@
 /* Service worker: cache the app shell so it runs offline once installed. */
-const CACHE = "shortdeck-v3";
+const CACHE = "shortdeck-v4";
+const PREFIX = "shortdeck-";   // other apps share this origin on GitHub Pages
 const ASSETS = [
   ".", "index.html", "style.css", "app.js", "db.js", "vocab.js", "pinyin.js",
   "import.html", "convert.html",
@@ -13,8 +14,10 @@ self.addEventListener("install", (e) => {
     .then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", (e) => {
+  // only our own old caches: Cache Storage is per-origin, and sibling apps
+  // (poker-journal, range-lab, squid-web) share it on GitHub Pages
   e.waitUntil(caches.keys().then((ks) =>
-    Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+    Promise.all(ks.filter((k) => k.startsWith(PREFIX) && k !== CACHE).map((k) => caches.delete(k)))
   ).then(() => self.clients.claim()));
 });
 // Stale-while-revalidate for same-origin GETs: serve the cached copy instantly,
