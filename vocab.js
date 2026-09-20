@@ -51,6 +51,7 @@ const TENDENCY_TAGS = [
   { id: "raise-earliest-v",  cat: "preflop",  label: "Earliest raise value", kind: "position" },  // earliest seat he open-raises for value
   { id: "raise-earliest-b",  cat: "preflop",  label: "Earliest raise bluff", kind: "position" },  // earliest seat he open-raises as a bluff (steal)
   { id: "iso-raises-limps",  cat: "preflop",  label: "Iso-raises limps" },
+  { id: "iso-width",         cat: "preflop",  label: "Iso",  kind: "choice", options: ["tight", "normal", "wide"] },  // how wide he iso-raises a limper
   { id: "iso-earliest-v",    cat: "preflop",  label: "Earliest iso value", kind: "position" },  // earliest seat he iso-raises a limper for value
   { id: "iso-earliest-b",    cat: "preflop",  label: "Earliest iso bluff", kind: "position" },  // earliest seat he iso-raises a limper as a bluff
   { id: "limp-caller",       cat: "preflop",  label: "Limps then calls" },      // limps, then calls any iso/raise
@@ -156,7 +157,7 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
    (READ_GROUPS in app.js) and scale reads render separately. */
 const READ_SUBCATS = {
   preflop: [
-    { label: "Limping",   ids: ["limp-width", "lc-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "iso-earliest-v", "iso-earliest-b", "lc-pp"] },
+    { label: "Limping",   ids: ["limp-width", "lc-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "iso-width", "iso-earliest-v", "iso-earliest-b", "lc-pp"] },
     { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
   ],
   postflop: [
