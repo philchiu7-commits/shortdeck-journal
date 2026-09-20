@@ -1,0 +1,7 @@
+# Files kept in the repo but never served by Cloudflare Pages.
+tools/
+.claude/
+CLAUDE.md
+TODO.md
+README.md
+generate_icons.py

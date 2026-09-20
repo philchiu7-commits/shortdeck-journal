@@ -1,1 +1,4 @@
 .DS_Store
+
+# dev-only import tooling — never deploy (Cloudflare serves the whole tree)
+tools/
