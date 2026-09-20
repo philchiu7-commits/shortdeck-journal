@@ -106,6 +106,8 @@ const READ_GROUPS = [
   { cat: "postflop", label: "Station",    bubbles: [["station-f", "F"], ["station-t", "T"], ["station-r", "R"]] },
   { cat: "postflop", label: "Lead",       bubbles: [["ld-draws", "Draws"], ["ld-tp", "TP"], ["ld-2p", "2P+"]] },
   { cat: "postflop", label: "Lead nut",   bubbles: [["lead-nut-f", "F"], ["lead-nut-t", "T"], ["lead-nut-r", "R"]] },
+  { cat: "postflop", label: "Can call nut IP",  bubbles: [["call-nut-ip-f", "F"], ["call-nut-ip-t", "T"], ["call-nut-ip-r", "R"]] },
+  { cat: "postflop", label: "Can call nut OOP", bubbles: [["call-nut-oop-f", "F"], ["call-nut-oop-t", "T"], ["call-nut-oop-r", "R"]] },
   { cat: "postflop", label: "Raise nuts", bubbles: [["raise-nuts-f", "F"], ["raise-nuts-t", "T"], ["raise-nuts-r", "R"]] },
   { cat: "postflop", label: "Bluff till", bubbles: [["bluff-till-f", "F"], ["bluff-till-t", "T"], ["bluff-till-r", "R"]] },
   { cat: "postflop", label: "Bluff raise", bubbles: [["bluff-raise-f", "F"], ["bluff-raise-t", "T"], ["bluff-raise-r", "R"]] },
@@ -122,7 +124,6 @@ const GROUPED_IDS = new Set(READ_GROUPS.flatMap((g) => g.bubbles.map((b) => b[0]
    "Label [V ▾][B ▾]" row instead of two separate wide dropdown boxes. */
 const POS_PAIRS = [
   { label: "Latest LRR",     v: "lrr-latest-v",     b: "lrr-latest-b" },
-  { label: "Earliest iso",   v: "iso-earliest-v",   b: "iso-earliest-b" },
   { label: "Earliest raise", v: "raise-earliest-v", b: "raise-earliest-b" },
 ];
 const POS_PAIR_BY_V = Object.fromEntries(POS_PAIRS.map((p) => [p.v, p]));

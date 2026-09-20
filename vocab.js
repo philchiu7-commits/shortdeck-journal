@@ -60,7 +60,7 @@ const TENDENCY_TAGS = [
   { id: "calls-raises-wide", cat: "preflop",  label: "Calls raises wide" },     // RETIRED (kept for label) — superseded by cc-width's graded tight/normal/wide
   { id: "3bets-light",       cat: "preflop",  label: "3bets light" },
   { id: "over-folds-3bet",   cat: "preflop",  label: "Over-folds to 3bet" },
-  { id: "jams-pre-light",    cat: "preflop",  label: "Jams pre light" },        // gets it in pre with AK / TT+ / any pair
+  { id: "jams-pre-light",    cat: "preflop",  label: "Jam over Raise light" },        // gets it in pre with AK / TT+ / any pair
   // postflop — grouped bubbles (Station / Lead / Raise nuts / Bluff till / Bluff raise / Bluff XT / Range)
   { id: "station-f",         cat: "postflop", label: "Station F" },
   { id: "station-t",         cat: "postflop", label: "Station T" },
@@ -71,6 +71,12 @@ const TENDENCY_TAGS = [
   { id: "lead-nut-f",        cat: "postflop", label: "Lead nut F" },            // leads out with the nuts on this street (no slowplay)
   { id: "lead-nut-t",        cat: "postflop", label: "Lead nut T" },
   { id: "lead-nut-r",        cat: "postflop", label: "Lead nut R" },
+  { id: "call-nut-ip-f",     cat: "postflop", label: "Can call nut IP F" },     // flat-calls with the nuts in position (slowplay) on this street
+  { id: "call-nut-ip-t",     cat: "postflop", label: "Can call nut IP T" },
+  { id: "call-nut-ip-r",     cat: "postflop", label: "Can call nut IP R" },
+  { id: "call-nut-oop-f",    cat: "postflop", label: "Can call nut OOP F" },    // flat-calls with the nuts out of position on this street
+  { id: "call-nut-oop-t",    cat: "postflop", label: "Can call nut OOP T" },
+  { id: "call-nut-oop-r",    cat: "postflop", label: "Can call nut OOP R" },
   { id: "raise-nuts-f",      cat: "postflop", label: "Raise nuts F" },
   { id: "raise-nuts-t",      cat: "postflop", label: "Raise nuts T" },
   { id: "raise-nuts-r",      cat: "postflop", label: "Raise nuts R" },
@@ -149,7 +155,7 @@ const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]))
 const TAG_CATS = ["preflop", "postflop", "sizing", "live"];
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
-const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps"]);   // too general / cluttered picker
+const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts"]);   // too general / cluttered picker
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 
 /* Sub-cluster single-read chips within each category. Any tag not listed
@@ -157,8 +163,8 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
    (READ_GROUPS in app.js) and scale reads render separately. */
 const READ_SUBCATS = {
   preflop: [
-    { label: "Limping",   ids: ["limp-width", "lc-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "iso-width", "iso-earliest-v", "iso-earliest-b", "lc-pp"] },
-    { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
+    { label: "Limping",   ids: ["limp-width", "lc-width", "iso-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "lc-pp"] },
+    { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "jams-pre-light"] },
   ],
   postflop: [
     { label: "Cbet & Float", ids: ["over-cbet", "floats-wide", "barrels-off"] },
@@ -173,7 +179,6 @@ const READ_SUBCATS = {
   ],
   live: [
     { label: "Physical / timing", ids: ["timing-tells", "snap-call-weak", "talks-when-strong"] },
-    { label: "Mental state",      ids: ["tilts"] },
   ],
 };
 
