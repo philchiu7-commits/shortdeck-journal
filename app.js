@@ -104,6 +104,16 @@ const READ_GROUPS = [
 ];
 const GROUPED_IDS = new Set(READ_GROUPS.flatMap((g) => g.bubbles.map((b) => b[0])));
 
+/* Value/bluff position-read pairs — shown in the picker as one compact
+   "Label [V ▾][B ▾]" row instead of two separate wide dropdown boxes. */
+const POS_PAIRS = [
+  { label: "Latest LRR",     v: "lrr-latest-v",     b: "lrr-latest-b" },
+  { label: "Earliest iso",   v: "iso-earliest-v",   b: "iso-earliest-b" },
+  { label: "Earliest raise", v: "raise-earliest-v", b: "raise-earliest-b" },
+];
+const POS_PAIR_BY_V = Object.fromEntries(POS_PAIRS.map((p) => [p.v, p]));
+const POS_PAIR_SECONDARY = new Set(POS_PAIRS.map((p) => p.b));
+
 /* Felt villain-pill engine tag — one-word read summary shown on each seated
    villain's card. Compound rules win over singles (higher signal), and inside
    singles the PILL_READS priority list decides. Returns null → no pill row. */
@@ -1819,6 +1829,29 @@ function renderOppDetail(id) {
     const base = bubble ? "bubble" : "chip mini";
     return `<button class="${base}${st ? " on " + STATE_CLASS[st] : ""}" data-tag="${id}">${esc(lbl)}</button>`;
   };
+  // A single seat <select> for a position read.
+  const posSelect = (id) => {
+    const st = reads[id];
+    const opts = ['<option value="">–</option>']
+      .concat(POSITIONS.map((p) => `<option value="${p}"${st === p ? " selected" : ""}>${p}</option>`)).join("");
+    return `<select class="prselect${readIsActive(id, st) ? " on" : ""}" data-posselect="${id}">${opts}</select>`;
+  };
+  // Choice / position reads render as a labelled row that lines up with the
+  // F/T/R bubble rows above — one visual language for every graded read.
+  const structRow = (label, inner) => `<div class="readgroup"><span class="rglabel">${esc(label)}</span>${inner}</div>`;
+  const structFor = (id) => {
+    if (POS_PAIR_SECONDARY.has(id)) return "";                 // drawn with its V partner
+    if (isPositionRead(id)) {
+      const pair = POS_PAIR_BY_V[id];
+      if (pair) return structRow(pair.label,
+        `<div class="prpair"><label class="prtag${readIsActive(pair.v, reads[pair.v]) ? " on" : ""}">V${posSelect(pair.v)}</label>` +
+        `<label class="prtag${readIsActive(pair.b, reads[pair.b]) ? " on" : ""}">B${posSelect(pair.b)}</label></div>`);
+      return structRow(TAG_BY_ID[id].label, `<div class="prpair">${posSelect(id)}</div>`);
+    }
+    const opts = CHOICE_READS[id].map((v) =>
+      `<button class="chip mini${reads[id] === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("");
+    return structRow(TAG_BY_ID[id].label, `<div class="bubbles">${opts}</div>`);
+  };
   $("od-tags").innerHTML = TAG_CATS.map((cat) => {
     const groups = READ_GROUPS.filter((g) => g.cat === cat).map((g) =>
       `<div class="readgroup"><span class="rglabel">${esc(g.label)}</span><div class="bubbles">` +
@@ -1829,13 +1862,21 @@ function renderOppDetail(id) {
     const usedIds = new Set(subgroups.flatMap((s) => s.ids));
     // Retired reads — data preserved on old opponents, but no longer offered as a toggle.
     const isSingle = (t) => t.cat === cat && !GROUPED_IDS.has(t.id) && !isScaleRead(t.id) && !RETIRED_TAG_IDS.has(t.id);
-    const chipFor = (id) => { const t = TAG_BY_ID[id]; return t && isSingle(t) ? readBtn(t.id, t.label, false) : ""; };
     const subHTML = subgroups.map((sg) => {
-      const chips = sg.ids.map(chipFor).filter(Boolean).join("");
-      if (!chips) return "";
-      // All read subgroups wrap so every read stays visible without horizontal
-      // scrolling (Phil: "shows all reads so can be second row").
-      return `<div class="readsub"><span class="rslabel">${esc(sg.label)}</span><div class="chiprow readwrap">${chips}</div></div>`;
+      // Split each subgroup: plain yes/no reads form a compact chip cloud, while
+      // graded reads (choice + position) drop to aligned "label + controls" rows
+      // so heavy dropdown boxes no longer zig-zag between small chips.
+      const chipIds = [], rowIds = [];
+      sg.ids.forEach((id) => {
+        const t = TAG_BY_ID[id];
+        if (!t || !isSingle(t)) return;
+        (isPositionRead(id) || isChoiceRead(id) ? rowIds : chipIds).push(id);
+      });
+      const chips = chipIds.map((id) => readBtn(id, TAG_BY_ID[id].label, false)).join("");
+      const rows = rowIds.map(structFor).join("");
+      if (!chips && !rows) return "";
+      return `<div class="readsub"><span class="rslabel">${esc(sg.label)}</span>` +
+        (chips ? `<div class="chiprow readwrap">${chips}</div>` : "") + rows + `</div>`;
     }).join("");
     const otherSingles = TENDENCY_TAGS.filter((t) => isSingle(t) && !usedIds.has(t.id))
       .map((t) => readBtn(t.id, t.label, false)).join("") +

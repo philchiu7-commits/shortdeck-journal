@@ -145,7 +145,7 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
    (READ_GROUPS in app.js) and scale reads render separately. */
 const READ_SUBCATS = {
   preflop: [
-    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "lc-pp", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b"] },
+    { label: "Limping",   ids: ["limp-width", "lrr-bluff", "can-ls-light", "lc-pp", "iso-raises-limps", "lrr-latest-v", "lrr-latest-b", "iso-earliest-v", "iso-earliest-b"] },
     { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
   ],
   postflop: [

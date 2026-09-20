@@ -509,6 +509,14 @@ textarea.noteedit { margin-bottom: 0; }
   border-radius: 8px; padding: 3px 6px; font-size: 13px; font-weight: 700;
 }
 
+/* Graded reads (value/bluff seat pair + choice) as an aligned "label + controls"
+   row — same rhythm as the F/T/R bubble rows. */
+.prpair { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.prtag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.prtag.on { color: var(--accent); }
+.prselect { appearance: menulist; background: rgba(0,0,0,.25); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 4px 7px; font-size: 13px; font-weight: 700; }
+.prselect.on { color: var(--text); border-color: var(--accent); }
+
 /* Choice-kind read: label + one-of-N option chips */
 .choiceread {
   display: inline-flex; align-items: center; gap: 8px; margin: 4px 4px 4px 0;
