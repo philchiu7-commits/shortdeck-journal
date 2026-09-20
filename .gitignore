@@ -1,4 +1,10 @@
 .DS_Store
 
-# dev-only import tooling — never deploy (Cloudflare serves the whole tree)
+# Dev-only files: kept locally, never committed. Cloudflare Pages serves the
+# ENTIRE tracked tree (private repo or not) and ignores .assetsignore, so the
+# only way to keep a file off the public site is to keep it out of git.
 tools/
+CLAUDE.md
+TODO.md
+generate_icons.py
+.claude/
