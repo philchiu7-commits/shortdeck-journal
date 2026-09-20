@@ -508,6 +508,11 @@ textarea.noteedit { margin-bottom: 0; }
   appearance: menulist; background: rgba(0,0,0,.25); color: var(--text); border: 1px solid var(--line);
   border-radius: 8px; padding: 3px 6px; font-size: 13px; font-weight: 700;
 }
+.posread .prall {
+  background: rgba(0,0,0,.25); color: var(--muted); border: 1px solid var(--line);
+  border-radius: 8px; padding: 3px 8px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.posread .prall.on { background: var(--accent); border-color: var(--accent); color: #0a0d12; }
 
 /* Choice-kind read: label + one-of-N option chips */
 .choiceread {

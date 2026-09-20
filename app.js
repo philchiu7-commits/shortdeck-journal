@@ -79,7 +79,8 @@ const readChip = (id, state) => {
     return `<span class="chip mini on sscale" title="${esc(lbl)}: ${v}/100 (${scaleBucket(v)})">${esc(lbl)} · ${v}</span>`;
   }
   if (isPositionRead(id)) {
-    return `<span class="chip mini on sgreen" title="${esc(lbl)}: ${esc(state)}">${esc(lbl)} · ${esc(state)}</span>`;
+    const disp = state === "ALL" ? "All" : state;
+    return `<span class="chip mini on sgreen" title="${esc(lbl)}: ${esc(disp)}">${esc(lbl)} · ${esc(disp)}</span>`;
   }
   if (isChoiceRead(id)) {
     return `<span class="chip mini on sscale" title="${esc(lbl)}: ${esc(state)}">${esc(lbl)} · ${esc(cap1(state))}</span>`;
@@ -1787,13 +1788,15 @@ function renderOppDetail(id) {
     const st = reads[id];
     if (isPositionRead(id)) {
       const active = readIsActive(id, st);
+      const all = st === "ALL";
       const opts = ['<option value="">–</option>']
         .concat(POSITIONS.map((p) => `<option value="${p}"${st === p ? " selected" : ""}>${p}</option>`))
         .join("");
-      return `<label class="posread${active ? " on" : ""}" title="${esc(lbl)}">
+      return `<div class="posread${active ? " on" : ""}" title="${esc(lbl)}">
         <span class="prlbl">${esc(lbl)}</span>
+        <button type="button" class="prall${all ? " on" : ""}" data-posall="${id}">All</button>
         <select class="prselect" data-posselect="${id}">${opts}</select>
-      </label>`;
+      </div>`;
     }
     if (isChoiceRead(id)) {
       const active = readIsActive(id, st);
@@ -4184,6 +4187,17 @@ function bindStatic() {
       const o = oppById(curOppId);
       const id = clr.dataset.scaleclear;
       delete oppReads(o)[id];
+      o.updatedAt = Date.now();
+      await dbPut("opponents", o);
+      renderOppDetail(curOppId);
+      return;
+    }
+    const pa = e.target.closest("[data-posall]");
+    if (pa) {
+      const o = oppById(curOppId);
+      const reads = oppReads(o);
+      const id = pa.dataset.posall;
+      if (reads[id] === "ALL") delete reads[id]; else reads[id] = "ALL";   // toggle "all positions"
       o.updatedAt = Date.now();
       await dbPut("opponents", o);
       renderOppDetail(curOppId);

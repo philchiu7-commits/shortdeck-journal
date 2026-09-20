@@ -44,6 +44,8 @@ const TENDENCY_TAGS = [
   { id: "lrr-latest-v",      cat: "preflop",  label: "Latest LRR value", kind: "position" },   // seat of his last value limp-reraise
   { id: "lrr-latest-b",      cat: "preflop",  label: "Latest LRR bluff", kind: "position" },   // seat of his last bluff limp-reraise
   { id: "opens-premium",     cat: "preflop",  label: "Raises = premium" },      // yes = first-in raise is AA–JJ/AK; no = raises wide
+  { id: "raise-earliest-v",  cat: "preflop",  label: "Earliest raise value", kind: "position" },  // earliest seat he open-raises for value
+  { id: "raise-earliest-b",  cat: "preflop",  label: "Earliest raise bluff", kind: "position" },  // earliest seat he open-raises as a bluff (steal)
   { id: "iso-raises-limps",  cat: "preflop",  label: "Iso-raises limps" },
   { id: "iso-earliest-v",    cat: "preflop",  label: "Earliest iso value", kind: "position" },  // earliest seat he iso-raises a limper for value
   { id: "iso-earliest-b",    cat: "preflop",  label: "Earliest iso bluff", kind: "position" },  // earliest seat he iso-raises a limper as a bluff
@@ -121,7 +123,7 @@ const PLAYER_TYPES = [
   { id: "fish",       label: "Fish",       icon: "🐠", color: "#e08a3c" },
   { id: "loose-fish", label: "Loose fish", icon: "🐟", color: "#4fbf5a" },
   { id: "tight-fish", label: "Tight fish", icon: "🎣", color: "#c5c33a" },
-  { id: "reg",        label: "Reg",        icon: "🃏", color: "#4f7fdf" },
+  { id: "reg",        label: "Loose reg",  icon: "🃏", color: "#4f7fdf" },
   { id: "good-reg",   label: "Good reg",   icon: "🦈", color: "#d64848" },
   { id: "tight-reg",  label: "Tight reg",  icon: "🔒", color: "#7a8496" },
 ];
@@ -138,7 +140,7 @@ const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 const READ_SUBCATS = {
   preflop: [
     { label: "Limping",   ids: ["limp-width", "lrr-bluff", "lrr-latest-v", "lrr-latest-b", "lc-pp", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b"] },
-    { label: "Raising",   ids: ["opens-premium", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
+    { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "over-folds-3bet", "jams-pre-light"] },
   ],
   postflop: [
     { label: "Cbet & Float", ids: ["over-cbet", "floats-wide", "barrels-off"] },
