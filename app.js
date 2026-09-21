@@ -839,6 +839,31 @@ async function migrateDupBoardCards() {
   await metaSet("migrations.dupCardsV1", { ts: Date.now(), patched });
 }
 
+/* DX imports made before the ring fix labelled n players as U(n+2)…U6 (skipping
+   U5/U4). The first seat of an n-player table is U(n) now, so a hand holding
+   U(n+2) is one of the old ones: shift its U seats onto the real ring. Safe to
+   re-run — a fixed hand never contains U(n+2). */
+async function fixDxSeats() {
+  let patched = 0;
+  for (const h of HANDS) {
+    const n = h.seats;
+    if (!(n >= 4) || !(h.imported?.source === "dx" || String(h.id).startsWith("dxh-"))) continue;
+    const vs = h.villains || [];
+    const pos = [...vs.map((v) => v.pos), h.heroPos].filter(Boolean);
+    if (!pos.includes("U" + (n + 2))) continue;
+    const from = Array.from({ length: n - 3 }, (_, i) => "U" + (n + 2 - i));
+    const to = Array.from({ length: n - 3 }, (_, i) => "U" + (n - i));
+    const map = Object.fromEntries(from.map((f, i) => [f, to[i]]));
+    for (const v of vs) if (map[v.pos]) v.pos = map[v.pos];
+    if (map[h.heroPos]) h.heroPos = map[h.heroPos];
+    h.updatedAt = Date.now();
+    await dbPut("hands", h);
+    patched++;
+  }
+  if (patched) _statsCache = null;
+  return patched;
+}
+
 async function migrateLegacyReads() {
   if (await metaGet("mig.legacyReads")) return;   // one-shot: skip the full-table rewrite on every boot
   for (const o of OPP) {
@@ -5166,6 +5191,7 @@ function bindStatic() {
       try {
         const counts = await importJSON(JSON.parse(raw));
         await refreshCache();
+        await fixDxSeats();
         hideSheet();
         toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands`);
         renderData();
@@ -5179,6 +5205,7 @@ function bindStatic() {
     try {
       const counts = await importJSON(JSON.parse(await f.text()));
       await refreshCache();
+      await fixDxSeats();
       toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands`);
       renderData();
     } catch (err) { toast("Import failed: " + err.message); }
@@ -5236,6 +5263,7 @@ async function boot() {
   await migrateLegacyReads();
   await migrateNoteConvertedSquid();
   await migrateDupBoardCards();
+  await fixDxSeats();
   await loadBlindsDefault();
   collapsedGroups = new Set((await metaGet("collapsedGroups")) || []);
   pinnedGroup = (await metaGet("pinnedGroup")) ?? null;
