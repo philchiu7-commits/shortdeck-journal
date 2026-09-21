@@ -2371,6 +2371,8 @@ function renderOppDetail(id) {
   $("od-hands").innerHTML = (seenHTML + noCardsHTML) ||
     (allHands.length ? `<div class="empty">No hands match these filters. ${allHands.length} total — try clearing.</div>` : `<div class="empty">No hands logged.</div>`);
 
+  renderStats(id, mine);
+  renderSizing(id, mine);
   renderRanges(id, mine);
 }
 
@@ -4894,6 +4896,7 @@ function bindStatic() {
     renderOppDetail(curOppId);
   };
   $("od-hands").onclick = handListClick;
+  bindStats();
 
   // hand detail
   $("hv-edit").onclick = () => {

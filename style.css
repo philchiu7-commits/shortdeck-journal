@@ -932,3 +932,27 @@ textarea.noteedit { margin-bottom: 0; }
   text-transform: uppercase; color: var(--muted);
 }
 .rdhead .rdn { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+/* Stats — HUD chips + per-seat / postflop tables */
+.sthud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+.stchip { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 2px 4px; text-align: center; min-width: 0; }
+.stchip label { display: block; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stchip b { display: block; font-size: 17px; line-height: 1.2; }
+.stchip i, .stc i { display: block; font-style: normal; font-size: 9px; color: var(--muted); }
+.stchip.thin b, .stc.thin b { opacity: .5; }
+.sttabs { margin-bottom: 8px; }
+.sttable { display: flex; flex-direction: column; gap: 2px; }
+.strow { display: grid; grid-template-columns: 62px repeat(var(--cols), minmax(0, 1fr)); gap: 2px; align-items: center; }
+.sthead { font-size: 10px; color: var(--muted); text-align: center; text-transform: uppercase; }
+.stlbl { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.stc { text-align: center; background: var(--panel2); border-radius: 4px; padding: 3px 0 2px; min-width: 0; }
+.stc b { font-size: 12px; line-height: 1.1; }
+.stc.none { color: #4a5160; padding: 8px 0; }
+.stnote { margin-top: 8px; font-size: 11px; color: var(--muted); }
+.stdefs { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.stdefs summary { cursor: pointer; color: var(--accent); }
+.stdefs p { margin: 6px 0 0; }
+.stdefs b { color: var(--text); }
+
+.szgap { height: 6px; }
+.stc.szTop { outline: 1px solid var(--accent); }
