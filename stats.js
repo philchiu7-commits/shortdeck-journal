@@ -306,18 +306,53 @@ function renderSizing(oppId, hands) {
   if (!host) return;
   const A = sdSizingAuto(oppId, hands);
   const skips = SD_SZ_SKIPS.filter(([k]) => A.skipped[k]).map(([k, l]) => `${A.skipped[k]} bet${A.skipped[k] === 1 ? "" : "s"}: ${l}`);
-  $("od-sizinghint").textContent = A.n ? `${A.n} bet${A.n === 1 ? "" : "s"} graded` : "";
   const cols = SD_SZ_STEPS.length;
-  const head = `<div class="strow sthead" style="--cols:${cols}"><div></div>${SD_SZ_STEPS.map((s) => `<div>${s}</div>`).join("")}</div>`;
-  const body = ["V", "B"].map((kind) => ["flop", "turn", "river"].map((st) => {
-    const cell = A.rows[st + "-" + kind.toLowerCase()] || {};
-    const total = SD_SZ_STEPS.reduce((s, x) => s + (cell[x] || 0), 0);
-    const top = total ? Math.max(...SD_SZ_STEPS.map((x) => cell[x] || 0)) : 0;
-    return `<div class="strow" style="--cols:${cols}"><div class="stlbl">${st[0].toUpperCase() + st.slice(1)} ${kind === "V" ? "Value" : "Bluff"}</div>${
-      SD_SZ_STEPS.map((x) => { const c = cell[x] || 0; return `<div class="stc${c ? "" : " none"}${c && c === top ? " szTop" : ""}">${c ? `<b>${c}</b>` : "–"}</div>`; }).join("")}</div>`;
+  const headFor = (blankLast) => `<div class="strow sthead" style="--cols:${cols}"><div></div>${SD_SZ_STEPS.map((s) => `<div>${blankLast && s === "Jam" ? "" : s}</div>`).join("")}</div>`;
+  const rowLbl = (st, kind) => `<div class="stlbl">${st[0].toUpperCase() + st.slice(1)} ${kind === "V" ? "Value" : "Bluff"}</div>`;
+  const grid = (cellFor, tail, blankLast) => headFor(blankLast) + ["V", "B"].map((kind) => ["flop", "turn", "river"].map((st) => {
+    const cell = cellFor(st, kind);
+    const top = Math.max(0, ...SD_SZ_STEPS.map((x) => cell[x] || 0));
+    return `<div class="strow" style="--cols:${cols}">${rowLbl(st, kind)}${SD_SZ_STEPS.map((x, i) => tail(st, kind, x, cell[x] || 0, top, i)).join("")}</div>`;
   }).join("")).join(`<div class="szgap"></div>`);
+  const auto = grid((st, k) => A.rows[st + "-" + k.toLowerCase()] || {}, (st, k, x, c, top) =>
+    `<div class="stc${c ? "" : " none"}${c && c === top ? " szTop" : ""}">${c ? `<b>${c}</b>` : "–"}</div>`);
+  /* Manual taps: the same grid, but every cell is a button that adds one. The
+     seventh column has no Jam rung, so it holds the row's clear button. */
+  const o = oppById(oppId), reads = o ? oppReads(o) : {};
+  const tapId = (st, k) => `size-${st}-${k.toLowerCase()}`;
+  let tapped = 0;
+  const manual = grid((st, k) => reads[tapId(st, k)] || {}, (st, k, x, c, top, i) => {
+    const id = tapId(st, k);
+    if (x === "Jam") return (reads[id] && tallyLeader(reads[id]))
+      ? `<button class="stc szClr" data-tallyclear="${id}" title="Clear this row" aria-label="Clear this row">✕</button>` : `<div></div>`;
+    tapped += c;
+    return `<button class="stc szTap${c ? "" : " none"}${c && c === top ? " szTop" : ""}" data-tally="${id}" data-val="${x}" aria-label="${x}">${c ? `<b>${c}</b>` : "+"}</button>`;
+  }, true);
   host.innerHTML = `
-    <div class="sttable">${head}${body}</div>
+    <div class="szsub">From hands${A.n ? ` · ${A.n} bet${A.n === 1 ? "" : "s"}` : ""}</div>
+    <div class="sttable">${auto}</div>
     <div class="stnote">From hands where his cards were logged, so bluffs he never showed aren't here — read the Bluff rows as a floor. Value = trips+ with his own cards, an overpair, or two pair with both his cards. On a flush board (3+ of a suit) or a four-to-a-straight board only trips+ is value, and on a paired board two pair isn't. Everything else, draws and top pair included, counts as a bluff.${
-      skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>`;
+      skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>
+    <div class="szsub">Your taps${tapped ? ` · ${tapped}` : ""}</div>
+    <div class="sttable">${manual}</div>
+    <div class="stnote">Tap a size when you see him bet it as value or as a bluff.</div>`;
+}
+
+function bindSizing() {
+  $("od-sizing").onclick = async (e) => {
+    const clr = e.target.closest("[data-tallyclear]"), tap = e.target.closest("[data-tally]");
+    if (!clr && !tap || !curOppId) return;
+    const o = oppById(curOppId);
+    if (!o) return;
+    const reads = oppReads(o);
+    if (clr) delete reads[clr.dataset.tallyclear];
+    else {
+      const id = tap.dataset.tally, v = tap.dataset.val;
+      const counts = reads[id] && typeof reads[id] === "object" ? reads[id] : (reads[id] = {});
+      counts[v] = (counts[v] || 0) + 1;
+    }
+    o.updatedAt = Date.now();
+    await dbPut("opponents", o);
+    renderOppDetail(curOppId);
+  };
 }

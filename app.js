@@ -48,6 +48,8 @@ const isChoiceRead = (id) => !!CHOICE_READS[id];
 const TALLY_READS = Object.fromEntries(
   (typeof TENDENCY_TAGS !== "undefined" ? TENDENCY_TAGS : []).filter((t) => t.kind === "tally").map((t) => [t.id, t.options || []]));
 const isTallyRead = (id) => !!TALLY_READS[id];
+/* The six size-*-v/b tallies are drawn in the Sizings panel, not the Reads list. */
+const SIZING_GRID_IDS = new Set(["flop", "turn", "river"].flatMap((s) => ["v", "b"].map((k) => `size-${s}-${k}`)));
 /* Tally reads store {option: count}; every option with a count lights up, the leader is the highest. */
 const tallyLeader = (counts) => {
   const entries = Object.entries(counts || {}).filter(([, n]) => n > 0);
@@ -253,7 +255,7 @@ function handFacts(h, idx) {
     faced: { pre: false, flop: false, turn: false, river: false },
     xt: { flop: false, turn: false, river: false },      // checked to: a check in front, no bet out
     lead: { flop: false, turn: false, river: false },    // first player to act on the street
-    cat: { flop: null, turn: null, river: null },        // his made-hand class as of that street
+    md: { flop: null, turn: null, river: null },         // his hand vs the board as of that street
     pfr: false, limpedFirst: false, isoSpot: false, sd: false, won: null,
   };
   const open = { pre: false, flop: false, turn: false, river: false };
@@ -276,11 +278,11 @@ function handFacts(h, idx) {
     acted[a.street] = true;
   }
   f.pfr = lastPreAgg === me;
-  /* Made-hand class as of each street, so "blocks small with 2 pair+" is asked
-     against the board he actually had in front of him, not the river runout. */
+  /* Where his hand stood on each street, so "bluff" is asked against the board
+     he had in front of him and not the river runout. */
   if (f.cards.length === 2)
     for (const [st, n] of [["flop", 3], ["turn", 4], ["river", 5]])
-      if (f.board.length >= n) f.cat[st] = best7(f.board.slice(0, n).concat(f.cards))[0];
+      if (f.board.length >= n) f.md[st] = madeTier(f.cards, f.board.slice(0, n));
   const win = handWinner(h);
   if (win && win.how === "showdown") { f.sd = true; f.won = win.winners.includes(me); }
   return f;
@@ -308,6 +310,48 @@ const fOpened = (f) => f.s.pre.some((x) => isAgg(x.act) && !x.facing);
 const fFacedRR = (f) => { const a = f.s.pre, i = a.findIndex((x) => isAgg(x.act) && !x.facing); return i >= 0 && a.slice(i + 1).some((x) => x.facing); };
 const fBucket = (f, st) => { const x = f.s[st].find((y) => isAgg(y.act) && y.bucket); return x ? x.bucket : null; };
 const fPair = (f) => f.cards.length === 2 && f.cards[0][0] === f.cards[1][0];
+/* Where his hand sits against the board, as of the street he bet on. Phil's
+   ladder, 2026-09-22: a bluff is anything weaker than second pair — it does NOT
+   have to have lost at showdown, so a hand whose cards are logged counts even
+   if it never got there. The polar ends are hands with no pair of his own and
+   hands that are top pair good kicker or better; everything between (bottom or
+   third pair, second pair, top pair with a small kicker, an underpair) is the
+   merged middle. "Good kicker" = Q or better alongside top pair — my reading,
+   not Phil's words. Pairs that live entirely on the board are not his. */
+const SD_CARDRE = /^[6-9TJQKA][cdhs]$/;
+const GOOD_KICKER = 12;                               // Q in RVAL terms
+function madeTier(hole, board) {
+  if (!hole || hole.length !== 2 || board.length < 3) return null;
+  const all = hole.concat(board);
+  if (!all.every((c) => SD_CARDRE.test(String(c))) || new Set(all).size !== all.length) return null;
+  const s = best7(all);
+  const hv = hole.map((c) => RVAL[c[0]]);
+  const bv = [...new Set(board.map((c) => RVAL[c[0]]))].sort((a, b) => b - a);
+  const cnt = {};
+  for (const c of all) cnt[RVAL[c[0]]] = (cnt[RVAL[c[0]]] || 0) + 1;
+  const mine = [...new Set(hv.filter((v) => cnt[v] >= 2))];                 // his own paired ranks
+  const none = { tier: 0, kicker: 0, ownPair: false };
+  if (s[0] >= 4) return { tier: 4, kicker: 0, ownPair: true };              // straight, flush, boat, quads
+  if (s[0] === 3) return mine.length ? { tier: 4, kicker: 0, ownPair: true } : none;
+  if (s[0] === 2 && mine.length === 2) return { tier: 4, kicker: 0, ownPair: true };
+  if (!mine.length) return none;                                           // board pairs only, or no pair
+  const p = Math.max(...mine);
+  if (hv[0] === hv[1]) {                                                   // pocket pair
+    const above = bv.filter((v) => v > p).length;
+    return { tier: above === 0 ? 3 : above === 1 ? 1 : 0, kicker: 0, ownPair: true };
+  }
+  const idx = bv.indexOf(p);                                               // 0 = top pair
+  return { tier: idx === 0 ? 2 : idx === 1 ? 1 : 0, kicker: Math.max(...hv.filter((v) => v !== p)), ownPair: true };
+}
+const mdBluff = (m) => !!m && m.tier === 0;
+const mdStrong = (m) => !!m && (m.tier >= 3 || (m.tier === 2 && m.kicker >= GOOD_KICKER));   // TPGK+
+const fMade = (f, st) => f.md[st];
+const fBluffed = (f, st) => mdBluff(f.md[st]);
+const fValue = (f, st) => mdStrong(f.md[st]);
+/* The street he actually put money in on, latest first — the hand's own verdict. */
+const fBetSt = (f) => STREETS3.filter((st) => fFired(f, st) && f.md[st]).pop() || null;
+const fBetMade = (f) => { const st = fBetSt(f); return st ? f.md[st] : null; };
+
 /* A bucket as a number so sizes can be compared: "Jam" sits above every %. */
 const bPct = (b) => { if (b === "Jam") return 999; const m = /^B(\d+)$/.exec(b || ""); return m ? Number(m[1]) : null; };
 const fSmallB = (f, st) => { const b = fBucket(f, st); return b === "B25" || b === "B33" ? b : null; };
@@ -2323,7 +2367,7 @@ function renderOppDetail(id) {
     const subgroups = READ_SUBCATS[cat] || [];
     const usedIds = new Set(subgroups.flatMap((s) => s.ids));
     // Retired reads — data preserved on old opponents, but no longer offered as a toggle.
-    const isSingle = (t) => t.cat === cat && !GROUPED_IDS.has(t.id) && !isScaleRead(t.id) && !RETIRED_TAG_IDS.has(t.id);
+    const isSingle = (t) => t.cat === cat && !SIZING_GRID_IDS.has(t.id) && !GROUPED_IDS.has(t.id) && !isScaleRead(t.id) && !RETIRED_TAG_IDS.has(t.id);
     const subHTML = subgroups.map((sg) => {
       // Split each subgroup: plain yes/no reads form a compact chip cloud, while
       // graded reads (choice + position + tally) drop to aligned "label + controls"
@@ -5006,6 +5050,7 @@ function bindStatic() {
   };
   $("od-hands").onclick = handListClick;
   bindStats();
+  bindSizing();
 
   // hand detail
   $("hv-edit").onclick = () => {
