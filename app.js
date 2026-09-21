@@ -1145,6 +1145,12 @@ function rangeEvidence(oppId, hands) {
   }
   return ev;
 }
+/* Showdown-only cells (nothing painted) take the colour of what he most often did with the hand. */
+function evidenceAct(ev) {
+  const n = {};
+  for (const e of ev) n[e.act] = (n[e.act] || 0) + 1;
+  return Object.keys(n).sort((a, b) => n[b] - n[a])[0] || null;
+}
 function rangeGridHTML(painted, evid) {
   const cells = [];
   for (let i = 0; i < RANKS.length; i++) {
@@ -1153,10 +1159,12 @@ function rangeGridHTML(painted, evid) {
       const cls = i === j ? hi + hi : (i < j ? hi + lo + "s" : lo + hi + "o");
       const act = painted[cls];
       const ev = evid[cls] || [];
-      const style = act ? `background:${ACT_COLORS[act] || "#5a6068"};color:#fff;` : "background:#1a1d23;color:#6b7078;";
+      const evAct = act ? null : evidenceAct(ev);
+      const evc = evAct ? ACT_COLORS[evAct] : "";
+      const style = act ? `background:${ACT_COLORS[act] || "#5a6068"};color:#fff;` : evc ? `background:${evc};color:#fff;` : "background:#1a1d23;color:#6b7078;";
       const dots = ev.slice(0, 3).map((e) => `<i class="rgdot" style="background:${ACT_COLORS[e.act] || "#fff"}"></i>`).join("");
       const badge = ev.length > 3 ? `<span class="rgn">${ev.length}</span>` : "";
-      cells.push(`<div class="rgcell tappable" data-rgcell="${cls}" data-rc="${i},${j}" style="${style}" title="${cls}${ev.length ? ` · seen ${ev.length}×` : ""}">${cls}${dots ? `<span class="rgdots">${dots}</span>` : ""}${badge}</div>`);
+      cells.push(`<div class="rgcell tappable" data-rgcell="${cls}" data-rc="${i},${j}" data-evc="${evc}" style="${style}" title="${cls}${ev.length ? ` · seen ${ev.length}×` : ""}">${cls}${dots ? `<span class="rgdots">${dots}</span>` : ""}${badge}</div>`);
     }
   }
   return cells.join("");
@@ -1507,7 +1515,7 @@ function renderRanges(oppId, hands) {
   const evAll = rangeEvidence(oppId, hands);
   const sit = RANGE_SIT_BY_ID[rangeSit] || RANGE_SITS[0];
   rangeSit = sit.id;
-  if (rangeBrush !== "hands" && !sit.acts.some(([a]) => a === rangeBrush)) rangeBrush = sit.acts[0][0];
+  if (!sit.acts.some(([a]) => a === rangeBrush)) rangeBrush = sit.acts[0][0];
   const painted = ranges[rangeBucket]?.[rangeSit] || {};
   const evid = evAll[rangeBucket]?.[rangeSit] || {};
   const bucketChips = RANGE_BUCKETS.map((b) => {
@@ -1520,8 +1528,7 @@ function renderRanges(oppId, hands) {
     return `<button class="chip mini${x.id === rangeSit ? " on" : ""}" data-rgsit="${x.id}">${esc(x.label)}${n ? `<i>${n}</i>` : ""}</button>`;
   }).join("");
   const brushChips = sit.acts.map(([a, l]) =>
-    `<button class="rgbrush${rangeBrush === a ? " on" : ""}" data-rgbrush="${a}" style="--bc:${ACT_COLORS[a]}">${esc(l)}</button>`).join("")
-    + `<button class="rgbrush${rangeBrush === "hands" ? " on" : ""}" data-rgbrush="hands" style="--bc:#7a95b0">Hands ●</button>`;
+    `<button class="rgbrush${rangeBrush === a ? " on" : ""}" data-rgbrush="${a}" style="--bc:${ACT_COLORS[a]}">${esc(l)}</button>`).join("");
   const combos = rangeCombos(painted);
   const paintedN = Object.values(combos).reduce((t, n) => t + n, 0);
   const summary = sit.acts.filter(([a]) => combos[a]).map(([a, l]) =>
@@ -1538,9 +1545,8 @@ function renderRanges(oppId, hands) {
       <button class="chip mini danger${paintedN ? "" : " hidden"}" data-rgclear>Clear ${rangeBucket}</button>
     </div>`;
   $("od-rangelegend").innerHTML =
-    `<span class="rglegnote">${rangeBrush === "hands" ? "Tap a cell to see the showdown hands behind it."
-      : "Tap or drag to paint. Tap a painted cell with the same brush to clear it."}</span>`
-    + `<span class="rglegnote">● dot = showdown hand, coloured by what he actually did.</span>`;
+    `<span class="rglegnote">Tap or drag to paint. Tap a painted cell with the same brush to clear it.</span>`
+    + `<span class="rglegnote">Cells fill in by themselves from showdowns (● dots). Long-press a cell to see those hands.</span>`;
   const hint = $("od-rangehint");
   if (hint) hint.textContent = `${rangeBucket} · ${sit.label} · ${pct(paintedN)} mapped`;
 }
@@ -1551,8 +1557,9 @@ function rangePaintCell(cell) {
   if (!rangeApply(curOppId, cell.dataset.rgcell, rgDrag.mode, rangeBrush)) return;
   rgDrag.changed = true;
   const act = rgDrag.mode === "erase" ? null : rangeBrush;
-  cell.style.background = act ? ACT_COLORS[act] : "#1a1d23";
-  cell.style.color = act ? "#fff" : "#6b7078";
+  const bg = act ? ACT_COLORS[act] : cell.dataset.evc || "#1a1d23";
+  cell.style.background = bg;
+  cell.style.color = act || cell.dataset.evc ? "#fff" : "#6b7078";
 }
 /* Fast swipes skip cells between pointer events — walk the grid line from
    the previous cell to this one so a stroke never leaves gaps. */
@@ -1594,20 +1601,33 @@ function bindRangeGrid() {
   host.onpointerdown = (e) => {
     const cell = e.target.closest("[data-rgcell]");
     if (!cell || !curOppId) return;
-    if (rangeBrush === "hands") { openRangeCellSheet(curOppId, cell.dataset.rgcell); return; }
     e.preventDefault();
-    const cur = oppById(curOppId)?.ranges?.[rangeBucket]?.[rangeSit]?.[cell.dataset.rgcell];
-    rgDrag = { mode: cur === rangeBrush ? "erase" : "paint", changed: false };
+    const cls = cell.dataset.rgcell;
+    const cur = oppById(curOppId)?.ranges?.[rangeBucket]?.[rangeSit]?.[cls];
+    rgDrag = { mode: cur === rangeBrush ? "erase" : "paint", changed: false, first: cell };
     rangePaintAt(cell);
+    /* held still on one cell: undo that tap's paint and show the hands behind it */
+    rgDrag.timer = setTimeout(() => {
+      if (!rgDrag || rgDrag.last?.join() !== cell.dataset.rc) return;
+      if (rgDrag.changed) {
+        rangeApply(curOppId, cls, cur ? "paint" : "erase", cur);
+        rgDrag.changed = false;
+      }
+      rgDrag = null;
+      renderRanges(curOppId);
+      openRangeCellSheet(curOppId, cls);
+    }, 450);
   };
   host.onpointermove = (e) => {
     if (!rgDrag) return;
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-rgcell]");
     if (el) rangePaintAt(el);
+    if (el && el !== rgDrag.first) clearTimeout(rgDrag.timer);
   };
   const end = () => {
     if (!rgDrag) return;
     const changed = rgDrag.changed;
+    clearTimeout(rgDrag.timer);
     rgDrag = null;
     if (changed && curOppId) { rangeSave(curOppId); renderRanges(curOppId); }
   };
