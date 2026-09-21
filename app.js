@@ -105,24 +105,40 @@ const readChip = (id, state) => {
   }
   return `<span class="chip mini on ${STATE_CLASS[state] || ""}">${esc(lbl)}</span>`;
 };
-/* Postflop reads shown as "Label + bubbles" rows; each bubble is its own toggle. */
-const READ_GROUPS = [
-  { cat: "postflop", label: "Station",    bubbles: [["station-f", "F"], ["station-t", "T"], ["station-r", "R"]] },
-  { cat: "postflop", label: "Lead",       bubbles: [["ld-draws", "Draws"], ["ld-tp", "TP"], ["ld-2p", "2P+"]] },
-  { cat: "postflop", label: "Lead nut",   bubbles: [["lead-nut-f", "F"], ["lead-nut-t", "T"], ["lead-nut-r", "R"]] },
-  { cat: "postflop", label: "Can call nut IP",  bubbles: [["call-nut-ip-f", "F"], ["call-nut-ip-t", "T"], ["call-nut-ip-r", "R"]] },
-  { cat: "postflop", label: "Can call nut OOP", bubbles: [["call-nut-oop-f", "F"], ["call-nut-oop-t", "T"], ["call-nut-oop-r", "R"]] },
-  { cat: "postflop", label: "Raise nuts", bubbles: [["raise-nuts-f", "F"], ["raise-nuts-t", "T"], ["raise-nuts-r", "R"]] },
-  { cat: "postflop", label: "Bluff till", bubbles: [["bluff-till-f", "F"], ["bluff-till-t", "T"], ["bluff-till-r", "R"]] },
-  { cat: "postflop", label: "Bluff raise", bubbles: [["bluff-raise-f", "F"], ["bluff-raise-t", "T"], ["bluff-raise-r", "R"]] },
-  { cat: "postflop", label: "Bluff raise w/", bubbles: [["br-fdsd", "FD/SD"], ["br-worst", "Worst"]] },
-  { cat: "postflop", label: "Bluff XT",   bubbles: [["bluff-xt-f", "F"], ["bluff-xt-t", "T"], ["bluff-xt-r", "R"]] },
-  { cat: "postflop", label: "xR value",   bubbles: [["xr-value-f", "F"], ["xr-value-t", "T"], ["xr-value-r", "R"]] },
-  { cat: "postflop", label: "xR bluff",   bubbles: [["xr-bluff-f", "F"], ["xr-bluff-t", "T"], ["xr-bluff-r", "R"]] },
-  { cat: "postflop", label: "Flop V mw",  bubbles: [["flop-vmw-lead", "Lead"], ["flop-vmw-xr", "xR"]] },
-  { cat: "postflop", label: "Range",      bubbles: [["merged", "Merged"], ["polar", "Polar"]] },
+/* How the picker is organised: street -> role (As PFR / As PFC) -> When Bet / When X.
+   Display only: ids, saved reads and the exploit rules never see this. A read
+   listed nowhere lands in Unsorted > Other, so nothing can go missing. Edit the
+   id lists freely to move a read. Graded reads (choice / position / tally / scale)
+   can be listed like any other id. */
+const wb = (bet, x) => [{ label: "When Bet", ids: bet }, { label: "When X", ids: x }];
+const READ_LAYOUT = [
+  { title: "Preflop", subs: [{ rows: [
+    { label: "Limping", ids: ["limp-width", "lc-width", "iso-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "lc-pp"] },
+    { label: "Raising", ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "jams-pre-light"] },
+  ] }] },
+  { title: "Flop", subs: [
+    { label: "As PFR", rows: wb(["over-cbet", "bluff-till-f"], ["bluff-xt-f"]) },
+    { label: "As PFC", rows: wb(["lead-nut-f", "ld-draws", "ld-tp", "ld-2p", "bluff-raise-f", "br-fdsd", "br-worst", "raise-nuts-f", "flop-vmw-lead"],
+      ["station-f", "floats-wide", "call-nut-ip-f", "call-nut-oop-f", "xr-value-f", "xr-bluff-f", "flop-vmw-xr"]) },
+  ] },
+  { title: "Turn", subs: [
+    { label: "As PFR", rows: wb(["barrels-off", "bluff-till-t"], ["bluff-xt-t"]) },
+    { label: "As PFC", rows: wb(["lead-nut-t", "bluff-raise-t", "raise-nuts-t"], ["station-t", "call-nut-ip-t", "call-nut-oop-t", "xr-value-t", "xr-bluff-t"]) },
+  ] },
+  { title: "River", subs: [
+    { label: "As PFR", rows: wb(["bluffs-rivers", "protected-block", "bluff-till-r"], ["bluff-xt-r"]) },
+    { label: "As PFC", rows: wb(["lead-nut-r", "bluff-raise-r", "raise-nuts-r"], ["station-r", "call-nut-ip-r", "call-nut-oop-r", "xr-value-r", "xr-bluff-r"]) },
+  ] },
+  { title: "Unsorted", subs: [{ rows: [
+    { label: "Range", ids: ["merged", "polar"] },
+    { label: "Hand strength", ids: ["chases-draws", "overplays-tp", "pays-off-fh"] },
+    { label: "OOP", ids: ["checks-range-oop", "xr-oop-v", "xr-oop-b"] },
+    { label: "Bluff lines", ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light", "bluff-missed-draws", "bluffs-air"] },
+    { label: "Preflop sizing", ids: ["open-big-strong", "3bet-big-strong"] },
+    { label: "Postflop sizing", ids: ["size-up-draws", "small-with-weak", "overbets-nuts"] },
+    { label: "Physical / timing", ids: ["timing-tells", "snap-call-weak", "talks-when-strong"] },
+  ] }] },
 ];
-const GROUPED_IDS = new Set(READ_GROUPS.flatMap((g) => g.bubbles.map((b) => b[0])));
 
 /* Value/bluff position-read pairs — shown in the picker as one compact
    "Label [V ▾][B ▾]" row instead of two separate wide dropdown boxes. */
@@ -2374,41 +2390,36 @@ function renderOppDetail(id) {
       `<button class="chip mini${reads[id] === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("");
     return structRow(TAG_BY_ID[id].label, `<div class="bubbles">${opts}</div>`);
   };
-  $("od-tags").innerHTML = TAG_CATS.map((cat) => {
-    const groups = READ_GROUPS.filter((g) => g.cat === cat).map((g) =>
-      `<div class="readgroup"><span class="rglabel">${esc(g.label)}</span><div class="bubbles">` +
-      g.bubbles.map(([id, lbl]) => readBtn(id, lbl, true)).join("") + `</div></div>`).join("");
-    // Sub-cluster the flat single reads by theme so related tags sit together.
-    // Anything not listed falls into "Other" at the end.
-    const subgroups = READ_SUBCATS[cat] || [];
-    const usedIds = new Set(subgroups.flatMap((s) => s.ids));
-    // Retired reads — data preserved on old opponents, but no longer offered as a toggle.
-    const isSingle = (t) => t.cat === cat && !SIZING_GRID_IDS.has(t.id) && !GROUPED_IDS.has(t.id) && !isScaleRead(t.id) && !RETIRED_TAG_IDS.has(t.id);
-    const subHTML = subgroups.map((sg) => {
-      // Split each subgroup: plain yes/no reads form a compact chip cloud, while
-      // graded reads (choice + position + tally) drop to aligned "label + controls"
-      // rows so heavy dropdown boxes no longer zig-zag between small chips.
-      const chipIds = [], rowIds = [];
-      sg.ids.forEach((id) => {
-        const t = TAG_BY_ID[id];
-        if (!t || !isSingle(t)) return;
-        (isPositionRead(id) || isChoiceRead(id) || isTallyRead(id) ? rowIds : chipIds).push(id);
-      });
-      const chips = chipIds.map((id) => readBtn(id, TAG_BY_ID[id].label, false)).join("");
-      const rows = rowIds.map(structFor).join("");
-      if (!chips && !rows) return "";
-      return `<div class="readsub"><span class="rslabel">${esc(sg.label)}</span>` +
-        (chips ? `<div class="chiprow readwrap">${chips}</div>` : "") + rows + `</div>`;
-    }).join("");
-    const otherSingles = TENDENCY_TAGS.filter((t) => isSingle(t) && !usedIds.has(t.id))
-      .map((t) => readBtn(t.id, t.label, false)).join("") +
-      TENDENCY_TAGS.filter((t) => t.cat === cat && RETIRED_TAG_IDS.has(t.id) && readIsActive(t.id, reads[t.id]))
-        .map((t) => readBtn(t.id, t.label + " (retired)", false)).join("");
-    const scales = TENDENCY_TAGS.filter((t) => t.cat === cat && isScaleRead(t.id))
-      .map((t) => readBtn(t.id, t.label, false)).join("");
-    return `<div class="tagcat">${cat}</div>${groups}${subHTML}` +
-      (otherSingles ? `<div class="readsub"><span class="rslabel">Other</span><div class="chiprow readwrap">${otherSingles}</div></div>` : "") +
-      scales;
+  const live = (id) => { const t = TAG_BY_ID[id]; return t && !RETIRED_TAG_IDS.has(id) && !SIZING_GRID_IDS.has(id) ? t : null; };
+  const placed = new Set(READ_LAYOUT.flatMap((c) => c.subs.flatMap((sb) => sb.rows.flatMap((r) => r.ids))));
+  const rowHTML = (r) => {
+    // Graded reads (choice + position + tally + scale) drop to aligned "label + controls"
+    // rows so heavy dropdown boxes don't zig-zag between small chips.
+    const chipIds = [], rowIds = [];
+    r.ids.forEach((id) => {
+      if (!live(id)) return;
+      (isPositionRead(id) || isChoiceRead(id) || isTallyRead(id) || isScaleRead(id) ? rowIds : chipIds).push(id);
+    });
+    const chips = chipIds.map((id) => readBtn(id, TAG_BY_ID[id].label, false)).join("");
+    const rows = rowIds.map((id) => isScaleRead(id) ? readBtn(id, TAG_BY_ID[id].label, false) : structFor(id)).join("");
+    return `<div class="readsub"><span class="rslabel">${esc(r.label)}</span>` +
+      (chips ? `<div class="chiprow readwrap">${chips}</div>` : "") + rows +
+      (!chips && !rows ? `<div class="chiprow readwrap"><span class="chipnote">—</span></div>` : "") + `</div>`;
+  };
+  $("od-tags").innerHTML = READ_LAYOUT.map((cat) => {
+    let subs = cat.subs;
+    if (cat.title === "Unsorted") {
+      // reads not placed above, plus retired reads an opponent still carries (so they can be cleared)
+      const extra = TENDENCY_TAGS.filter((t) => live(t.id) && !placed.has(t.id)).map((t) => readBtn(t.id, t.label, false))
+        .concat(TENDENCY_TAGS.filter((t) => RETIRED_TAG_IDS.has(t.id) && readIsActive(t.id, reads[t.id]))
+          .map((t) => readBtn(t.id, t.label + " (retired)", false))).join("");
+      subs = [{ rows: subs[0].rows }];
+      var otherHTML = extra ? `<div class="readsub"><span class="rslabel">Other</span><div class="chiprow readwrap">${extra}</div></div>` : "";
+    }
+    return `<div class="tagcat">${esc(cat.title)}</div>` + subs.map((sb) =>
+      (sb.label ? `<div class="tagrole">${esc(sb.label)}</div>` : "") +
+      `<div class="${sb.label ? "roleblock" : ""}">${sb.rows.map(rowHTML).join("")}</div>`).join("") +
+      (cat.title === "Unsorted" ? otherHTML : "");
   }).join("");
 
   // FEATURE 1 — what this opponent's logged hands say. Three panels off one

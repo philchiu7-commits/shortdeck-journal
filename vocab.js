@@ -10,10 +10,10 @@
                  | "choice" (pick one of `options`, e.g. ["tight","normal","wide"])
                  | "tally" (pick one of `options` repeatedly; each tap increments
                    that option's count, e.g. tracking which bet size he uses most).
-     2. Optionally list it in READ_SUBCATS so it sits in a named row.
+     2. Optionally list it in READ_LAYOUT (app.js) so it sits in a street/role row; unlisted reads land in Unsorted > Other.
      3. Optionally add EXPLOIT_RULES[id] = { yes: "…", no: "…" } for an
         auto-suggested exploit, and/or a PILL_READS entry for a felt pill.
-   Street triads (F/T/R bubbles) live in READ_GROUPS in app.js. */
+   Street/role placement lives in READ_LAYOUT in app.js. */
 
 /* Short deck is ante-only: every seat antes, the button posts a double ante.
    No blinds. UTG (left of the button) acts first on EVERY street, BN last.
@@ -152,35 +152,10 @@ const PLAYER_TYPES = [
   { id: "tight-reg",  label: "Tight reg",  icon: "🔒", color: "#7a8496" },
 ];
 const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]));
-const TAG_CATS = ["preflop", "postflop", "sizing", "live"];
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
 const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts"]);   // too general / cluttered picker
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
-
-/* Sub-cluster single-read chips within each category. Any tag not listed
-   drops into an "Other" row at the end of its category. Grouped bubbles
-   (READ_GROUPS in app.js) and scale reads render separately. */
-const READ_SUBCATS = {
-  preflop: [
-    { label: "Limping",   ids: ["limp-width", "lc-width", "iso-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "lc-pp"] },
-    { label: "Raising",   ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "jams-pre-light"] },
-  ],
-  postflop: [
-    { label: "Cbet & Float", ids: ["over-cbet", "floats-wide", "barrels-off"] },
-    { label: "Hand strength", ids: ["chases-draws", "overplays-tp", "pays-off-fh", "bluffs-rivers", "protected-block"] },
-    { label: "OOP",           ids: ["checks-range-oop", "xr-oop-v", "xr-oop-b"] },
-    { label: "Bluff lines",   ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light", "bluff-missed-draws", "bluffs-air"] },
-  ],
-  sizing: [
-    { label: "Preflop sizing",  ids: ["open-big-strong", "3bet-big-strong"] },
-    { label: "Postflop sizing", ids: ["size-up-draws", "small-with-weak", "overbets-nuts"] },
-    { label: "Sizings", ids: ["size-flop-v", "size-turn-v", "size-river-v", "size-flop-b", "size-turn-b", "size-river-b"] },
-  ],
-  live: [
-    { label: "Physical / timing", ids: ["timing-tells", "snap-call-weak", "talks-when-strong"] },
-  ],
-};
 
 /* Auto-suggested exploits: tag id → { yes, no }. "yes" = tendency present,
    "no" = confirmed absent (only where the absence is itself exploitable).

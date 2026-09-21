@@ -962,3 +962,7 @@ textarea.noteedit { margin-bottom: 0; }
 .stc.szTap.none { color: #4a5160; padding: 8px 0; }
 .stc.szTap:active { filter: brightness(1.4); }
 .stc.szClr { background: transparent; color: var(--muted); font-size: 12px; padding: 8px 0; }
+
+/* reads picker: role heading (As PFR / As PFC) and its indented When Bet / When X rows */
+.tagrole { font-size: 12px; font-weight: 600; color: var(--text); margin: 8px 0 4px; }
+.roleblock { margin-left: 8px; padding-left: 8px; border-left: 2px solid var(--line); }
