@@ -173,14 +173,15 @@ function openStatSheet(el) {
   openReadProof(p.label, "Newest first. Tap a hand to open it.", p.r[2], { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
 }
 
-/* Desktop hover: a small popover with the hands that hit. Touch has no hover, so it taps into the sheet. */
+/* Desktop hover: a small popover with the hands that hit, showdowns first. Touch has no hover, so it taps into the sheet. */
 let stPop = null;
 function stPopHide() { if (stPop) stPop.classList.add("hidden"); }
 function stPopShow(el) {
   const p = statProof(el);
   if (!p) return;
   const byId = new Map(HANDS.map((h) => [h.id, h]));
-  const pick = (l) => [...new Set(l)].map((x) => byId.get(x)).filter(Boolean).sort((a, b) => b.ts - a.ts);
+  const sd = (h) => handWinner(h)?.how === "showdown" ? 1 : 0;      // hands that went to showdown lead, newest first within each group
+  const pick = (l) => [...new Set(l)].map((x) => byId.get(x)).filter(Boolean).sort((a, b) => sd(b) - sd(a) || b.ts - a.ts);
   const hit = pick(p.r[2]), miss = pick(p.r[3]);
   const show = (hit.length ? hit : miss).slice(0, 4);
   const more = hit.length + miss.length - show.length;
