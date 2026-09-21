@@ -194,6 +194,25 @@ const dedupeById = (arr) => {   // id-less notes/exploits (hand-authored/legacy 
 const recReads = (o) => o.reads && typeof o.reads === "object" ? o.reads
   : (Array.isArray(o.tags) ? Object.fromEntries(o.tags.map((id) => [id, "yes"])) : {});
 
+/* Ranges used to be keyed by coarse bucket (EP/MP/BTN); now by seat (U7 U6 U5 U4 HJ CO BN).
+   EP → U7+U6, MP → U5+U4, BTN → BN, copied without overwriting anything already painted. */
+const RANGE_MIGRATE = { EP: ["U7", "U6"], MP: ["U5", "U4"], BTN: ["BN"] };
+function migrateRanges(o) {
+  if (!o || !o.ranges) return false;
+  let changed = false;
+  for (const [old, seats] of Object.entries(RANGE_MIGRATE)) {
+    const src = o.ranges[old];
+    if (!src) continue;
+    for (const seat of seats) {
+      const dst = (o.ranges[seat] ||= {});
+      for (const [sit, cells] of Object.entries(src)) dst[sit] = { ...cells, ...(dst[sit] || {}) };
+    }
+    delete o.ranges[old];
+    changed = true;
+  }
+  return changed;
+}
+
 /* Fold incoming opponent `from` into existing `into` (union; survivor keeps identity). */
 function mergeOppRecords(into, from) {
   const ir = (into.reads = recReads(into)), fr = recReads(from);
@@ -205,6 +224,7 @@ function mergeOppRecords(into, from) {
   if (from.hiddenReads || into.hiddenReads)
     into.hiddenReads = { ...(from.hiddenReads || {}), ...(into.hiddenReads || {}) };
   if (!(into.featured || []).length && (from.featured || []).length) into.featured = from.featured;
+  migrateRanges(into); migrateRanges(from);
   if (from.ranges) {                       // per-bucket/situation union; survivor wins painted cells
     into.ranges = into.ranges || {};
     for (const [b, sits] of Object.entries(from.ranges))

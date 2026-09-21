@@ -302,6 +302,7 @@ async function mergeOpponents(fromId, intoId) {
 
 async function refreshCache() {
   [OPP, HANDS] = await Promise.all(["opponents", "hands"].map(dbAll));
+  for (const o of OPP) if (migrateRanges(o)) dbPut("opponents", o).catch(() => {});
   _statsCache = null;
 }
 
@@ -619,7 +620,7 @@ function renderHandFilters(oppId, allHands) {
 
 /* ================= Ranges (9×9 per position bucket, per situation) =================
    Phil's estimate of how each opponent plays each hand class preflop, painted
-   by hand. opponent.ranges = { BTN|CO|HJ|MP|EP: { open|vslimp|vsraise: { "AKs": act } } }.
+   by hand. opponent.ranges = { U7|U6|U5|U4|HJ|CO|BN: { open|vslimp|vsraise: { "AKs": act } } }.
    Unpainted = unknown (never assume fold). Showdown hands overlay as dots so
    the estimate can be checked against what was actually seen. */
 /* Cards → 81-hand class: "AA", "AKs", "AKo", … (short deck ranks A–6). */
@@ -634,7 +635,9 @@ function handClass(cards) {
 }
 const combosOf = (cls) => cls.length === 2 ? 6 : cls.endsWith("s") ? 4 : 12;
 const RANGE_TOTAL_COMBOS = 630;                 // 36-card deck
-const RANGE_BUCKETS = ["EP", "MP", "HJ", "CO", "BTN"];
+const RANGE_BUCKETS = ["U7", "U6", "U5", "U4", "HJ", "CO", "BN"];
+/* Seat → range bucket: each seat is its own bucket; U9/U8 fold into U7 (the earliest bucket). */
+const rangeBucketOf = (pos) => RANGE_BUCKETS.includes(pos) ? pos : /^U\d$/.test(pos || "") && +pos[1] > 7 ? "U7" : null;
 const RANGE_SITS = [
   { id: "open",    label: "First in", acts: [["limp", "Limp"], ["raise", "Raise"], ["fold", "Fold"]] },
   { id: "vslimp",  label: "vs limp",  acts: [["limp", "Over-limp"], ["raise", "Iso"], ["fold", "Fold"]] },
@@ -643,7 +646,7 @@ const RANGE_SITS = [
 const RANGE_SIT_BY_ID = Object.fromEntries(RANGE_SITS.map((s) => [s.id, s]));
 const ACT_COLORS = { raise: "#d64848", "3bet": "#a02828", call: "#6bbf6b", limp: "#e5c04a", fold: "#7c8794" };
 const RAISE_ACTS = new Set(["raise", "3bet", "4bet", "5bet", "jam", "bet"]);
-let rangeBucket = "BTN", rangeSit = "open", rangeBrush = "raise";
+let rangeBucket = "BN", rangeSit = "open", rangeBrush = "raise";
 /* Showdown evidence: hands where this villain showed cards, keyed
    bucket → situation → class → [{act, id}]. Situation = what happened before
    the villain's FIRST preflop action: a raise → vsraise, a limp → vslimp,
@@ -656,7 +659,7 @@ function rangeEvidence(oppId, hands) {
     if (idx < 0) continue;
     const v = h.villains[idx];
     const hc = handClass(v.cards);
-    const bucket = posBucket(v.pos);
+    const bucket = rangeBucketOf(v.pos);
     if (!hc || !bucket) continue;
     const me = "v" + idx;
     const pre = (h.actions || []).filter((a) => a.street === "pre");
