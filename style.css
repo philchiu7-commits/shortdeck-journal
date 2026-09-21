@@ -922,3 +922,13 @@ textarea.noteedit { margin-bottom: 0; }
 .actlist { margin-top: 6px; font-size: 12px; color: var(--muted); line-height: 1.4; word-break: break-word; }
 .actionpad-sheet { padding-top: 4px; }
 .actionpad-sheet .actgrid { margin-bottom: 8px; }
+
+/* Read-evidence sheet: the hands behind one read, split into the hands he did
+   it in and the hands that offered the same chance and went another way. */
+.rdsub { color: var(--muted); font-size: 12px; padding: 2px 2px 8px; }
+.rdhead {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 2px 4px; font-size: 11px; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted);
+}
+.rdhead .rdn { margin-left: auto; font-variant-numeric: tabular-nums; }

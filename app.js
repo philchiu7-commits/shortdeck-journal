@@ -12,6 +12,8 @@ let editNoteId = null, editExploitId = null;
 let storageDurable = false;
 let showSuggestedExploits = {};   // per-opponent toggle for suggested exploits (oppId -> bool)
 let showDerivedReads = {};        // per-opponent toggle for hand-derived read suggestions
+let showReadEvid = {};            // per-opponent toggle: hands behind the reads already set
+let showExploitSignals = {};      // per-opponent toggle: tag-free one-sided tells
 let showConvertedNotes = {};      // per-opponent toggle: show notes already converted to hands
 let oppEditMode = false;          // opponents list: reorder / regroup mode
 let vSearch = "";                 // hand-entry villain search query
@@ -218,52 +220,360 @@ function villainStreetActs(h, actor) {
   return m;
 }
 
-/* FEATURE 1 — infer candidate reads from an opponent's logged hands. Each
-   detector counts hands showing a pattern; a read is suggested once its count
-   crosses a (per-signal) threshold and it isn't already set or dismissed. */
-/* Signals: {tagId, state, threshold}. State "no" means the "no" direction of
-   the merged read (e.g. gives-up-turn → barrels-off:no). */
-/* Thresholds are deliberately high (5+) because Phil only logs interesting /
-   showdown hands — the sample is biased and small. Lower thresholds fire
-   noise. See project_poker_journal_v2_engine_spec.md. */
-const READ_SIGNALS = [
-  { id: "3bets-light",      state: "yes", th: 5 },
-  { id: "barrels-off",      state: "no",  th: 5 },   // was: gives-up-turn
-  { id: "barrels-off",      state: "yes", th: 5 },
-  { id: "over-cbet",        state: "yes", th: 5 },
-  { id: "bluff-raise-f",    state: "yes", th: 5 },
-  { id: "station-f",        state: "yes", th: 5 },
-  { id: "station-t",        state: "yes", th: 5 },
-  { id: "station-r",        state: "yes", th: 5 },
-];
-function derivedReads(o, hands) {
-  hands = hands || HANDS.filter((h) => (h.villainIds || []).includes(o.id));
-  const cnt = {};
-  const bump = (k) => (cnt[k] = (cnt[k] || 0) + 1);
-  const aggr = (arr) => arr.some((a) => a === "bet" || a === "raise");
-  for (const h of hands) {
-    const idx = (h.villains || []).findIndex((v) => v.opponentId === o.id);
-    if (idx < 0) continue;
-    const s = villainStreetActs(h, "v" + idx);
-    const raisedPre = s.pre.some((a) => ["raise", "3bet", "4bet", "5bet"].includes(a));
-    if (s.pre.includes("3bet")) bump("3bets-light:yes");
-    if (s.flop.includes("bet") && (s.turn.includes("check") || s.turn.includes("fold"))) bump("barrels-off:no");
-    if (aggr(s.flop) && aggr(s.turn) && aggr(s.river)) bump("barrels-off:yes");
-    if (raisedPre && s.flop.includes("bet")) bump("over-cbet:yes");
-    if (s.flop.includes("raise")) bump("bluff-raise-f:yes");
-    if (s.flop.includes("call")) bump("station-f:yes");
-    if (s.turn.includes("call")) bump("station-t:yes");
-    if (s.river.includes("call")) bump("station-r:yes");
+/* ============ FEATURE 1 — the hands behind every read ============
+   One pass flattens a (hand, villain) pair into `facts`; a read query is then a
+   one-line predicate over those facts. The same registry drives three panels:
+   suggestions for reads not yet set, the hands behind reads already set, and
+   the tag-free exploit signals below. Adding a detector costs one row. */
+
+const isAgg = (a) => AGG_ACTS.includes(a);
+
+/* The size Phil actually recorded, never a reconstruction: postflop sizes come
+   off a fixed chip row ("50%" → B50), so the bucket is his own reading of the
+   bet. A bet logged without a size has no bucket and stays out of every sizing
+   count — a guessed size would poison exactly the tell it feeds. */
+function sizeBucket(a) {
+  if (a.act === "jam" || a.size === "Jam") return "Jam";
+  const m = /^(\d+(?:\.\d+)?)%$/.exec(a.size || "");
+  if (m) return "B" + Math.round(Number(m[1]));
+  return /^\d+(\.\d+)?[ax]$/i.test(a.size || "") ? String(a.size).toLowerCase() : null;
+}
+
+/* Everything a detector needs from one villain's hand. `facing` on each of his
+   actions records whether a bet or raise was already out there when he acted —
+   without that a hand is silent on a read rather than evidence against it. */
+function handFacts(h, idx) {
+  const me = "v" + idx;
+  const v = (h.villains || [])[idx] || {};
+  const f = {
+    id: h.id, ts: h.ts || 0, pos: v.pos || null,
+    cards: (v.cards || []).filter(Boolean),
+    board: (h.board || []).filter(Boolean),
+    s: { pre: [], flop: [], turn: [], river: [] },
+    faced: { pre: false, flop: false, turn: false, river: false },
+    limpedFirst: false, isoSpot: false, sd: false, won: null,
+  };
+  const open = { pre: false, flop: false, turn: false, river: false };
+  let sawLimp = false, first = true;
+  for (const a of h.actions || []) {
+    if (!f.s[a.street]) continue;
+    if (a.actor === me) {
+      if (open[a.street]) f.faced[a.street] = true;
+      f.s[a.street].push({ act: a.act, size: a.size || "", bucket: sizeBucket(a), facing: open[a.street] });
+      if (first) { f.limpedFirst = a.act === "limp"; f.isoSpot = sawLimp; first = false; }
+    } else if (a.street === "pre" && a.act === "limp" && first) sawLimp = true;
+    if (isAgg(a.act)) open[a.street] = true;
   }
+  const win = handWinner(h);
+  if (win && win.how === "showdown") { f.sd = true; f.won = win.winners.includes(me); }
+  return f;
+}
+function oppFacts(o, hands) {
+  hands = hands || HANDS.filter((h) => (h.villainIds || []).includes(o.id));
+  const out = [];
+  for (const h of hands) {
+    const i = (h.villains || []).findIndex((x) => x.opponentId === o.id);
+    if (i >= 0) out.push(handFacts(h, i));
+  }
+  return out;
+}
+
+/* --- readers over facts, so every registry row stays one line --- */
+const fActs = (f, st) => f.s[st].map((x) => x.act);
+const fDid = (f, st, ...a) => f.s[st].some((x) => a.includes(x.act));
+const fFired = (f, st) => f.s[st].some((x) => isAgg(x.act));
+const fActed = (f, st) => f.s[st].length > 0;
+const fLed = (f, st) => f.s[st].some((x) => x.act === "bet" && !x.facing);
+const fCheckRaised = (f, st) => { const a = fActs(f, st); const i = a.indexOf("check"); return i >= 0 && a.slice(i + 1).some(isAgg); };
+const fLimpRR = (f) => f.limpedFirst && fActs(f, "pre").slice(1).some(isAgg);
+const fOpened = (f) => f.s.pre.some((x) => isAgg(x.act) && !x.facing);
+/* He put in the first raise and then had one come back at him. */
+const fFacedRR = (f) => { const a = f.s.pre, i = a.findIndex((x) => isAgg(x.act) && !x.facing); return i >= 0 && a.slice(i + 1).some((x) => x.facing); };
+const fBucket = (f, st) => { const x = f.s[st].find((y) => isAgg(y.act) && y.bucket); return x ? x.bucket : null; };
+const fPair = (f) => f.cards.length === 2 && f.cards[0][0] === f.cards[1][0];
+const STREETS3 = ["flop", "turn", "river"];
+const ST_NAME = { pre: "Preflop", flop: "Flop", turn: "Turn", river: "River" };
+
+/* Thresholds stay high: Phil logs the interesting hands, so the sample is small
+   and biased and a low bar fires noise. A row without `th` is never suggested —
+   it exists only to answer "show me the hands behind this read". */
+const READ_EVIDENCE = [
+  // ---- preflop ----
+  { id: "3bets-light", state: "yes", th: 5, yes: "3-bet", no: "Faced a raise, didn't 3-bet",
+    chance: (f) => f.faced.pre, did: (f) => fDid(f, "pre", "3bet") },
+  { id: "over-folds-3bet", state: "yes", th: 4, yes: "Folded to the reraise", no: "Faced a reraise, didn't fold",
+    chance: fFacedRR, did: (f) => f.s.pre.some((x) => x.act === "fold" && x.facing) },
+  { id: "jams-pre-light", state: "yes", th: 4, yes: "Jammed over a raise", no: "Faced a raise, didn't jam",
+    chance: (f) => f.faced.pre, did: (f) => fDid(f, "pre", "jam") },
+  { id: "iso-raises-limps", state: "yes", th: 4, yes: "Raised over the limps", no: "Limps in front, didn't raise",
+    chance: (f) => f.isoSpot, did: (f) => f.s.pre[0] && isAgg(f.s.pre[0].act) },
+  { id: "limp-caller", state: "yes", th: 5, yes: "Limped, then called a raise", no: "Limped, didn't call a raise",
+    chance: (f) => f.limpedFirst && f.faced.pre, did: (f) => f.s.pre.some((x) => x.act === "call" && x.facing) },
+  { id: "calls-raises-wide", state: "yes", th: 6, yes: "Called a raise", no: "Faced a raise, didn't call",
+    chance: (f) => f.faced.pre, did: (f) => f.s.pre.some((x) => x.act === "call" && x.facing) },
+  { id: "can-ls-light", state: "yes", th: 3, yes: "Limped, then shoved", no: "Limped, didn't shove",
+    chance: (f) => f.limpedFirst, did: (f) => fActs(f, "pre").slice(1).includes("jam") },
+  { id: "lc-pp", state: "yes", th: 3, yes: "Limp-called a pocket pair", no: "Limp-called something else",
+    chance: (f) => f.cards.length === 2 && f.limpedFirst && f.s.pre.some((x) => x.act === "call" && x.facing), did: fPair },
+  { id: "limp-width", yes: "Limped in", no: "", chance: (f) => fActed(f, "pre"), did: (f) => f.limpedFirst },
+  { id: "lc-width", yes: "Limped, then called", no: "Limped, then folded or raised",
+    chance: (f) => f.limpedFirst && f.faced.pre, did: (f) => f.s.pre.some((x) => x.act === "call" && x.facing) },
+  { id: "cc-width", yes: "Cold-called a raise", no: "Faced a raise, didn't call",
+    chance: (f) => f.faced.pre && !f.limpedFirst, did: (f) => f.s.pre.some((x) => x.act === "call" && x.facing) },
+  { id: "iso-width", yes: "Raised over the limps", no: "Limps in front, didn't raise",
+    chance: (f) => f.isoSpot, did: (f) => f.s.pre[0] && isAgg(f.s.pre[0].act) },
+  { id: "opens-premium", yes: "Opened and showed", no: "Opened, never showed",
+    chance: fOpened, did: (f) => f.cards.length === 2 },
+  // ---- postflop: what he does facing a bet ----
+  { id: "station-f", state: "yes", th: 5, yes: "Called the flop", no: "Faced a flop bet, didn't call",
+    chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "call") },
+  { id: "station-t", state: "yes", th: 5, yes: "Called the turn", no: "Faced a turn bet, didn't call",
+    chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "call") },
+  { id: "station-r", state: "yes", th: 5, yes: "Called the river", no: "Faced a river bet, didn't call",
+    chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
+  { id: "bluff-raise-f", state: "yes", th: 4, yes: "Raised a flop bet", no: "Faced a flop bet, didn't raise",
+    chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "raise", "jam") },
+  { id: "bluff-raise-t", state: "yes", th: 3, yes: "Raised a turn bet", no: "Faced a turn bet, didn't raise",
+    chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "raise", "jam") },
+  { id: "bluff-raise-r", state: "yes", th: 3, yes: "Raised a river bet", no: "Faced a river bet, didn't raise",
+    chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "raise", "jam") },
+  { id: "br-fdsd", yes: "Raised a flop bet", no: "Faced a flop bet, didn't raise",
+    chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "raise", "jam") },
+  { id: "br-worst", yes: "Raised a flop bet", no: "Faced a flop bet, didn't raise",
+    chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "raise", "jam") },
+  { id: "call-nut-ip-f", yes: "Called the flop", no: "Faced a flop bet, didn't call", chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "call") },
+  { id: "call-nut-ip-t", yes: "Called the turn", no: "Faced a turn bet, didn't call", chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "call") },
+  { id: "call-nut-ip-r", yes: "Called the river", no: "Faced a river bet, didn't call", chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
+  { id: "call-nut-oop-f", yes: "Called the flop", no: "Faced a flop bet, didn't call", chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "call") },
+  { id: "call-nut-oop-t", yes: "Called the turn", no: "Faced a turn bet, didn't call", chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "call") },
+  { id: "call-nut-oop-r", yes: "Called the river", no: "Faced a river bet, didn't call", chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
+  { id: "raise-nuts-f", yes: "Raised the flop", no: "Faced a flop bet, didn't raise", chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "raise", "jam") },
+  { id: "raise-nuts-t", yes: "Raised the turn", no: "Faced a turn bet, didn't raise", chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "raise", "jam") },
+  { id: "raise-nuts-r", yes: "Raised the river", no: "Faced a river bet, didn't raise", chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "raise", "jam") },
+  { id: "overplays-tp", yes: "Called a river bet", no: "Faced a river bet, didn't call", chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
+  { id: "pays-off-fh", yes: "Called a river bet", no: "Faced a river bet, didn't call", chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
+  { id: "chases-draws", yes: "Called a flop or turn bet and took another card", no: "Faced the bet, didn't continue",
+    chance: (f) => f.faced.flop || f.faced.turn,
+    did: (f) => (fDid(f, "flop", "call") && fActed(f, "turn")) || (fDid(f, "turn", "call") && fActed(f, "river")) },
+  // ---- postflop: what he does with the betting lead ----
+  { id: "over-cbet", state: "yes", th: 5, yes: "Raised pre, then bet the flop", no: "Raised pre, didn't bet the flop",
+    chance: (f) => fOpened(f) && fActed(f, "flop"), did: (f) => fDid(f, "flop", "bet") },
+  { id: "barrels-off", state: "no", th: 5, yes: "Bet the flop, then gave up", no: "Bet the flop, kept firing",
+    chance: (f) => fDid(f, "flop", "bet") && fActed(f, "turn"), did: (f) => fDid(f, "turn", "check", "fold") },
+  { id: "barrels-off", state: "yes", th: 5, yes: "Fired all three streets", no: "Got to the river without firing it",
+    chance: (f) => fFired(f, "flop") && fActed(f, "river"), did: (f) => fFired(f, "flop") && fFired(f, "turn") && fFired(f, "river") },
+  { id: "floats-wide", state: "yes", th: 3, yes: "Called the flop, then took the turn", no: "Called the flop, didn't fire the turn",
+    chance: (f) => fDid(f, "flop", "call") && fActed(f, "turn"), did: (f) => fFired(f, "turn") },
+  { id: "ld-draws", yes: "Led into the raiser", no: "Had the flop lead available, checked", chance: (f) => fActed(f, "flop") && !fOpened(f), did: (f) => fLed(f, "flop") },
+  { id: "ld-tp", yes: "Led into the raiser", no: "Had the flop lead available, checked", chance: (f) => fActed(f, "flop") && !fOpened(f), did: (f) => fLed(f, "flop") },
+  { id: "ld-2p", yes: "Led into the raiser", no: "Had the flop lead available, checked", chance: (f) => fActed(f, "flop") && !fOpened(f), did: (f) => fLed(f, "flop") },
+  { id: "lead-nut-f", yes: "Led the flop", no: "Could lead the flop, checked", chance: (f) => fActed(f, "flop") && !fOpened(f), did: (f) => fLed(f, "flop") },
+  { id: "lead-nut-t", yes: "Led the turn", no: "Could lead the turn, checked", chance: (f) => fActed(f, "turn"), did: (f) => fLed(f, "turn") },
+  { id: "lead-nut-r", yes: "Led the river", no: "Could lead the river, checked", chance: (f) => fActed(f, "river"), did: (f) => fLed(f, "river") },
+  { id: "flop-vmw-lead", yes: "Led the flop", no: "Could lead the flop, checked", chance: (f) => fActed(f, "flop") && !fOpened(f), did: (f) => fLed(f, "flop") },
+  { id: "flop-vmw-xr", yes: "Check-raised the flop", no: "Checked the flop into a bet, didn't raise",
+    chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop, did: (f) => fCheckRaised(f, "flop") },
+  // ---- check-raises, split by how the hand ended ----
+  { id: "xr-value-f", state: "yes", th: 3, yes: "Check-raised the flop and won at showdown", no: "Checked the flop into a bet, didn't raise",
+    chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop, did: (f) => fCheckRaised(f, "flop") && f.won === true },
+  { id: "xr-value-t", state: "yes", th: 3, yes: "Check-raised the turn and won at showdown", no: "Checked the turn into a bet, didn't raise",
+    chance: (f) => fActs(f, "turn").includes("check") && f.faced.turn, did: (f) => fCheckRaised(f, "turn") && f.won === true },
+  { id: "xr-value-r", state: "yes", th: 3, yes: "Check-raised the river and won at showdown", no: "Checked the river into a bet, didn't raise",
+    chance: (f) => fActs(f, "river").includes("check") && f.faced.river, did: (f) => fCheckRaised(f, "river") && f.won === true },
+  { id: "xr-bluff-f", state: "yes", th: 3, yes: "Check-raised the flop and lost at showdown", no: "Checked the flop into a bet, didn't raise",
+    chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop, did: (f) => fCheckRaised(f, "flop") && f.won === false },
+  { id: "xr-bluff-t", state: "yes", th: 3, yes: "Check-raised the turn and lost at showdown", no: "Checked the turn into a bet, didn't raise",
+    chance: (f) => fActs(f, "turn").includes("check") && f.faced.turn, did: (f) => fCheckRaised(f, "turn") && f.won === false },
+  { id: "xr-bluff-r", state: "yes", th: 3, yes: "Check-raised the river and lost at showdown", no: "Checked the river into a bet, didn't raise",
+    chance: (f) => fActs(f, "river").includes("check") && f.faced.river, did: (f) => fCheckRaised(f, "river") && f.won === false },
+  { id: "xr-oop-v", yes: "Check-raised and won at showdown", no: "Checked into a bet, didn't raise",
+    chance: (f) => STREETS3.some((st) => fActs(f, st).includes("check") && f.faced[st]),
+    did: (f) => STREETS3.some((st) => fCheckRaised(f, st)) && f.won === true },
+  { id: "xr-oop-b", yes: "Check-raised and lost at showdown", no: "Checked into a bet, didn't raise",
+    chance: (f) => STREETS3.some((st) => fActs(f, st).includes("check") && f.faced[st]),
+    did: (f) => STREETS3.some((st) => fCheckRaised(f, st)) && f.won === false },
+  // ---- river bluffing, measured by what he showed ----
+  { id: "bluffs-rivers", state: "yes", th: 3, yes: "Bet the river and lost at showdown", no: "Bet the river and won at showdown",
+    chance: (f) => f.sd && fFired(f, "river"), did: (f) => f.won === false },
+  { id: "barrels-light", state: "yes", th: 3, yes: "Fired flop and turn, lost at showdown", no: "Fired flop and turn, won at showdown",
+    chance: (f) => f.sd && fFired(f, "flop") && fFired(f, "turn"), did: (f) => f.won === false },
+  { id: "bluffs-air", yes: "Bet the river and lost at showdown", no: "Bet the river and won at showdown",
+    chance: (f) => f.sd && fFired(f, "river"), did: (f) => f.won === false },
+  { id: "bluff-missed-draws", yes: "Bet the river and lost at showdown", no: "Bet the river and won at showdown",
+    chance: (f) => f.sd && fFired(f, "river"), did: (f) => f.won === false },
+  { id: "bluff-line-bxb", state: "yes", th: 3, yes: "Bet · check · bet, lost at showdown", no: "Reached the river another way",
+    chance: (f) => f.sd && fActed(f, "river"),
+    did: (f) => fFired(f, "flop") && !fFired(f, "turn") && fFired(f, "river") && f.won === false },
+  { id: "bluff-line-xb", state: "yes", th: 3, yes: "Check · bet, lost at showdown", no: "Reached the turn another way",
+    chance: (f) => f.sd && fActed(f, "turn"),
+    did: (f) => !fFired(f, "flop") && fFired(f, "turn") && f.won === false },
+  { id: "bluff-line-xxb", state: "yes", th: 3, yes: "Check · check · bet, lost at showdown", no: "Reached the river another way",
+    chance: (f) => f.sd && fActed(f, "river"),
+    did: (f) => !fFired(f, "flop") && !fFired(f, "turn") && fFired(f, "river") && f.won === false },
+  // ---- sizing ----
+  { id: "open-big-strong", yes: "Opened with a size recorded", no: "Opened without a size recorded",
+    chance: fOpened, did: (f) => !!fBucket(f, "pre") },
+  { id: "3bet-big-strong", yes: "3-bet with a size recorded", no: "3-bet without a size recorded",
+    chance: (f) => fDid(f, "pre", "3bet"), did: (f) => !!fBucket(f, "pre") },
+  { id: "size-up-draws", yes: "Bet postflop with a size recorded", no: "Bet postflop without a size recorded",
+    chance: (f) => STREETS3.some((st) => fFired(f, st)), did: (f) => STREETS3.some((st) => !!fBucket(f, st)) },
+  { id: "small-with-weak", yes: "Bet postflop and lost at showdown", no: "Bet postflop and won at showdown",
+    chance: (f) => f.sd && STREETS3.some((st) => fFired(f, st)), did: (f) => f.won === false },
+  { id: "overbets-nuts", yes: "Bet postflop and won at showdown", no: "Bet postflop and lost at showdown",
+    chance: (f) => f.sd && STREETS3.some((st) => fFired(f, st)), did: (f) => f.won === true },
+  { id: "size-flop-v", yes: "Bet the flop with a size, won at showdown", no: "Bet the flop with a size, lost at showdown",
+    chance: (f) => f.sd && !!fBucket(f, "flop"), did: (f) => f.won === true },
+  { id: "size-turn-v", yes: "Bet the turn with a size, won at showdown", no: "Bet the turn with a size, lost at showdown",
+    chance: (f) => f.sd && !!fBucket(f, "turn"), did: (f) => f.won === true },
+  { id: "size-river-v", yes: "Bet the river with a size, won at showdown", no: "Bet the river with a size, lost at showdown",
+    chance: (f) => f.sd && !!fBucket(f, "river"), did: (f) => f.won === true },
+  { id: "size-flop-b", yes: "Bet the flop with a size, lost at showdown", no: "Bet the flop with a size, won at showdown",
+    chance: (f) => f.sd && !!fBucket(f, "flop"), did: (f) => f.won === false },
+  { id: "size-turn-b", yes: "Bet the turn with a size, lost at showdown", no: "Bet the turn with a size, won at showdown",
+    chance: (f) => f.sd && !!fBucket(f, "turn"), did: (f) => f.won === false },
+  { id: "size-river-b", yes: "Bet the river with a size, lost at showdown", no: "Bet the river with a size, won at showdown",
+    chance: (f) => f.sd && !!fBucket(f, "river"), did: (f) => f.won === false },
+];
+const EVIDENCE_BY_TAG = READ_EVIDENCE.reduce((m, r) => ((m[r.id] = m[r.id] || []).push(r), m), {});
+
+/* Split the facts into the hands that showed the pattern and the hands that
+   offered the same chance and didn't. A hand with no chance lands on neither
+   side. One bad record shouldn't take the whole panel down, so a predicate that
+   throws just counts as "no". */
+function evidenceSplit(row, facts) {
+  const hands = [], miss = [];
+  for (const f of facts) {
+    let ok = false, hit = false;
+    try { ok = !!row.chance(f); if (ok) hit = !!row.did(f); } catch (_) { ok = false; }
+    if (ok) (hit ? hands : miss).push(f.id);
+  }
+  return { hands, miss, chances: hands.length + miss.length };
+}
+
+function derivedReads(o, hands, facts) {
+  facts = facts || oppFacts(o, hands);
   const reads = oppReads(o);
   const dismissed = new Set(o.readDismissed || []);
-  return READ_SIGNALS.map((sig) => {
-    const key = sig.id + ":" + sig.state;
-    const c = cnt[key] || 0;
-    if (c < sig.th || reads[sig.id] || dismissed.has(key) || !TAG_BY_ID[sig.id] || RETIRED_TAG_IDS.has(sig.id)) return null;
-    const suffix = sig.state === "no" ? " (NO)" : "";
-    return { tagId: sig.id, state: sig.state, key, count: c, label: TAG_BY_ID[sig.id].label + suffix };
+  return READ_EVIDENCE.filter((r) => r.th).map((r) => {
+    const key = r.id + ":" + r.state;
+    const t = TAG_BY_ID[r.id];
+    if (!t || readIsActive(r.id, reads[r.id]) || dismissed.has(key) || RETIRED_TAG_IDS.has(r.id)) return null;
+    const ev = evidenceSplit(r, facts);
+    if (ev.hands.length < r.th) return null;
+    return { tagId: r.id, state: r.state, key, count: ev.hands.length, chances: ev.chances,
+             hands: ev.hands, miss: ev.miss, yes: r.yes, no: r.no,
+             label: t.label + (r.state === "no" ? " (NO)" : "") };
   }).filter(Boolean).sort((a, b) => b.count - a.count);
+}
+
+/* The hands behind the reads Phil has already set — the same registry read the
+   other way round. Not "should he set this" but "here is what the logs say
+   about the one he did set", so a read he is about to exploit is checkable. */
+function setReadEvidence(o, facts) {
+  const reads = oppReads(o);
+  const out = [];
+  for (const id of Object.keys(reads)) {
+    if (!readIsActive(id, reads[id]) || !TAG_BY_ID[id]) continue;
+    const rows = EVIDENCE_BY_TAG[id];
+    if (!rows) continue;
+    const row = rows.find((r) => r.state === reads[id]) || rows[0];
+    const ev = evidenceSplit(row, facts);
+    if (!ev.chances) continue;
+    out.push({ tagId: id, label: TAG_BY_ID[id].label, yes: row.yes, no: row.no, ...ev });
+  }
+  return out.sort((a, b) => b.hands.length - a.hands.length);
+}
+
+/* ---- tag-free exploit signals ----
+   One-sided tells: every single time he did X, the same thing was true. Phil's
+   own examples are this shape — "every time they use B33 on the river they are
+   bluffing", "they never limp-reraise as a bluff" — and the exploit is the
+   absence, which no frequency read on the card can express. Facts only; what to
+   do about them is Phil's to write. Value/bluff here means one thing and only
+   one thing: the hand reached showdown and he won it, or reached showdown and
+   lost it. Hands that never got there say nothing either way. */
+function exploitSignals(facts) {
+  const out = [];
+  const add = (label, detail, hands, miss) => out.push({ label, detail, hands, miss, chances: hands.length + miss.length });
+  const ids = (l) => l.map((f) => f.id);
+
+  // Limp-reraise: does he ever have a bluff in there?
+  const lrr = facts.filter(fLimpRR), lrrSD = lrr.filter((f) => f.sd);
+  if (lrrSD.length >= 3) {
+    const lost = lrrSD.filter((f) => f.won === false), won = lrrSD.filter((f) => f.won === true);
+    if (!lost.length) add("Limp-reraise is never a bluff", `${won.length} of ${won.length} shown down were winners`, ids(won), []);
+    else add("Limp-reraises as a bluff", `${lost.length} of ${lrrSD.length} shown down were losers`, ids(lost), ids(won));
+  }
+  // Limp-shove.
+  const ls = facts.filter((f) => f.limpedFirst && fActs(f, "pre").slice(1).includes("jam"));
+  if (ls.length >= 2) add("Limps, then shoves", `${ls.length} hand${ls.length === 1 ? "" : "s"}`, ids(ls), ids(facts.filter((f) => f.limpedFirst && !ls.includes(f))));
+
+  // Sizing tells: one bucket that only ever showed up on one side of showdown.
+  for (const st of STREETS3) {
+    const shown = facts.filter((f) => f.sd && fBucket(f, st));
+    const by = {};
+    for (const f of shown) (by[fBucket(f, st)] = by[fBucket(f, st)] || []).push(f);
+    for (const b of Object.keys(by)) {
+      const list = by[b];
+      if (list.length < 3) continue;
+      const lost = list.filter((f) => f.won === false), won = list.filter((f) => f.won === true);
+      if (lost.length && !won.length) add(`${ST_NAME[st]} ${b} is always a bluff`, `${lost.length} of ${lost.length} shown down lost`, ids(lost), []);
+      else if (won.length && !lost.length) add(`${ST_NAME[st]} ${b} is always value`, `${won.length} of ${won.length} shown down won`, ids(won), []);
+    }
+    // One sizing only — he never varies it on this street.
+    const sized = facts.filter((f) => fBucket(f, st));
+    const seen = [...new Set(sized.map((f) => fBucket(f, st)))];
+    if (sized.length >= 4 && seen.length === 1) add(`Only ever bets ${seen[0]} on the ${st}`, `${sized.length} sized bets, one size`, ids(sized), []);
+  }
+
+  // Never / always folds to a bet on a street.
+  for (const st of STREETS3) {
+    const spots = facts.filter((f) => f.faced[st]);
+    if (spots.length < 4) continue;
+    const folded = spots.filter((f) => fDid(f, st, "fold"));
+    if (!folded.length) add(`Never folds the ${st}`, `${spots.length} bets faced, ${spots.length} continues`, ids(spots), []);
+    else if (folded.length === spots.length) add(`Always folds the ${st}`, `${spots.length} of ${spots.length} bets faced`, ids(folded), []);
+  }
+  // Never check-raises anywhere.
+  const xrSpots = facts.filter((f) => STREETS3.some((st) => fActs(f, st).includes("check") && f.faced[st]));
+  if (xrSpots.length >= 5) {
+    const xr = xrSpots.filter((f) => STREETS3.some((st) => fCheckRaised(f, st)));
+    if (!xr.length) add("Never check-raises", `${xrSpots.length} chances, none taken`, ids(xrSpots), []);
+  }
+  // Never 3-bets preflop.
+  const vsRaise = facts.filter((f) => f.faced.pre);
+  if (vsRaise.length >= 6) {
+    const tb = vsRaise.filter((f) => fDid(f, "pre", "3bet", "4bet", "jam"));
+    if (!tb.length) add("Never reraises preflop", `${vsRaise.length} raises faced, never once`, ids(vsRaise), []);
+  }
+  // Never limps / limps every time he enters.
+  const entered = facts.filter((f) => f.s.pre.some((x) => x.act !== "fold"));
+  if (entered.length >= 6) {
+    const limped = entered.filter((f) => f.limpedFirst);
+    if (!limped.length) add("Never limps", `${entered.length} pots entered, always with a raise or a call`, ids(entered), []);
+    else if (limped.length === entered.length) add("Always limps in", `${entered.length} of ${entered.length} pots entered`, ids(limped), []);
+  }
+  return out;
+}
+
+/* Sheet: the hands behind one read — the hands he did it in, and the hands that
+   offered the same chance and went another way. N hands is a claim; N of M is
+   what decides whether the read is true. Rows open the hand. */
+function openReadProof(label, sub, ids, other, oppId) {
+  const byId = new Map(HANDS.map((h) => [h.id, h]));
+  const pick = (l) => [...new Set(l || [])].map((x) => byId.get(x)).filter(Boolean).sort((a, b) => b.ts - a.ts);
+  const hit = pick(ids), miss = pick(other && other.ids);
+  if (!hit.length && !miss.length) return;
+  const block = (t, l) => l.length
+    ? `<div class="rdhead"><b>${esc(t)}</b><span class="rdn">${l.length}</span></div>` + l.map((h) => handRowHTML(h, oppId)).join("")
+    : "";
+  sheetGroup = "__rgcell__";
+  showSheet(
+    `<div class="sheethead"><span class="t">${esc(label)}</span><button data-sheetclose>Close</button></div>
+     <div class="rdsub">${esc(sub)}</div>
+     <div class="list rgcell-hands">${
+       miss.length && other ? block(other.yes || "Did this", hit) + block(other.no || "Had the chance, didn't", miss)
+       : hit.map((h) => handRowHTML(h, oppId)).join("")}</div>`);
 }
 
 /* FEATURE 2 — predictive defaults for hand entry, from history. */
@@ -1918,23 +2228,48 @@ function renderOppDetail(id) {
       scales;
   }).join("");
 
-  // FEATURE 1 — reads inferred from this opponent's logged hands
-  const dReads = derivedReads(o, mine);
+  // FEATURE 1 — what this opponent's logged hands say. Three panels off one
+  // registry: reads worth adding, the hands behind the reads already on the
+  // card, and one-sided tells that no read on the card can express.
+  const facts = oppFacts(o, mine);
+  const sgHead = (label, key, open) =>
+    `<div class="sugghead" data-toggle="${key}"><span>${esc(label)}</span><span class="toggle-arrow">${open ? "▼" : "▶"}</span></div>`;
+  const ofN = (n, m) => `${n} of ${m} chance${m === 1 ? "" : "s"}${m ? ` · ${Math.round((100 * n) / m)}%` : ""}`;
+
+  const dReads = derivedReads(o, mine, facts);
   const showD = showDerivedReads[id];
   const dHTML = dReads.length
-    ? `<div class="sugghead" data-toggle-dreads>
-        <span>From logged hands · small sample</span>
-        <span class="toggle-arrow">${showD ? "▼" : "▶"}</span>
-      </div>` + (showD ? dReads.map((s) =>
+    ? sgHead("From logged hands · small sample", "dreads", showD) + (showD ? dReads.map((s) =>
         `<div class="suggitem" data-dtag="${esc(s.tagId)}" data-dstate="${esc(s.state || "yes")}" data-dkey="${esc(s.key)}">
-           <div class="notetext">📊 <b>${esc(s.label)}</b> — seen in ${s.count} hand${s.count > 1 ? "s" : ""}</div>
+           <div class="notetext">📊 <b>${esc(s.label)}</b> — ${ofN(s.count, s.chances)}</div>
            <div class="noterowbtns">
+             <button class="chip mini" data-dwhy>Show the hands</button>
              <button class="chip mini on sgreen" data-dacc>＋ Add read</button>
              <button class="chip mini" data-ddismiss>Dismiss</button>
            </div></div>`).join("") : "")
     : "";
 
-  $("od-readsugg").innerHTML = dHTML;
+  const setEv = setReadEvidence(o, facts);
+  const showE = showReadEvid[id];
+  const eHTML = setEv.length
+    ? sgHead(`Hands behind your reads · ${setEv.length}`, "revid", showE) + (showE ? setEv.map((s) =>
+        `<div class="suggitem" data-ewhy="${esc(s.tagId)}">
+           <div class="notetext">▦ <b>${esc(s.label)}</b> — ${ofN(s.hands.length, s.chances)}</div>
+           <div class="noterowbtns"><button class="chip mini" data-ewhygo>Show the hands</button></div>
+         </div>`).join("") : "")
+    : "";
+
+  const sigs = exploitSignals(facts);
+  const showS = showExploitSignals[id];
+  const sHTML = sigs.length
+    ? sgHead(`Exploit signals · ${sigs.length}`, "rsig", showS) + (showS ? sigs.map((s, i) =>
+        `<div class="suggitem suggstrong" data-swhy="${i}">
+           <div class="notetext">🎯 <b>${esc(s.label)}</b> — ${esc(s.detail)}</div>
+           <div class="noterowbtns"><button class="chip mini" data-swhygo>Show the hands</button></div>
+         </div>`).join("") : "")
+    : "";
+
+  $("od-readsugg").innerHTML = dHTML + eHTML + sHTML;
 
   {
     const allNotes = o.notes || [];
@@ -4514,22 +4849,46 @@ function bindStatic() {
     renderOppDetail(curOppId);
   };
   $("od-readsugg").onclick = async (e) => {
-    if (e.target.closest("[data-toggle-dreads]")) {
-      showDerivedReads[curOppId] = !showDerivedReads[curOppId];
+    const tg = e.target.closest("[data-toggle]");
+    if (tg) {
+      const k = tg.dataset.toggle;
+      const store = k === "dreads" ? showDerivedReads : k === "revid" ? showReadEvid : showExploitSignals;
+      store[curOppId] = !store[curOppId];
       renderOppDetail(curOppId);
       return;
     }
     const o = oppById(curOppId);
+    if (!o) return;
+    const sig = e.target.closest("[data-swhy]");
+    if (sig) {
+      const s = exploitSignals(oppFacts(o))[Number(sig.dataset.swhy)];
+      if (s) openReadProof(`${s.label} · ${o.name}`, s.detail, s.hands,
+        s.miss.length ? { ids: s.miss, yes: "Did this", no: "Had the chance, didn't" } : null, o.id);
+      return;
+    }
+    const ev = e.target.closest("[data-ewhy]");
+    if (ev) {
+      const r = setReadEvidence(o, oppFacts(o)).find((x) => x.tagId === ev.dataset.ewhy);
+      if (r) openReadProof(`${r.label} · ${o.name}`,
+        `${r.hands.length} of ${r.chances} chance${r.chances === 1 ? "" : "s"}`, r.hands,
+        { ids: r.miss, yes: r.yes, no: r.no }, o.id);
+      return;
+    }
     const item = e.target.closest("[data-dtag]");
     if (!item) return;
     const tag = item.dataset.dtag;
     const state = item.dataset.dstate || "yes";
     const dkey = item.dataset.dkey || tag;                   // per-direction dismiss key
-    if (e.target.closest("[data-dacc]")) {
-      oppReads(o)[tag] = state;                              // accept → set the read (yes or no)
-    } else {
-      (o.readDismissed = o.readDismissed || []).push(dkey);  // dismiss → stop suggesting this direction
+    if (e.target.closest("[data-dwhy]")) {
+      const s = derivedReads(o).find((x) => x.key === dkey);
+      if (s) openReadProof(`${s.label} · ${o.name}`,
+        `${s.count} of ${s.chances} chance${s.chances === 1 ? "" : "s"}`, s.hands,
+        { ids: s.miss, yes: s.yes, no: s.no }, o.id);
+      return;
     }
+    if (e.target.closest("[data-dacc]")) oppReads(o)[tag] = state;            // accept → set the read
+    else if (e.target.closest("[data-ddismiss]")) (o.readDismissed = o.readDismissed || []).push(dkey);
+    else return;                                   // a tap on the row itself is not a dismissal
     o.updatedAt = Date.now();
     await dbPut("opponents", o);
     renderOppDetail(curOppId);
