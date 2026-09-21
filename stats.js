@@ -212,22 +212,8 @@ function sdBoardTexture(board) {
 }
 
 function sdMadeClass(hole, board) {
-  if (!hole || hole.length !== 2 || board.length < 3) return null;
-  const all = hole.concat(board);
-  if (!all.every((c) => SD_CARD.test(String(c))) || new Set(all).size !== all.length) return null;
-  const s = best7(all);
-  if (board.length === 5 && cmpScore(s, best7(board)) === 0) return "B";        // playing the board
-  const cnt = {};
-  for (const c of all) cnt[RVAL[c[0]]] = (cnt[RVAL[c[0]]] || 0) + 1;
-  const hv = hole.map((c) => RVAL[c[0]]);
-  const mine = hv.filter((v) => cnt[v] >= 2);                                    // his own paired ranks
-  if (s[0] >= 4) return "V";                                                     // straight, flush, boat, quads
-  if (s[0] === 3) return mine.length ? "V" : "B";                                // trips need one of his cards
-  const tex = sdBoardTexture(board);
-  if (tex.flush || tex.straight4 || tex.paired) return "B";
-  if (s[0] === 2) return new Set(mine).size === 2 ? "V" : "B";                   // two pair, both his cards
-  if (s[0] === 1 && hv[0] === hv[1] && hv[0] > Math.max(...board.map((c) => RVAL[c[0]]))) return "V";   // overpair
-  return "B";
+  const m = madeTier(hole, board);                     // one ladder for the whole app — see app.js
+  return m ? (m.tier >= 1 ? "V" : "B") : null;
 }
 
 const SD_SZ_STEPS = ["B25", "B33", "B50", "B66", "B100", "B150", "Jam"];

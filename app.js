@@ -313,13 +313,21 @@ const fPair = (f) => f.cards.length === 2 && f.cards[0][0] === f.cards[1][0];
 /* Where his hand sits against the board, as of the street he bet on. Phil's
    ladder, 2026-09-22: a bluff is anything weaker than second pair — it does NOT
    have to have lost at showdown, so a hand whose cards are logged counts even
-   if it never got there. The polar ends are hands with no pair of his own and
-   hands that are top pair good kicker or better; everything between (bottom or
-   third pair, second pair, top pair with a small kicker, an underpair) is the
-   merged middle. "Good kicker" = Q or better alongside top pair — my reading,
-   not Phil's words. Pairs that live entirely on the board are not his. */
+   if it never got there. Second pair on up is value, top pair included, and a
+   paired board does not demote it. But once the board shows four to a straight
+   or four to a flush, one pair is a bluff whatever it is — only the straight or
+   the flush itself is still value. The polar ends are the bluffs and the
+   overpairs-or-better; second and top pair are the merged middle.
+   Pairs that live entirely on the board are not his. */
 const SD_CARDRE = /^[6-9TJQKA][cdhs]$/;
-const GOOD_KICKER = 12;                               // Q in RVAL terms
+const SD_RUNS = [[6,7,8,9,10],[7,8,9,10,11],[8,9,10,11,12],[9,10,11,12,13],[10,11,12,13,14],[14,6,7,8,9]];
+/* Four to a straight or four to a flush — a three-card flop can never show it. */
+function sdScary(board) {
+  const rk = new Set(board.map((c) => RVAL[c[0]]));
+  const su = {};
+  for (const c of board) su[c[1]] = (su[c[1]] || 0) + 1;
+  return SD_RUNS.some((w) => w.filter((r) => rk.has(r)).length >= 4) || Math.max(0, ...Object.values(su)) >= 4;
+}
 function madeTier(hole, board) {
   if (!hole || hole.length !== 2 || board.length < 3) return null;
   const all = hole.concat(board);
@@ -331,24 +339,26 @@ function madeTier(hole, board) {
   const cnt = {};
   for (const c of all) cnt[RVAL[c[0]]] = (cnt[RVAL[c[0]]] || 0) + 1;
   const mine = [...new Set(hv.filter((v) => cnt[v] >= 2))];                 // his own paired ranks
-  const none = { tier: 0, kicker: 0, ownPair: false };
-  if (s[0] >= 4) return { tier: 4, kicker: 0, ownPair: true };              // straight, flush, boat, quads
-  if (s[0] === 3) return mine.length ? { tier: 4, kicker: 0, ownPair: true } : none;
-  if (s[0] === 2 && mine.length === 2) return { tier: 4, kicker: 0, ownPair: true };
+  const none = { tier: 0, ownPair: false };
+  if (s[0] >= 4) return { tier: 4, ownPair: true };              // straight, flush, boat, quads
+  if (sdScary(board)) return { tier: 0, ownPair: !!mine.length }; // one pair on a 4-straight/4-flush is a bluff
+  if (s[0] === 3) return mine.length ? { tier: 4, ownPair: true } : none;
+  if (s[0] === 2 && mine.length === 2) return { tier: 4, ownPair: true };
   if (!mine.length) return none;                                           // board pairs only, or no pair
   const p = Math.max(...mine);
   if (hv[0] === hv[1]) {                                                   // pocket pair
     const above = bv.filter((v) => v > p).length;
-    return { tier: above === 0 ? 3 : above === 1 ? 1 : 0, kicker: 0, ownPair: true };
+    return { tier: above === 0 ? 3 : above === 1 ? 1 : 0, ownPair: true };
   }
   const idx = bv.indexOf(p);                                               // 0 = top pair
-  return { tier: idx === 0 ? 2 : idx === 1 ? 1 : 0, kicker: Math.max(...hv.filter((v) => v !== p)), ownPair: true };
+  return { tier: idx === 0 ? 2 : idx === 1 ? 1 : 0, ownPair: true };
 }
 const mdBluff = (m) => !!m && m.tier === 0;
-const mdStrong = (m) => !!m && (m.tier >= 3 || (m.tier === 2 && m.kicker >= GOOD_KICKER));   // TPGK+
+const mdStrong = (m) => !!m && m.tier >= 3;            // overpair+: the top end of a polar range
+const mdValue = (m) => !!m && m.tier >= 1;             // second pair or better, top pair included
 const fMade = (f, st) => f.md[st];
 const fBluffed = (f, st) => mdBluff(f.md[st]);
-const fValue = (f, st) => mdStrong(f.md[st]);
+const fValue = (f, st) => mdValue(f.md[st]);
 /* The street he actually put money in on, latest first — the hand's own verdict. */
 const fBetSt = (f) => STREETS3.filter((st) => fFired(f, st) && f.md[st]).pop() || null;
 const fBetMade = (f) => { const st = fBetSt(f); return st ? f.md[st] : null; };
@@ -489,13 +499,13 @@ const READ_EVIDENCE = [
     chance: (f) => STREETS3.some((st) => fFired(f, st)), did: (f) => STREETS3.some((st) => !!fBucket(f, st)) },
   { id: "small-with-weak", yes: "Bet postflop weaker than second pair", no: "Bet postflop with second pair or better",
     chance: (f) => !!fBetMade(f), did: (f) => mdBluff(fBetMade(f)) },
-  { id: "overbets-nuts", yes: "Bet postflop with top pair good kicker or better", no: "Bet postflop with less",
+  { id: "overbets-nuts", yes: "Bet postflop with an overpair or better", no: "Bet postflop with less",
     chance: (f) => !!fBetMade(f), did: (f) => mdStrong(fBetMade(f)) },
-  { id: "size-flop-v", yes: "Bet the flop with a size, top pair good kicker or better", no: "Bet the flop with a size, less than that",
+  { id: "size-flop-v", yes: "Bet the flop with a size, second pair or better", no: "Bet the flop with a size, weaker than that",
     chance: (f) => !!f.md.flop && !!fBucket(f, "flop"), did: (f) => fValue(f, "flop") },
-  { id: "size-turn-v", yes: "Bet the turn with a size, top pair good kicker or better", no: "Bet the turn with a size, less than that",
+  { id: "size-turn-v", yes: "Bet the turn with a size, second pair or better", no: "Bet the turn with a size, weaker than that",
     chance: (f) => !!f.md.turn && !!fBucket(f, "turn"), did: (f) => fValue(f, "turn") },
-  { id: "size-river-v", yes: "Bet the river with a size, top pair good kicker or better", no: "Bet the river with a size, less than that",
+  { id: "size-river-v", yes: "Bet the river with a size, second pair or better", no: "Bet the river with a size, weaker than that",
     chance: (f) => !!f.md.river && !!fBucket(f, "river"), did: (f) => fValue(f, "river") },
   { id: "size-flop-b", yes: "Bet the flop with a size, weaker than second pair", no: "Bet the flop with a size, second pair or better",
     chance: (f) => !!f.md.flop && !!fBucket(f, "flop"), did: (f) => fBluffed(f, "flop") },
@@ -514,13 +524,13 @@ const READ_EVIDENCE = [
     chance: (f) => f.xt.river && !!f.md.river, did: (f) => fFired(f, "river") && fBluffed(f, "river") },
 
   /* Polar vs merged is about the hands he bets, not the size (Phil, 2026-09-22):
-     polar = no pair of his own, or top pair good kicker and better, nothing in
-     between; merged = he'll bet the middle too, middle pair and the like. Two
-     complementary rows over the same turn/river bets, so exactly one can fire. */
-  { id: "polar", state: "yes", th: 5, minN: 7, rate: .7, yes: "Turn/river bet with air or TPGK+", no: "Turn/river bet with a middling pair",
-    chance: (f) => !!fBetLate(f), did: (f) => { const m = fBetLate(f); return !m.ownPair || mdStrong(m); } },
-  { id: "merged", state: "yes", th: 3, minN: 7, rate: .3, yes: "Turn/river bet with a middling pair", no: "Turn/river bet with air or TPGK+",
-    chance: (f) => !!fBetLate(f), did: (f) => { const m = fBetLate(f); return m.ownPair && !mdStrong(m); } },
+     polar = the bluffs and the overpairs-and-better, nothing in between; merged
+     = he'll bet the middle too, second and top pair. Two complementary rows over
+     the same turn/river bets, so exactly one can fire. */
+  { id: "polar", state: "yes", th: 5, minN: 7, rate: .7, yes: "Turn/river bet with a bluff or an overpair+", no: "Turn/river bet with second or top pair",
+    chance: (f) => !!fBetLate(f), did: (f) => { const m = fBetLate(f); return mdBluff(m) || mdStrong(m); } },
+  { id: "merged", state: "yes", th: 3, minN: 7, rate: .3, yes: "Turn/river bet with second or top pair", no: "Turn/river bet with a bluff or an overpair+",
+    chance: (f) => !!fBetLate(f), did: (f) => { const m = fBetLate(f); return !mdBluff(m) && !mdStrong(m); } },
 
   /* Protected block: the small bet is capable of two pair or better, read
      against the board as of that street and only when his cards are known. */
