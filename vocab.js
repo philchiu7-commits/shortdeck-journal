@@ -128,12 +128,12 @@ const TENDENCY_TAGS = [
   { id: "small-with-weak",   cat: "sizing",   label: "Small = weak" },
   { id: "overbets-nuts",     cat: "sizing",   label: "Sizes up with nuts" },
   // sizing — tally which pot-% size he uses, per street, value vs bluff
-  { id: "size-flop-v",       cat: "sizing",   label: "Flop V",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
-  { id: "size-turn-v",       cat: "sizing",   label: "Turn V",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
-  { id: "size-river-v",      cat: "sizing",   label: "River V", kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
-  { id: "size-flop-b",       cat: "sizing",   label: "Flop B",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
-  { id: "size-turn-b",       cat: "sizing",   label: "Turn B",  kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
-  { id: "size-river-b",      cat: "sizing",   label: "River B", kind: "tally", options: ["B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-flop-v",       cat: "sizing",   label: "Flop V",  kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-turn-v",       cat: "sizing",   label: "Turn V",  kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-river-v",      cat: "sizing",   label: "River V", kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-flop-b",       cat: "sizing",   label: "Flop B",  kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-turn-b",       cat: "sizing",   label: "Turn B",  kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
+  { id: "size-river-b",      cat: "sizing",   label: "River B", kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
   // live
   { id: "tilts",             cat: "live",     label: "Tilts after losses" },
   { id: "timing-tells",      cat: "live",     label: "Timing tells" },
