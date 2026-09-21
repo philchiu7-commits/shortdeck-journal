@@ -213,7 +213,7 @@ function sdBoardTexture(board) {
 
 function sdMadeClass(hole, board) {
   const m = madeTier(hole, board);                     // one ladder for the whole app — see app.js
-  return m ? (m.tier >= 1 ? "V" : "B") : null;
+  return m ? (m.value ? "V" : "B") : null;
 }
 
 const SD_SZ_STEPS = ["B25", "B33", "B50", "B66", "B100", "B150", "Jam"];
