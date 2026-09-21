@@ -325,6 +325,7 @@ function madeTier(hole, board) {
   const all = hole.concat(board);
   if (!all.every((c) => SD_CARDRE.test(String(c))) || new Set(all).size !== all.length) return null;
   const s = best7(all);
+  if (board.length === 5 && cmpScore(s, best7(board)) === 0) return null;   // playing the board: says nothing
   const hv = hole.map((c) => RVAL[c[0]]);
   const bv = [...new Set(board.map((c) => RVAL[c[0]]))].sort((a, b) => b - a);
   const cnt = {};
@@ -351,6 +352,8 @@ const fValue = (f, st) => mdStrong(f.md[st]);
 /* The street he actually put money in on, latest first — the hand's own verdict. */
 const fBetSt = (f) => STREETS3.filter((st) => fFired(f, st) && f.md[st]).pop() || null;
 const fBetMade = (f) => { const st = fBetSt(f); return st ? f.md[st] : null; };
+/* Same idea for the big streets only, where polar-vs-merged is decided. */
+const fBetLate = (f) => (fFired(f, "river") && f.md.river) || (fFired(f, "turn") && f.md.turn) || null;
 
 /* A bucket as a number so sizes can be compared: "Jam" sits above every %. */
 const bPct = (b) => { if (b === "Jam") return 999; const m = /^B(\d+)$/.exec(b || ""); return m ? Number(m[1]) : null; };
@@ -442,41 +445,41 @@ const READ_EVIDENCE = [
     chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop, did: (f) => fCheckRaised(f, "flop") },
   // ---- check-raises, split by how the hand ended ----
   { id: "xr-value-f", state: "yes", th: 3, yes: "Check-raised the flop and won at showdown", no: "Checked the flop into a bet, didn't raise",
-    chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop, did: (f) => fCheckRaised(f, "flop") && f.won === true },
+    chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop && !!f.md.flop, did: (f) => fCheckRaised(f, "flop") && fValue(f, "flop") },
   { id: "xr-value-t", state: "yes", th: 3, yes: "Check-raised the turn and won at showdown", no: "Checked the turn into a bet, didn't raise",
-    chance: (f) => fActs(f, "turn").includes("check") && f.faced.turn, did: (f) => fCheckRaised(f, "turn") && f.won === true },
+    chance: (f) => fActs(f, "turn").includes("check") && f.faced.turn && !!f.md.turn, did: (f) => fCheckRaised(f, "turn") && fValue(f, "turn") },
   { id: "xr-value-r", state: "yes", th: 3, yes: "Check-raised the river and won at showdown", no: "Checked the river into a bet, didn't raise",
-    chance: (f) => fActs(f, "river").includes("check") && f.faced.river, did: (f) => fCheckRaised(f, "river") && f.won === true },
+    chance: (f) => fActs(f, "river").includes("check") && f.faced.river && !!f.md.river, did: (f) => fCheckRaised(f, "river") && fValue(f, "river") },
   { id: "xr-bluff-f", state: "yes", th: 3, yes: "Check-raised the flop and lost at showdown", no: "Checked the flop into a bet, didn't raise",
-    chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop, did: (f) => fCheckRaised(f, "flop") && f.won === false },
+    chance: (f) => fActs(f, "flop").includes("check") && f.faced.flop && !!f.md.flop, did: (f) => fCheckRaised(f, "flop") && fBluffed(f, "flop") },
   { id: "xr-bluff-t", state: "yes", th: 3, yes: "Check-raised the turn and lost at showdown", no: "Checked the turn into a bet, didn't raise",
-    chance: (f) => fActs(f, "turn").includes("check") && f.faced.turn, did: (f) => fCheckRaised(f, "turn") && f.won === false },
+    chance: (f) => fActs(f, "turn").includes("check") && f.faced.turn && !!f.md.turn, did: (f) => fCheckRaised(f, "turn") && fBluffed(f, "turn") },
   { id: "xr-bluff-r", state: "yes", th: 3, yes: "Check-raised the river and lost at showdown", no: "Checked the river into a bet, didn't raise",
-    chance: (f) => fActs(f, "river").includes("check") && f.faced.river, did: (f) => fCheckRaised(f, "river") && f.won === false },
+    chance: (f) => fActs(f, "river").includes("check") && f.faced.river && !!f.md.river, did: (f) => fCheckRaised(f, "river") && fBluffed(f, "river") },
   { id: "xr-oop-v", yes: "Check-raised and won at showdown", no: "Checked into a bet, didn't raise",
     chance: (f) => STREETS3.some((st) => fActs(f, st).includes("check") && f.faced[st]),
-    did: (f) => STREETS3.some((st) => fCheckRaised(f, st)) && f.won === true },
+    did: (f) => STREETS3.some((st) => fCheckRaised(f, st) && fValue(f, st)) },
   { id: "xr-oop-b", yes: "Check-raised and lost at showdown", no: "Checked into a bet, didn't raise",
     chance: (f) => STREETS3.some((st) => fActs(f, st).includes("check") && f.faced[st]),
-    did: (f) => STREETS3.some((st) => fCheckRaised(f, st)) && f.won === false },
-  // ---- river bluffing, measured by what he showed ----
-  { id: "bluffs-rivers", state: "yes", th: 3, yes: "Bet the river and lost at showdown", no: "Bet the river and won at showdown",
-    chance: (f) => f.sd && fFired(f, "river"), did: (f) => f.won === false },
-  { id: "barrels-light", state: "yes", th: 3, yes: "Fired flop and turn, lost at showdown", no: "Fired flop and turn, won at showdown",
-    chance: (f) => f.sd && fFired(f, "flop") && fFired(f, "turn"), did: (f) => f.won === false },
-  { id: "bluffs-air", yes: "Bet the river and lost at showdown", no: "Bet the river and won at showdown",
-    chance: (f) => f.sd && fFired(f, "river"), did: (f) => f.won === false },
-  { id: "bluff-missed-draws", yes: "Bet the river and lost at showdown", no: "Bet the river and won at showdown",
-    chance: (f) => f.sd && fFired(f, "river"), did: (f) => f.won === false },
-  { id: "bluff-line-bxb", state: "yes", th: 3, yes: "Bet · check · bet, lost at showdown", no: "Reached the river another way",
-    chance: (f) => f.sd && fActed(f, "river"),
-    did: (f) => fFired(f, "flop") && !fFired(f, "turn") && fFired(f, "river") && f.won === false },
-  { id: "bluff-line-xb", state: "yes", th: 3, yes: "Check · bet, lost at showdown", no: "Reached the turn another way",
-    chance: (f) => f.sd && fActed(f, "turn"),
-    did: (f) => !fFired(f, "flop") && fFired(f, "turn") && f.won === false },
-  { id: "bluff-line-xxb", state: "yes", th: 3, yes: "Check · check · bet, lost at showdown", no: "Reached the river another way",
-    chance: (f) => f.sd && fActed(f, "river"),
-    did: (f) => !fFired(f, "flop") && !fFired(f, "turn") && fFired(f, "river") && f.won === false },
+    did: (f) => STREETS3.some((st) => fCheckRaised(f, st) && fBluffed(f, st)) },
+  // ---- bluffing, measured by the hand he held when he fired ----
+  { id: "bluffs-rivers", state: "yes", th: 3, yes: "Bet the river weaker than second pair", no: "Bet the river with second pair or better",
+    chance: (f) => !!f.md.river && fFired(f, "river"), did: (f) => fBluffed(f, "river") },
+  { id: "barrels-light", state: "yes", th: 3, yes: "Fired flop and turn weaker than second pair", no: "Fired flop and turn with second pair or better",
+    chance: (f) => !!f.md.turn && fFired(f, "flop") && fFired(f, "turn"), did: (f) => fBluffed(f, "turn") },
+  { id: "bluffs-air", yes: "Bet the river with no pair of his own", no: "Bet the river with a pair or better",
+    chance: (f) => !!f.md.river && fFired(f, "river"), did: (f) => !f.md.river.ownPair },
+  { id: "bluff-missed-draws", yes: "Bet the river weaker than second pair", no: "Bet the river with second pair or better",
+    chance: (f) => !!f.md.river && fFired(f, "river"), did: (f) => fBluffed(f, "river") },
+  { id: "bluff-line-bxb", state: "yes", th: 3, yes: "Bet · check · bet, weaker than second pair", no: "Reached the river another way",
+    chance: (f) => !!f.md.river && fActed(f, "river"),
+    did: (f) => fFired(f, "flop") && !fFired(f, "turn") && fFired(f, "river") && fBluffed(f, "river") },
+  { id: "bluff-line-xb", state: "yes", th: 3, yes: "Check · bet, weaker than second pair", no: "Reached the turn another way",
+    chance: (f) => !!f.md.turn && fActed(f, "turn"),
+    did: (f) => !fFired(f, "flop") && fFired(f, "turn") && fBluffed(f, "turn") },
+  { id: "bluff-line-xxb", state: "yes", th: 3, yes: "Check · check · bet, weaker than second pair", no: "Reached the river another way",
+    chance: (f) => !!f.md.river && fActed(f, "river"),
+    did: (f) => !fFired(f, "flop") && !fFired(f, "turn") && fFired(f, "river") && fBluffed(f, "river") },
   // ---- sizing ----
   { id: "open-big-strong", yes: "Opened with a size recorded", no: "Opened without a size recorded",
     chance: fOpened, did: (f) => !!fBucket(f, "pre") },
@@ -484,46 +487,46 @@ const READ_EVIDENCE = [
     chance: (f) => fDid(f, "pre", "3bet"), did: (f) => !!fBucket(f, "pre") },
   { id: "size-up-draws", yes: "Bet postflop with a size recorded", no: "Bet postflop without a size recorded",
     chance: (f) => STREETS3.some((st) => fFired(f, st)), did: (f) => STREETS3.some((st) => !!fBucket(f, st)) },
-  { id: "small-with-weak", yes: "Bet postflop and lost at showdown", no: "Bet postflop and won at showdown",
-    chance: (f) => f.sd && STREETS3.some((st) => fFired(f, st)), did: (f) => f.won === false },
-  { id: "overbets-nuts", yes: "Bet postflop and won at showdown", no: "Bet postflop and lost at showdown",
-    chance: (f) => f.sd && STREETS3.some((st) => fFired(f, st)), did: (f) => f.won === true },
-  { id: "size-flop-v", yes: "Bet the flop with a size, won at showdown", no: "Bet the flop with a size, lost at showdown",
-    chance: (f) => f.sd && !!fBucket(f, "flop"), did: (f) => f.won === true },
-  { id: "size-turn-v", yes: "Bet the turn with a size, won at showdown", no: "Bet the turn with a size, lost at showdown",
-    chance: (f) => f.sd && !!fBucket(f, "turn"), did: (f) => f.won === true },
-  { id: "size-river-v", yes: "Bet the river with a size, won at showdown", no: "Bet the river with a size, lost at showdown",
-    chance: (f) => f.sd && !!fBucket(f, "river"), did: (f) => f.won === true },
-  { id: "size-flop-b", yes: "Bet the flop with a size, lost at showdown", no: "Bet the flop with a size, won at showdown",
-    chance: (f) => f.sd && !!fBucket(f, "flop"), did: (f) => f.won === false },
-  { id: "size-turn-b", yes: "Bet the turn with a size, lost at showdown", no: "Bet the turn with a size, won at showdown",
-    chance: (f) => f.sd && !!fBucket(f, "turn"), did: (f) => f.won === false },
-  { id: "size-river-b", yes: "Bet the river with a size, lost at showdown", no: "Bet the river with a size, won at showdown",
-    chance: (f) => f.sd && !!fBucket(f, "river"), did: (f) => f.won === false },
+  { id: "small-with-weak", yes: "Bet postflop weaker than second pair", no: "Bet postflop with second pair or better",
+    chance: (f) => !!fBetMade(f), did: (f) => mdBluff(fBetMade(f)) },
+  { id: "overbets-nuts", yes: "Bet postflop with top pair good kicker or better", no: "Bet postflop with less",
+    chance: (f) => !!fBetMade(f), did: (f) => mdStrong(fBetMade(f)) },
+  { id: "size-flop-v", yes: "Bet the flop with a size, top pair good kicker or better", no: "Bet the flop with a size, less than that",
+    chance: (f) => !!f.md.flop && !!fBucket(f, "flop"), did: (f) => fValue(f, "flop") },
+  { id: "size-turn-v", yes: "Bet the turn with a size, top pair good kicker or better", no: "Bet the turn with a size, less than that",
+    chance: (f) => !!f.md.turn && !!fBucket(f, "turn"), did: (f) => fValue(f, "turn") },
+  { id: "size-river-v", yes: "Bet the river with a size, top pair good kicker or better", no: "Bet the river with a size, less than that",
+    chance: (f) => !!f.md.river && !!fBucket(f, "river"), did: (f) => fValue(f, "river") },
+  { id: "size-flop-b", yes: "Bet the flop with a size, weaker than second pair", no: "Bet the flop with a size, second pair or better",
+    chance: (f) => !!f.md.flop && !!fBucket(f, "flop"), did: (f) => fBluffed(f, "flop") },
+  { id: "size-turn-b", yes: "Bet the turn with a size, weaker than second pair", no: "Bet the turn with a size, second pair or better",
+    chance: (f) => !!f.md.turn && !!fBucket(f, "turn"), did: (f) => fBluffed(f, "turn") },
+  { id: "size-river-b", yes: "Bet the river with a size, weaker than second pair", no: "Bet the river with a size, second pair or better",
+    chance: (f) => !!f.md.river && !!fBucket(f, "river"), did: (f) => fBluffed(f, "river") },
 
-  /* Phil's definitions, 2026-09-22. XT = "checked to": the flop aggressor
-     checks and it's on him with no bet in front. A bluff is still only the one
-     thing the log can see — bet, got to showdown, lost — so the chance is the
-     checked-to spots that showed down. */
-  { id: "bluff-xt-f", state: "yes", th: 3, yes: "Checked to on the flop, bet, lost at showdown", no: "Checked to on the flop, went another way",
-    chance: (f) => f.xt.flop && f.sd, did: (f) => fFired(f, "flop") && f.won === false },
-  { id: "bluff-xt-t", state: "yes", th: 3, yes: "Checked to on the turn, bet, lost at showdown", no: "Checked to on the turn, went another way",
-    chance: (f) => f.xt.turn && f.sd, did: (f) => fFired(f, "turn") && f.won === false },
-  { id: "bluff-xt-r", state: "yes", th: 3, yes: "Checked to on the river, bet, lost at showdown", no: "Checked to on the river, went another way",
-    chance: (f) => f.xt.river && f.sd, did: (f) => fFired(f, "river") && f.won === false },
+  /* Phil's definitions, 2026-09-22. XT = "checked to": the street's aggressor
+     checks and it's on him with no bet in front. */
+  { id: "bluff-xt-f", state: "yes", th: 3, yes: "Checked to on the flop, bet weaker than second pair", no: "Checked to on the flop, went another way",
+    chance: (f) => f.xt.flop && !!f.md.flop, did: (f) => fFired(f, "flop") && fBluffed(f, "flop") },
+  { id: "bluff-xt-t", state: "yes", th: 3, yes: "Checked to on the turn, bet weaker than second pair", no: "Checked to on the turn, went another way",
+    chance: (f) => f.xt.turn && !!f.md.turn, did: (f) => fFired(f, "turn") && fBluffed(f, "turn") },
+  { id: "bluff-xt-r", state: "yes", th: 3, yes: "Checked to on the river, bet weaker than second pair", no: "Checked to on the river, went another way",
+    chance: (f) => f.xt.river && !!f.md.river, did: (f) => fFired(f, "river") && fBluffed(f, "river") },
 
-  /* Merged vs polar, measured on the big streets only. One size per hand: the
-     turn bet if he sized one, else the river — a hand is one data point, not two. */
-  { id: "polar", state: "yes", th: 5, minN: 7, rate: .7, yes: "Big bet (66%+ or jam) on the turn or river", no: "Smaller bet on the turn or river",
-    chance: (f) => bPct(fLateB(f)) !== null, did: (f) => bPct(fLateB(f)) >= 66 },
-  { id: "merged", state: "yes", th: 5, minN: 7, rate: .7, yes: "Medium bet (25-65%) on the turn or river", no: "Bigger or smaller bet on the turn or river",
-    chance: (f) => bPct(fLateB(f)) !== null, did: (f) => { const p = bPct(fLateB(f)); return p >= 25 && p <= 65; } },
+  /* Polar vs merged is about the hands he bets, not the size (Phil, 2026-09-22):
+     polar = no pair of his own, or top pair good kicker and better, nothing in
+     between; merged = he'll bet the middle too, middle pair and the like. Two
+     complementary rows over the same turn/river bets, so exactly one can fire. */
+  { id: "polar", state: "yes", th: 5, minN: 7, rate: .7, yes: "Turn/river bet with air or TPGK+", no: "Turn/river bet with a middling pair",
+    chance: (f) => !!fBetLate(f), did: (f) => { const m = fBetLate(f); return !m.ownPair || mdStrong(m); } },
+  { id: "merged", state: "yes", th: 3, minN: 7, rate: .3, yes: "Turn/river bet with a middling pair", no: "Turn/river bet with air or TPGK+",
+    chance: (f) => !!fBetLate(f), did: (f) => { const m = fBetLate(f); return m.ownPair && !mdStrong(m); } },
 
-  /* Protected block: the small bet is capable of two pair or better. Class is
-     read against the board as of that street, and only when his cards are known. */
+  /* Protected block: the small bet is capable of two pair or better, read
+     against the board as of that street and only when his cards are known. */
   { id: "protected-block", state: "yes", th: 5, yes: "Blocked B25/B33 holding two pair or better", no: "Blocked B25/B33 holding less",
-    chance: (f) => STREETS3.some((st) => fSmallB(f, st) && f.cat[st] !== null),
-    did: (f) => STREETS3.some((st) => fSmallB(f, st) && f.cat[st] >= 2) },
+    chance: (f) => STREETS3.some((st) => fSmallB(f, st) && f.md[st]),
+    did: (f) => STREETS3.some((st) => fSmallB(f, st) && f.md[st] && f.md[st].tier === 4) },
 
   /* Checks his whole range OOP: preflop raiser, first to act on the flop. */
   { id: "checks-range-oop", state: "yes", th: 8, minN: 10, rate: .75,
@@ -615,10 +618,10 @@ function exploitSignals(facts) {
   };
 
   // Limp-reraise: does he ever have a bluff in there?
-  const lrrSD = facts.filter((f) => fLimpRR(f) && f.sd);
-  const lrrWon = lrrSD.filter((f) => f.won === true), lrrLost = lrrSD.filter((f) => f.won === false);
-  sig(["Limp-reraise is never a bluff", "Limp-reraise is usually value"], lrrWon, lrrLost, 3, "shown down");
-  sig(["Limp-reraise is always a bluff", "Limp-reraise is usually a bluff"], lrrLost, lrrWon, 3, "shown down");
+  const lrrKnown = facts.filter((f) => fLimpRR(f) && !!f.md.flop);
+  const lrrV = lrrKnown.filter((f) => fValue(f, "flop")), lrrB = lrrKnown.filter((f) => fBluffed(f, "flop"));
+  sig(["Limp-reraise is never a bluff", "Limp-reraise is usually value"], lrrV, lrrB, 3, "hands seen");
+  sig(["Limp-reraise is always a bluff", "Limp-reraise is usually a bluff"], lrrB, lrrV, 3, "hands seen");
 
   // Limp-shove — a count, not a rate: twice is already a pattern worth knowing.
   const ls = facts.filter((f) => f.limpedFirst && fActs(f, "pre").slice(1).includes("jam"));
@@ -627,14 +630,14 @@ function exploitSignals(facts) {
 
   for (const st of STREETS3) {
     const N = ST_NAME[st];
-    // One bucket that leans hard to one side of showdown.
-    const shown = facts.filter((f) => f.sd && fBucket(f, st));
+    // One bucket that leans hard to one end of his range.
+    const shown = facts.filter((f) => f.md[st] && fBucket(f, st));
     const by = {};
     for (const f of shown) (by[fBucket(f, st)] = by[fBucket(f, st)] || []).push(f);
     for (const b of Object.keys(by)) {
-      const won = by[b].filter((f) => f.won === true), lost = by[b].filter((f) => f.won === false);
-      sig([`${N} ${b} is always a bluff`, `${N} ${b} is usually a bluff`], lost, won, 3, "shown down");
-      sig([`${N} ${b} is always value`, `${N} ${b} is usually value`], won, lost, 3, "shown down");
+      const val = by[b].filter((f) => fValue(f, st)), blf = by[b].filter((f) => fBluffed(f, st));
+      sig([`${N} ${b} is always a bluff`, `${N} ${b} is usually a bluff`], blf, val, 3, "hands seen");
+      sig([`${N} ${b} is always value`, `${N} ${b} is usually value`], val, blf, 3, "hands seen");
     }
     // Does he vary his size on this street at all?
     const sized = facts.filter((f) => fBucket(f, st));
@@ -655,12 +658,12 @@ function exploitSignals(facts) {
     sig([`Always stabs when checked to on the ${st}`, `Usually stabs when checked to on the ${st}`], stab, pass, 4, "checked-to spots");
     sig([`Never bets when checked to on the ${st}`, `Rarely bets when checked to on the ${st}`], pass, stab, 4, "checked-to spots");
     // ...and when he does stab, is it air?
-    const xtSD = xt.filter((f) => f.sd && fFired(f, st));
-    const xtL = xtSD.filter((f) => f.won === false), xtW = xtSD.filter((f) => f.won === true);
-    sig([`Stabs checked-to ${st}s with nothing`, `Usually bluffing when he stabs the ${st}`], xtL, xtW, 3, "shown down");
+    const xtK = xt.filter((f) => f.md[st] && fFired(f, st));
+    const xtB = xtK.filter((f) => fBluffed(f, st)), xtV = xtK.filter((f) => !fBluffed(f, st));
+    sig([`Stabs checked-to ${st}s with nothing`, `Usually bluffing when he stabs the ${st}`], xtB, xtV, 3, "hands seen");
     // Small bets: block or protection?
-    const sm = facts.filter((f) => fSmallB(f, st) && f.cat[st] !== null);
-    const smStrong = sm.filter((f) => f.cat[st] >= 2), smWeak = sm.filter((f) => f.cat[st] < 2);
+    const sm = facts.filter((f) => fSmallB(f, st) && f.md[st]);
+    const smStrong = sm.filter((f) => f.md[st].tier === 4), smWeak = sm.filter((f) => f.md[st].tier < 4);
     sig([`${N} B25/B33 is always two pair or better`, `${N} B25/B33 is usually two pair or better`], smStrong, smWeak, 5, "small bets");
     sig([`${N} B25/B33 is always one pair or worse`, `${N} B25/B33 is usually one pair or worse`], smWeak, smStrong, 5, "small bets");
   }
