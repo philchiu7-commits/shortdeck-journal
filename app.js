@@ -46,7 +46,7 @@ const isChoiceRead = (id) => !!CHOICE_READS[id];
 const TALLY_READS = Object.fromEntries(
   (typeof TENDENCY_TAGS !== "undefined" ? TENDENCY_TAGS : []).filter((t) => t.kind === "tally").map((t) => [t.id, t.options || []]));
 const isTallyRead = (id) => !!TALLY_READS[id];
-/* Tally reads store {option: count}; the leading option is whichever has the highest count. */
+/* Tally reads store {option: count}; every option with a count lights up, the leader is the highest. */
 const tallyLeader = (counts) => {
   const entries = Object.entries(counts || {}).filter(([, n]) => n > 0);
   if (!entries.length) return null;
@@ -95,9 +95,9 @@ const readChip = (id, state) => {
     return `<span class="chip mini on sscale" title="${esc(lbl)}: ${esc(state)}">${esc(lbl)} · ${esc(cap1(state))}</span>`;
   }
   if (isTallyRead(id)) {
-    const lead = tallyLeader(state);
-    if (!lead) return "";
-    return `<span class="chip mini on sscale" title="${esc(lbl)}: ${esc(lead[0])} (${lead[1]})">${esc(lbl)} · ${esc(lead[0])}</span>`;
+    const used = TALLY_READS[id].filter((v) => (state && state[v]) > 0);
+    if (!used.length) return "";
+    return `<span class="chip mini on sscale" title="${esc(lbl)}: ${esc(used.map((v) => `${v} (${state[v]})`).join(", "))}">${esc(lbl)} · ${esc(used.join(" "))}</span>`;
   }
   return `<span class="chip mini on ${STATE_CLASS[state] || ""}">${esc(lbl)}</span>`;
 };
@@ -1869,7 +1869,7 @@ function renderOppDetail(id) {
       const lead = tallyLeader(counts);
       const opts = TALLY_READS[id].map((v) => {
         const n = counts[v] || 0;
-        return `<button class="chip mini${lead && lead[0] === v ? " on sscale" : ""}" data-tally="${id}" data-val="${esc(v)}">${esc(cap1(v))}${n ? `<span class="tallyn">${n}</span>` : ""}</button>`;
+        return `<button class="chip mini${n ? " on sscale" : ""}" data-tally="${id}" data-val="${esc(v)}">${esc(cap1(v))}${n ? `<span class="tallyn">${n}</span>` : ""}</button>`;
       }).join("");
       const clr = lead ? `<button class="chip mini scaleclr" data-tallyclear="${id}" title="Clear">✕</button>` : "";
       return structRow(TAG_BY_ID[id].label, `<div class="bubbles">${opts}${clr}</div>`);
