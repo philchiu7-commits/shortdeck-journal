@@ -10,7 +10,7 @@
                  | "choice" (pick one of `options`, e.g. ["tight","normal","wide"])
                  | "tally" (pick one of `options` repeatedly; each tap increments
                    that option's count, e.g. tracking which bet size he uses most).
-     2. Optionally list it in READ_LAYOUT (app.js) so it sits in a street/role row; unlisted reads land in Unsorted > Other.
+     2. Optionally list it in READ_LAYOUT (app.js) so it sits in a street/role row; unlisted reads land in Uncategorized > Other.
      3. Optionally add EXPLOIT_RULES[id] = { yes: "…", no: "…" } for an
         auto-suggested exploit, and/or a PILL_READS entry for a felt pill.
    Street/role placement lives in READ_LAYOUT in app.js. */
@@ -103,7 +103,7 @@ const TENDENCY_TAGS = [
   { id: "polar",             cat: "postflop", label: "Polar" },
   // postflop — singles
   { id: "over-cbet",         cat: "postflop", label: "Over cbet" },             // no = under-cbets / gives up
-  { id: "floats-wide",       cat: "postflop", label: "Floats wide" },           // no = fit-or-fold
+  { id: "floats-wide",       cat: "postflop", label: "Flop overfloat" },        // no = fit-or-fold
   { id: "barrels-off",       cat: "postflop", label: "Barrels relentlessly" },  // no = gives up on turn
   { id: "chases-draws",      cat: "postflop", label: "Chases any draw" },       // short deck: OESD ≈ 45% by river, pays any price
   { id: "overplays-tp",      cat: "postflop", label: "Overplays TP / overpair" },
@@ -136,6 +136,39 @@ const TENDENCY_TAGS = [
   { id: "size-river-b",      cat: "sizing",   label: "River B", kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
   // live
   { id: "tilts",             cat: "live",     label: "Tilts after losses" },
+  /* Phil's postflop exploit tree, 2026-09-22 — one read per slot in the
+     Postflop General / Flop / Turn / River outline. Placement is READ_LAYOUT. */
+  // postflop general — multiway limped pot
+  { id: "mwl-oop-probe",     cat: "postflop", label: "OOP probe" },
+  { id: "mwl-xr",            cat: "postflop", label: "xR", kind: "tally", options: ["strong", "bluff"] },
+  { id: "mwl-ip-stab",       cat: "postflop", label: "IP stab", kind: "choice", options: ["merge", "air"] },
+  // flop
+  { id: "f-cbet-freq",       cat: "postflop", label: "Cbet freq", kind: "scale" },
+  { id: "f-fold-to-xr",      cat: "postflop", label: "Fold to xR", kind: "scale" },
+  { id: "f-xr-freq-pfr",     cat: "postflop", label: "xR freq", kind: "scale" },
+  { id: "f-xr-freq-pfc",     cat: "postflop", label: "xR freq", kind: "choice", options: ["under", "over"] },
+  { id: "punchbag-f-pfc",    cat: "postflop", label: "Punch bag" },
+  // turn
+  { id: "t-barrel2-freq",    cat: "postflop", label: "2nd barrel freq", kind: "scale" },
+  { id: "t-bluff-hands",     cat: "postflop", label: "Bluffs", kind: "tally", options: ["air", "equity", "SDV"] },
+  { id: "t-call-range",      cat: "postflop", label: "T call range", kind: "tally", options: ["2ndP", "SD", "weak FD", "<3rdP"] },
+  { id: "punchbag-t-pfr",    cat: "postflop", label: "Punch bag" },
+  { id: "t-bet-vol",         cat: "postflop", label: "Bet vol", kind: "choice", options: ["high", "low"] },
+  { id: "t-call-style",      cat: "postflop", label: "Turn call", kind: "choice", options: ["abs value", "wide"] },
+  // river
+  { id: "r-bluff-lines",     cat: "postflop", label: "Bluff lines (can?)", kind: "tally", options: ["BBB", "BXB", "XBB", "XXB"] },
+  { id: "r-bluff-hands",     cat: "postflop", label: "Bluff hands", kind: "tally", options: ["FD", "OESD", "Air", "A-high"] },
+  { id: "r-af",              cat: "postflop", label: "River AF", kind: "scale" },
+  { id: "r-bluff-bal",       cat: "postflop", label: "Bluff balance", kind: "choice", options: ["overbluff", "underbluff"] },
+  { id: "r-traps",           cat: "postflop", label: "Have traps?" },
+  { id: "punchbag-r-pfr",    cat: "postflop", label: "Punch bag" },
+  { id: "r-fold-bal",        cat: "postflop", label: "Fold balance", kind: "choice", options: ["overfold", "underfold"] },
+  { id: "r-to-sizing",       cat: "postflop", label: "To sizing", kind: "choice", options: ["elastic", "inelastic"] },
+  { id: "r-bet-vol",         cat: "postflop", label: "Bet vol", kind: "choice", options: ["high", "low"] },
+  { id: "r-can-raise",       cat: "postflop", label: "Can raise?", kind: "tally", options: ["bluff", "thin"] },
+  { id: "r-call-range",      cat: "postflop", label: "Call range", kind: "choice", options: ["wide", "tight"] },
+  { id: "r-call-hands",      cat: "postflop", label: "Bluff catch", kind: "tally", options: ["2ndP", "SD", "weak FD", "<3rdP"] },
+
   { id: "timing-tells",      cat: "live",     label: "Timing tells" },
   { id: "snap-call-weak",    cat: "live",     label: "Snap-call = weak" },
   { id: "talks-when-strong", cat: "live",     label: "Chatty = strong" },

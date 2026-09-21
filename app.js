@@ -107,7 +107,7 @@ const readChip = (id, state) => {
 };
 /* How the picker is organised: street -> role (As PFR / As PFC) -> When Bet / When X.
    Display only: ids, saved reads and the exploit rules never see this. A read
-   listed nowhere lands in Unsorted > Other, so nothing can go missing. Edit the
+   listed nowhere lands in Uncategorized > Other, so nothing can go missing. Edit the
    id lists freely to move a read. Graded reads (choice / position / tally / scale)
    can be listed like any other id. */
 const wb = (bet, x) => [{ label: "When Bet", ids: bet }, { label: "When X", ids: x }];
@@ -116,28 +116,22 @@ const READ_LAYOUT = [
     { label: "Limping", ids: ["limp-width", "lc-width", "iso-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "lc-pp"] },
     { label: "Raising", ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "jams-pre-light"] },
   ] }] },
-  { title: "Flop", subs: [
-    { label: "As PFR", rows: wb(["over-cbet", "bluff-till-f"], ["bluff-xt-f"]) },
-    { label: "As PFC", rows: wb(["lead-nut-f", "ld-draws", "ld-tp", "ld-2p", "bluff-raise-f", "br-fdsd", "br-worst", "raise-nuts-f", "flop-vmw-lead"],
-      ["station-f", "floats-wide", "call-nut-ip-f", "call-nut-oop-f", "xr-value-f", "xr-bluff-f", "flop-vmw-xr"]) },
+  { title: "Postflop general", subs: [
+    { label: "MWP limp", rows: [{ ids: ["mwl-oop-probe", "mwl-xr", "mwl-ip-stab"] }] },
   ] },
-  { title: "Turn", subs: [
-    { label: "As PFR", rows: wb(["barrels-off", "bluff-till-t"], ["bluff-xt-t"]) },
-    { label: "As PFC", rows: wb(["lead-nut-t", "bluff-raise-t", "raise-nuts-t"], ["station-t", "call-nut-ip-t", "call-nut-oop-t", "xr-value-t", "xr-bluff-t"]) },
+  { title: "Flop exploit", subs: [
+    { label: "As PFR", rows: wb(["f-cbet-freq", "f-fold-to-xr"], ["checks-range-oop", "f-xr-freq-pfr"]) },
+    { label: "As PFC", rows: [{ ids: ["f-xr-freq-pfc", "punchbag-f-pfc"] }] },
   ] },
-  { title: "River", subs: [
-    { label: "As PFR", rows: wb(["bluffs-rivers", "protected-block", "bluff-till-r"], ["bluff-xt-r"]) },
-    { label: "As PFC", rows: wb(["lead-nut-r", "bluff-raise-r", "raise-nuts-r"], ["station-r", "call-nut-ip-r", "call-nut-oop-r", "xr-value-r", "xr-bluff-r"]) },
+  { title: "Turn exploit", subs: [
+    { label: "As PFR", rows: wb(["t-barrel2-freq", "t-bluff-hands", "t-call-range"], ["punchbag-t-pfr"]) },
+    { label: "As PFC", rows: [{ ids: ["floats-wide", "t-bet-vol", "t-call-style"] }] },
   ] },
-  { title: "Unsorted", subs: [{ rows: [
-    { label: "Range", ids: ["merged", "polar"] },
-    { label: "Hand strength", ids: ["chases-draws", "overplays-tp", "pays-off-fh"] },
-    { label: "OOP", ids: ["checks-range-oop", "xr-oop-v", "xr-oop-b"] },
-    { label: "Bluff lines", ids: ["bluff-line-bxb", "bluff-line-xb", "bluff-line-xxb", "barrels-light", "bluff-missed-draws", "bluffs-air"] },
-    { label: "Preflop sizing", ids: ["open-big-strong", "3bet-big-strong"] },
-    { label: "Postflop sizing", ids: ["size-up-draws", "small-with-weak", "overbets-nuts"] },
-    { label: "Physical / timing", ids: ["timing-tells", "snap-call-weak", "talks-when-strong"] },
-  ] }] },
+  { title: "River exploit", subs: [
+    { label: "As PFR", rows: wb(["r-bluff-lines", "r-bluff-hands", "r-af", "r-bluff-bal"], ["r-traps", "punchbag-r-pfr"]) },
+    { label: "As PFC", rows: [{ ids: ["r-fold-bal", "r-to-sizing", "r-bet-vol", "r-can-raise", "r-call-range", "r-call-hands"] }] },
+  ] },
+  { title: "Uncategorized", subs: [{ rows: [] }] },
 ];
 
 /* Value/bluff position-read pairs — shown in the picker as one compact
@@ -2402,13 +2396,13 @@ function renderOppDetail(id) {
     });
     const chips = chipIds.map((id) => readBtn(id, TAG_BY_ID[id].label, false)).join("");
     const rows = rowIds.map((id) => isScaleRead(id) ? readBtn(id, TAG_BY_ID[id].label, false) : structFor(id)).join("");
-    return `<div class="readsub"><span class="rslabel">${esc(r.label)}</span>` +
+    return `<div class="readsub">${r.label ? `<span class="rslabel">${esc(r.label)}</span>` : ""}` +
       (chips ? `<div class="chiprow readwrap">${chips}</div>` : "") + rows +
       (!chips && !rows ? `<div class="chiprow readwrap"><span class="chipnote">—</span></div>` : "") + `</div>`;
   };
   $("od-tags").innerHTML = READ_LAYOUT.map((cat) => {
     let subs = cat.subs;
-    if (cat.title === "Unsorted") {
+    if (cat.title === "Uncategorized") {
       // reads not placed above, plus retired reads an opponent still carries (so they can be cleared)
       const extra = TENDENCY_TAGS.filter((t) => live(t.id) && !placed.has(t.id)).map((t) => readBtn(t.id, t.label, false))
         .concat(TENDENCY_TAGS.filter((t) => RETIRED_TAG_IDS.has(t.id) && readIsActive(t.id, reads[t.id]))
@@ -2419,7 +2413,7 @@ function renderOppDetail(id) {
     return `<div class="tagcat">${esc(cat.title)}</div>` + subs.map((sb) =>
       (sb.label ? `<div class="tagrole">${esc(sb.label)}</div>` : "") +
       `<div class="${sb.label ? "roleblock" : ""}">${sb.rows.map(rowHTML).join("")}</div>`).join("") +
-      (cat.title === "Unsorted" ? otherHTML : "");
+      (cat.title === "Uncategorized" ? otherHTML : "");
   }).join("");
 
   // FEATURE 1 — what this opponent's logged hands say. Three panels off one
