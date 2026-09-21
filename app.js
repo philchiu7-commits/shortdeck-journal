@@ -4731,7 +4731,11 @@ function bindStatic() {
   };
 
   // opponent detail
-  $("od-edit").onclick = () => $("od-editform").classList.toggle("hidden");
+  $("od-edit").onclick = () => {
+    const f = $("od-editform");
+    f.classList.toggle("hidden");
+    if (!f.classList.contains("hidden")) { f.scrollIntoView({ block: "center", behavior: "smooth" }); $("od-e-group").focus({ preventScroll: true }); }
+  };
   $("od-card-edit").onclick = openCardSheet;
   $("od-handfilters").onclick = (e) => {
     const c = e.target.closest("[data-hf]"); if (!c) return;
