@@ -251,19 +251,36 @@ function handFacts(h, idx) {
     board: (h.board || []).filter(Boolean),
     s: { pre: [], flop: [], turn: [], river: [] },
     faced: { pre: false, flop: false, turn: false, river: false },
-    limpedFirst: false, isoSpot: false, sd: false, won: null,
+    xt: { flop: false, turn: false, river: false },      // checked to: a check in front, no bet out
+    lead: { flop: false, turn: false, river: false },    // first player to act on the street
+    cat: { flop: null, turn: null, river: null },        // his made-hand class as of that street
+    pfr: false, limpedFirst: false, isoSpot: false, sd: false, won: null,
   };
   const open = { pre: false, flop: false, turn: false, river: false };
-  let sawLimp = false, first = true;
+  const acted = { pre: false, flop: false, turn: false, river: false };
+  const checked = { pre: false, flop: false, turn: false, river: false };
+  let sawLimp = false, first = true, lastPreAgg = null;
   for (const a of h.actions || []) {
     if (!f.s[a.street]) continue;
     if (a.actor === me) {
       if (open[a.street]) f.faced[a.street] = true;
+      if (!f.s[a.street].length && a.street !== "pre") {
+        f.lead[a.street] = !acted[a.street];
+        f.xt[a.street] = checked[a.street] && !open[a.street];
+      }
       f.s[a.street].push({ act: a.act, size: a.size || "", bucket: sizeBucket(a), facing: open[a.street] });
       if (first) { f.limpedFirst = a.act === "limp"; f.isoSpot = sawLimp; first = false; }
     } else if (a.street === "pre" && a.act === "limp" && first) sawLimp = true;
-    if (isAgg(a.act)) open[a.street] = true;
+    if (isAgg(a.act)) { open[a.street] = true; if (a.street === "pre") lastPreAgg = a.actor; }
+    if (a.act === "check") checked[a.street] = true;
+    acted[a.street] = true;
   }
+  f.pfr = lastPreAgg === me;
+  /* Made-hand class as of each street, so "blocks small with 2 pair+" is asked
+     against the board he actually had in front of him, not the river runout. */
+  if (f.cards.length === 2)
+    for (const [st, n] of [["flop", 3], ["turn", 4], ["river", 5]])
+      if (f.board.length >= n) f.cat[st] = best7(f.board.slice(0, n).concat(f.cards))[0];
   const win = handWinner(h);
   if (win && win.how === "showdown") { f.sd = true; f.won = win.winners.includes(me); }
   return f;
@@ -291,6 +308,12 @@ const fOpened = (f) => f.s.pre.some((x) => isAgg(x.act) && !x.facing);
 const fFacedRR = (f) => { const a = f.s.pre, i = a.findIndex((x) => isAgg(x.act) && !x.facing); return i >= 0 && a.slice(i + 1).some((x) => x.facing); };
 const fBucket = (f, st) => { const x = f.s[st].find((y) => isAgg(y.act) && y.bucket); return x ? x.bucket : null; };
 const fPair = (f) => f.cards.length === 2 && f.cards[0][0] === f.cards[1][0];
+/* A bucket as a number so sizes can be compared: "Jam" sits above every %. */
+const bPct = (b) => { if (b === "Jam") return 999; const m = /^B(\d+)$/.exec(b || ""); return m ? Number(m[1]) : null; };
+const fSmallB = (f, st) => { const b = fBucket(f, st); return b === "B25" || b === "B33" ? b : null; };
+/* One representative late-street size per hand: the turn bet if he sized one,
+   otherwise the river. Merged/polar are about how he bets big streets. */
+const fLateB = (f) => fBucket(f, "turn") || fBucket(f, "river");
 const STREETS3 = ["flop", "turn", "river"];
 const ST_NAME = { pre: "Preflop", flop: "Flop", turn: "Turn", river: "River" };
 
@@ -433,6 +456,35 @@ const READ_EVIDENCE = [
     chance: (f) => f.sd && !!fBucket(f, "turn"), did: (f) => f.won === false },
   { id: "size-river-b", yes: "Bet the river with a size, lost at showdown", no: "Bet the river with a size, won at showdown",
     chance: (f) => f.sd && !!fBucket(f, "river"), did: (f) => f.won === false },
+
+  /* Phil's definitions, 2026-09-22. XT = "checked to": the flop aggressor
+     checks and it's on him with no bet in front. A bluff is still only the one
+     thing the log can see — bet, got to showdown, lost — so the chance is the
+     checked-to spots that showed down. */
+  { id: "bluff-xt-f", state: "yes", th: 3, yes: "Checked to on the flop, bet, lost at showdown", no: "Checked to on the flop, went another way",
+    chance: (f) => f.xt.flop && f.sd, did: (f) => fFired(f, "flop") && f.won === false },
+  { id: "bluff-xt-t", state: "yes", th: 3, yes: "Checked to on the turn, bet, lost at showdown", no: "Checked to on the turn, went another way",
+    chance: (f) => f.xt.turn && f.sd, did: (f) => fFired(f, "turn") && f.won === false },
+  { id: "bluff-xt-r", state: "yes", th: 3, yes: "Checked to on the river, bet, lost at showdown", no: "Checked to on the river, went another way",
+    chance: (f) => f.xt.river && f.sd, did: (f) => fFired(f, "river") && f.won === false },
+
+  /* Merged vs polar, measured on the big streets only. One size per hand: the
+     turn bet if he sized one, else the river — a hand is one data point, not two. */
+  { id: "polar", state: "yes", th: 5, minN: 7, rate: .7, yes: "Big bet (66%+ or jam) on the turn or river", no: "Smaller bet on the turn or river",
+    chance: (f) => bPct(fLateB(f)) !== null, did: (f) => bPct(fLateB(f)) >= 66 },
+  { id: "merged", state: "yes", th: 5, minN: 7, rate: .7, yes: "Medium bet (25-65%) on the turn or river", no: "Bigger or smaller bet on the turn or river",
+    chance: (f) => bPct(fLateB(f)) !== null, did: (f) => { const p = bPct(fLateB(f)); return p >= 25 && p <= 65; } },
+
+  /* Protected block: the small bet is capable of two pair or better. Class is
+     read against the board as of that street, and only when his cards are known. */
+  { id: "protected-block", state: "yes", th: 5, yes: "Blocked B25/B33 holding two pair or better", no: "Blocked B25/B33 holding less",
+    chance: (f) => STREETS3.some((st) => fSmallB(f, st) && f.cat[st] !== null),
+    did: (f) => STREETS3.some((st) => fSmallB(f, st) && f.cat[st] >= 2) },
+
+  /* Checks his whole range OOP: preflop raiser, first to act on the flop. */
+  { id: "checks-range-oop", state: "yes", th: 8, minN: 10, rate: .75,
+    yes: "Preflop raiser, first to act on the flop - checked", no: "Preflop raiser, first to act on the flop - bet",
+    chance: (f) => f.pfr && f.lead.flop && fActed(f, "flop"), did: (f) => f.s.flop[0].act === "check" },
 ];
 const EVIDENCE_BY_TAG = READ_EVIDENCE.reduce((m, r) => ((m[r.id] = m[r.id] || []).push(r), m), {});
 
@@ -460,6 +512,8 @@ function derivedReads(o, hands, facts) {
     if (!t || readIsActive(r.id, reads[r.id]) || dismissed.has(key) || RETIRED_TAG_IDS.has(r.id)) return null;
     const ev = evidenceSplit(r, facts);
     if (ev.hands.length < r.th) return null;
+    if (r.minN && ev.chances < r.minN) return null;
+    if (r.rate && ev.hands.length / ev.chances < r.rate) return null;
     return { tagId: r.id, state: r.state, key, count: ev.hands.length, chances: ev.chances,
              hands: ev.hands, miss: ev.miss, yes: r.yes, no: r.no,
              label: t.label + (r.state === "no" ? " (NO)" : "") };
@@ -485,75 +539,110 @@ function setReadEvidence(o, facts) {
 }
 
 /* ---- tag-free exploit signals ----
-   One-sided tells: every single time he did X, the same thing was true. Phil's
+   Lopsided tells: nearly every time he did X, the same thing was true. Phil's
    own examples are this shape — "every time they use B33 on the river they are
    bluffing", "they never limp-reraise as a bluff" — and the exploit is the
-   absence, which no frequency read on the card can express. Facts only; what to
-   do about them is Phil's to write. Value/bluff here means one thing and only
-   one thing: the hand reached showdown and he won it, or reached showdown and
-   lost it. Hands that never got there say nothing either way. */
+   lean, which no yes/no read on the card can express. Facts only; what to do
+   about them is Phil's to write. Value/bluff here means one thing and only one
+   thing: the hand reached showdown and he won it, or reached showdown and lost
+   it. Hands that never got there say nothing either way.
+
+   Phil, 2026-09-22: it doesn't have to be 100%. A tell fires either unanimously
+   over a small sample, or at 70%+ over at least seven chances — and then the
+   wording drops from "always/never" to "usually/rarely" so the card never
+   overstates what the logs found. Some tells are absolutes-only (`allOnly`):
+   check-raising 30% of the time is not a tendency, it's a balanced player. */
+const SIG_MIN_N = 7, SIG_MIN_RATE = 0.7;
+
 function exploitSignals(facts) {
   const out = [];
-  const add = (label, detail, hands, miss) => out.push({ label, detail, hands, miss, chances: hands.length + miss.length });
   const ids = (l) => l.map((f) => f.id);
+  /* words = [unanimous phrasing, 70%+ phrasing]. Below the bar, nothing. */
+  const sig = (words, hit, miss, minAll, what, allOnly) => {
+    const tot = hit.length + miss.length;
+    if (!tot) return;
+    const all = hit.length === tot && tot >= minAll;
+    if (!all && (allOnly || tot < SIG_MIN_N || hit.length / tot < SIG_MIN_RATE)) return;
+    out.push({
+      label: all ? words[0] : words[1],
+      detail: `${hit.length} of ${tot} ${what} · ${Math.round((100 * hit.length) / tot)}%`,
+      hands: ids(hit), miss: ids(miss), chances: tot, rate: hit.length / tot,
+    });
+  };
 
   // Limp-reraise: does he ever have a bluff in there?
-  const lrr = facts.filter(fLimpRR), lrrSD = lrr.filter((f) => f.sd);
-  if (lrrSD.length >= 3) {
-    const lost = lrrSD.filter((f) => f.won === false), won = lrrSD.filter((f) => f.won === true);
-    if (!lost.length) add("Limp-reraise is never a bluff", `${won.length} of ${won.length} shown down were winners`, ids(won), []);
-    else add("Limp-reraises as a bluff", `${lost.length} of ${lrrSD.length} shown down were losers`, ids(lost), ids(won));
-  }
-  // Limp-shove.
-  const ls = facts.filter((f) => f.limpedFirst && fActs(f, "pre").slice(1).includes("jam"));
-  if (ls.length >= 2) add("Limps, then shoves", `${ls.length} hand${ls.length === 1 ? "" : "s"}`, ids(ls), ids(facts.filter((f) => f.limpedFirst && !ls.includes(f))));
+  const lrrSD = facts.filter((f) => fLimpRR(f) && f.sd);
+  const lrrWon = lrrSD.filter((f) => f.won === true), lrrLost = lrrSD.filter((f) => f.won === false);
+  sig(["Limp-reraise is never a bluff", "Limp-reraise is usually value"], lrrWon, lrrLost, 3, "shown down");
+  sig(["Limp-reraise is always a bluff", "Limp-reraise is usually a bluff"], lrrLost, lrrWon, 3, "shown down");
 
-  // Sizing tells: one bucket that only ever showed up on one side of showdown.
+  // Limp-shove — a count, not a rate: twice is already a pattern worth knowing.
+  const ls = facts.filter((f) => f.limpedFirst && fActs(f, "pre").slice(1).includes("jam"));
+  if (ls.length >= 2) out.push({ label: "Limps, then shoves", detail: `${ls.length} hands`,
+    hands: ids(ls), miss: ids(facts.filter((f) => f.limpedFirst && !ls.includes(f))), chances: facts.filter((f) => f.limpedFirst).length });
+
   for (const st of STREETS3) {
+    const N = ST_NAME[st];
+    // One bucket that leans hard to one side of showdown.
     const shown = facts.filter((f) => f.sd && fBucket(f, st));
     const by = {};
     for (const f of shown) (by[fBucket(f, st)] = by[fBucket(f, st)] || []).push(f);
     for (const b of Object.keys(by)) {
-      const list = by[b];
-      if (list.length < 3) continue;
-      const lost = list.filter((f) => f.won === false), won = list.filter((f) => f.won === true);
-      if (lost.length && !won.length) add(`${ST_NAME[st]} ${b} is always a bluff`, `${lost.length} of ${lost.length} shown down lost`, ids(lost), []);
-      else if (won.length && !lost.length) add(`${ST_NAME[st]} ${b} is always value`, `${won.length} of ${won.length} shown down won`, ids(won), []);
+      const won = by[b].filter((f) => f.won === true), lost = by[b].filter((f) => f.won === false);
+      sig([`${N} ${b} is always a bluff`, `${N} ${b} is usually a bluff`], lost, won, 3, "shown down");
+      sig([`${N} ${b} is always value`, `${N} ${b} is usually value`], won, lost, 3, "shown down");
     }
-    // One sizing only — he never varies it on this street.
+    // Does he vary his size on this street at all?
     const sized = facts.filter((f) => fBucket(f, st));
-    const seen = [...new Set(sized.map((f) => fBucket(f, st)))];
-    if (sized.length >= 4 && seen.length === 1) add(`Only ever bets ${seen[0]} on the ${st}`, `${sized.length} sized bets, one size`, ids(sized), []);
+    if (sized.length) {
+      const top = Object.entries(sized.reduce((m, f) => ((m[fBucket(f, st)] = (m[fBucket(f, st)] || 0) + 1), m), {}))
+        .sort((x, y) => y[1] - x[1])[0][0];
+      const on = sized.filter((f) => fBucket(f, st) === top);
+      sig([`Only ever bets ${top} on the ${st}`, `Almost always bets ${top} on the ${st}`], on, sized.filter((f) => !on.includes(f)), 4, "sized bets");
+    }
+    // Folding to a bet.
+    const faced = facts.filter((f) => f.faced[st]);
+    const folded = faced.filter((f) => fDid(f, st, "fold")), stuck = faced.filter((f) => !fDid(f, st, "fold"));
+    sig([`Never folds the ${st}`, `Rarely folds the ${st}`], stuck, folded, 4, "bets faced");
+    sig([`Always folds the ${st}`, `Usually folds the ${st}`], folded, stuck, 4, "bets faced");
+    // Checked to — does he take the free card or stab at it?
+    const xt = facts.filter((f) => f.xt[st] && fActed(f, st));
+    const stab = xt.filter((f) => fFired(f, st)), pass = xt.filter((f) => !fFired(f, st));
+    sig([`Always stabs when checked to on the ${st}`, `Usually stabs when checked to on the ${st}`], stab, pass, 4, "checked-to spots");
+    sig([`Never bets when checked to on the ${st}`, `Rarely bets when checked to on the ${st}`], pass, stab, 4, "checked-to spots");
+    // ...and when he does stab, is it air?
+    const xtSD = xt.filter((f) => f.sd && fFired(f, st));
+    const xtL = xtSD.filter((f) => f.won === false), xtW = xtSD.filter((f) => f.won === true);
+    sig([`Stabs checked-to ${st}s with nothing`, `Usually bluffing when he stabs the ${st}`], xtL, xtW, 3, "shown down");
+    // Small bets: block or protection?
+    const sm = facts.filter((f) => fSmallB(f, st) && f.cat[st] !== null);
+    const smStrong = sm.filter((f) => f.cat[st] >= 2), smWeak = sm.filter((f) => f.cat[st] < 2);
+    sig([`${N} B25/B33 is always two pair or better`, `${N} B25/B33 is usually two pair or better`], smStrong, smWeak, 5, "small bets");
+    sig([`${N} B25/B33 is always one pair or worse`, `${N} B25/B33 is usually one pair or worse`], smWeak, smStrong, 5, "small bets");
   }
 
-  // Never / always folds to a bet on a street.
-  for (const st of STREETS3) {
-    const spots = facts.filter((f) => f.faced[st]);
-    if (spots.length < 4) continue;
-    const folded = spots.filter((f) => fDid(f, st, "fold"));
-    if (!folded.length) add(`Never folds the ${st}`, `${spots.length} bets faced, ${spots.length} continues`, ids(spots), []);
-    else if (folded.length === spots.length) add(`Always folds the ${st}`, `${spots.length} of ${spots.length} bets faced`, ids(folded), []);
-  }
-  // Never check-raises anywhere.
+  // Preflop raiser, first to act on the flop — c-bet or give up?
+  const lead = facts.filter((f) => f.pfr && f.lead.flop && fActed(f, "flop"));
+  const ck = lead.filter((f) => f.s.flop[0].act === "check"), cb = lead.filter((f) => f.s.flop[0].act !== "check");
+  sig(["Never c-bets when first to act as the raiser", "Usually checks when first to act as the raiser"], ck, cb, 5, "flops as raiser");
+  sig(["C-bets every flop as the raiser", "C-bets almost every flop as the raiser"], cb, ck, 5, "flops as raiser");
+
+  // Never check-raises — absolutes only: 30% check-raise is balance, not a tell.
   const xrSpots = facts.filter((f) => STREETS3.some((st) => fActs(f, st).includes("check") && f.faced[st]));
-  if (xrSpots.length >= 5) {
-    const xr = xrSpots.filter((f) => STREETS3.some((st) => fCheckRaised(f, st)));
-    if (!xr.length) add("Never check-raises", `${xrSpots.length} chances, none taken`, ids(xrSpots), []);
-  }
-  // Never 3-bets preflop.
+  const xr = xrSpots.filter((f) => STREETS3.some((st) => fCheckRaised(f, st)));
+  sig(["Never check-raises", ""], xrSpots.filter((f) => !xr.includes(f)), xr, 5, "chances", true);
+  // Never reraises preflop — same reasoning.
   const vsRaise = facts.filter((f) => f.faced.pre);
-  if (vsRaise.length >= 6) {
-    const tb = vsRaise.filter((f) => fDid(f, "pre", "3bet", "4bet", "jam"));
-    if (!tb.length) add("Never reraises preflop", `${vsRaise.length} raises faced, never once`, ids(vsRaise), []);
-  }
-  // Never limps / limps every time he enters.
+  const tb = vsRaise.filter((f) => fDid(f, "pre", "3bet", "4bet", "jam"));
+  sig(["Never reraises preflop", ""], vsRaise.filter((f) => !tb.includes(f)), tb, 6, "raises faced", true);
+  // Entering the pot.
   const entered = facts.filter((f) => f.s.pre.some((x) => x.act !== "fold"));
-  if (entered.length >= 6) {
-    const limped = entered.filter((f) => f.limpedFirst);
-    if (!limped.length) add("Never limps", `${entered.length} pots entered, always with a raise or a call`, ids(entered), []);
-    else if (limped.length === entered.length) add("Always limps in", `${entered.length} of ${entered.length} pots entered`, ids(limped), []);
-  }
-  return out;
+  const limped = entered.filter((f) => f.limpedFirst), raised = entered.filter((f) => !f.limpedFirst);
+  sig(["Never limps", ""], raised, limped, 6, "pots entered", true);
+  sig(["Always limps in", "Usually limps in"], limped, raised, 6, "pots entered");
+  // Strongest lean first, then biggest sample — the top of the list is the one
+  // worth acting on tonight.
+  return out.sort((x, y) => (y.rate || 1) - (x.rate || 1) || y.chances - x.chances);
 }
 
 /* Sheet: the hands behind one read — the hands he did it in, and the hands that
