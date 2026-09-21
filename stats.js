@@ -105,14 +105,20 @@ function sdHandEvents(h, idx, put) {
 
 function sdStats(oppId, hands) {
   const T = Object.create(null);
+  let cur = null;                                // r[2] / r[3] = ids of the hands that hit / had the chance and didn't
   const put = (key, cols, hit) => {
-    for (const c of cols) { const r = T[key + "|" + c] || (T[key + "|" + c] = [0, 0]); r[1]++; if (hit) r[0]++; }
+    for (const c of cols) {
+      const r = T[key + "|" + c] || (T[key + "|" + c] = [0, 0, [], []]);
+      r[1]++; if (hit) r[0]++;
+      (hit ? r[2] : r[3]).push(cur);
+    }
   };
   let n = 0;
   for (const h of hands) {
     const i = (h.villains || []).findIndex((v) => v.opponentId === oppId);
     if (i < 0) continue;
     n++;
+    cur = h.id;
     sdHandEvents(h, i, put);
   }
   return { T, n };
@@ -144,27 +150,70 @@ const SD_DEFS = [
   ["WTSD / W$SD", "Went to showdown out of flops seen / won it (needs both hands and the board logged). Hands still unfinished are skipped."],
 ];
 
-function statCell(r) {
+let sdStatT = {};                                // the tallies behind the stats now on screen
+const SD_COL_LBL = { all: "", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
+
+function statCell(r, k, c) {
   if (!r || !r[1]) return `<div class="stc none">–</div>`;
-  return `<div class="stc${r[1] < 5 ? " thin" : ""}"><b>${Math.round((100 * r[0]) / r[1])}</b><i>${r[0]}/${r[1]}</i></div>`;
+  return `<div class="stc stk${r[1] < 5 ? " thin" : ""}" data-stk="${k}|${c}"><b>${Math.round((100 * r[0]) / r[1])}</b><i>${r[0]}/${r[1]}</i></div>`;
+}
+
+/* Tap a stat → the hands behind it, split into "did it" and "had the chance, didn't". */
+function statProof(el) {
+  const key = el.dataset.stk, r = sdStatT[key];
+  if (!r || !curOppId) return null;
+  const [k, c] = key.split("|");
+  const name = [...SD_HUD, ...SD_PRE_ROWS, ...SD_POST_ROWS].find(([, kk]) => kk === k)?.[0] || k;
+  const col = SD_COL_LBL[c] ?? c;
+  return { r, label: `${name}${col ? " · " + col : ""} · ${r[0]}/${r[1]}` };
+}
+function openStatSheet(el) {
+  const p = statProof(el);
+  if (!p) return;
+  openReadProof(p.label, "Newest first. Tap a hand to open it.", p.r[2], { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
+}
+
+/* Desktop hover: a small popover with the hands that hit. Touch has no hover, so it taps into the sheet. */
+let stPop = null;
+function stPopHide() { if (stPop) stPop.classList.add("hidden"); }
+function stPopShow(el) {
+  const p = statProof(el);
+  if (!p) return;
+  const byId = new Map(HANDS.map((h) => [h.id, h]));
+  const pick = (l) => [...new Set(l)].map((x) => byId.get(x)).filter(Boolean).sort((a, b) => b.ts - a.ts);
+  const hit = pick(p.r[2]), miss = pick(p.r[3]);
+  const show = (hit.length ? hit : miss).slice(0, 4);
+  const more = hit.length + miss.length - show.length;
+  if (!stPop) { stPop = document.createElement("div"); stPop.id = "stpop"; document.body.appendChild(stPop); }
+  stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>
+    ${hit.length ? "" : `<div class="spn">Never did it, had the chance in:</div>`}
+    ${show.map((h) => handRowHTML(h, curOppId)).join("")}
+    <div class="spn">${more > 0 ? `+${more} more · ` : ""}click for all, split by did / didn't</div>`;
+  stPop.classList.remove("hidden");
+  const b = el.getBoundingClientRect(), w = stPop.offsetWidth, hgt = stPop.offsetHeight;
+  const x = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2));
+  const y = b.bottom + 6 + hgt > innerHeight ? Math.max(8, b.top - hgt - 6) : b.bottom + 6;
+  stPop.style.left = x + "px"; stPop.style.top = y + "px";
 }
 
 function renderStats(oppId, hands) {
   const host = $("od-stats");
   if (!host) return;
   const { T, n } = sdStats(oppId, hands);
+  sdStatT = T;
+  stPopHide();
   const g = (key, col) => T[key + "|" + col];
   $("od-statshint").textContent = n ? `${n} logged hand${n === 1 ? "" : "s"}` : "";
   if (!n) { host.innerHTML = `<div class="empty">No hands logged for this player yet.</div>`; return; }
   const hud = SD_HUD.map(([l, k]) => {
     const r = g(k, "all");
-    return `<div class="stchip${!r || r[1] < 5 ? " thin" : ""}"><label>${esc(l)}</label><b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b><i>${r && r[1] ? `${r[0]}/${r[1]}` : "no data"}</i></div>`;
+    return `<div class="stchip${r && r[1] ? " stk" : ""}${!r || r[1] < 5 ? " thin" : ""}"${r && r[1] ? ` data-stk="${k}|all"` : ""}><label>${esc(l)}</label><b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b><i>${r && r[1] ? `${r[0]}/${r[1]}` : "no data"}</i></div>`;
   }).join("");
   const seats = ["all", ...RANGE_BUCKETS];
   const table = (rows, cols, cw) => {
     const head = `<div class="strow sthead" style="--cols:${cols.length}"><div></div>${cols.map(([, l]) => `<div>${esc(l)}</div>`).join("")}</div>`;
     return head + rows.map(([l, k]) =>
-      `<div class="strow" style="--cols:${cols.length}"><div class="stlbl">${esc(l)}</div>${cols.map(([c]) => statCell(g(k, c))).join("")}</div>`).join("");
+      `<div class="strow" style="--cols:${cols.length}"><div class="stlbl">${esc(l)}</div>${cols.map(([c]) => statCell(g(k, c), k, c)).join("")}</div>`).join("");
   };
   const body = statsTab === "pre"
     ? table(SD_PRE_ROWS, seats.map((s) => [s, s === "all" ? "All" : s]))
@@ -181,7 +230,15 @@ function renderStats(oppId, hands) {
 }
 
 function bindStats() {
-  $("od-stats").onclick = (e) => {
+  const host = $("od-stats");
+  if (matchMedia("(hover: hover)").matches) {
+    host.addEventListener("mouseover", (e) => { const c = e.target.closest("[data-stk]"); if (c) stPopShow(c); else stPopHide(); });
+    host.addEventListener("mouseleave", stPopHide);
+    addEventListener("scroll", stPopHide, { passive: true });
+  }
+  host.onclick = (e) => {
+    const c = e.target.closest("[data-stk]");
+    if (c) { stPopHide(); openStatSheet(c); return; }
     const b = e.target.closest("[data-sttab]");
     if (!b || !curOppId) return;
     statsTab = b.dataset.sttab;
