@@ -1569,6 +1569,40 @@ function isConvertibleNote(text) {
   return !!(v0.pos || (v0.cards || []).some(Boolean) || (d.board || []).some(Boolean) || (d.actions || []).length);
 }
 
+/* A note that reads as a hand, not a tendency: his cards or a board, plus at
+   least one action. "3bets light from BN" has an action and a seat but no
+   cards, so it stays a note; "BN KJs open 4a, flop Kh 9d 6c cbet" is a hand. */
+function isHandHistoryNote(text) {
+  if (!text) return false;
+  const d = parseNoteToDraft(text, "__probe__");
+  const v0 = d.villains[0] || {};
+  const cards = (v0.cards || []).filter(Boolean).length === 2;
+  const board = (d.board || []).filter(Boolean).length >= 3;
+  return (cards || board) && (d.actions || []).length > 0;
+}
+/* Turn one note into a saved hand and link the two (note.handId). */
+async function noteToHand(n, oppId, d) {
+  d = d || parseNoteToDraft(n.text, oppId);
+  const now = Date.now();
+  const rec = {
+    id: uid(), ts: now, updatedAt: now, hero: false,
+    heroPos: null, heroCards: null,
+    villains: d.villains.map((v) => ({ opponentId: v.opponentId, pos: v.pos || null,
+      cards: (v.cards || []).some(Boolean) ? v.cards : null })),
+    villainIds: [oppId],
+    board: d.board, actions: d.actions,
+    effStack: null, blinds: null,
+    squid: (d.squidHave || d.squidLeft)
+      ? { have: d.squidHave ? Number(d.squidHave) : null, left: d.squidLeft ? Number(d.squidLeft) : null } : null,
+    note: n.text, srcNoteId: n.id,
+  };
+  rec.result = null; rec.showdown = false;
+  await dbPut("hands", rec);
+  HANDS.push(rec); _statsCache = null;
+  n.handId = rec.id;
+  return rec;
+}
+
 /* Short chip label for a long exploit when no explicit abbr is typed. */
 function autoShort(text) {
   const words = String(text || "").trim().split(/\s+/);
@@ -4782,10 +4816,14 @@ function bindStatic() {
     const text = $("od-note").value.trim();
     if (!text) return;
     const o = oppById(curOppId);
-    (o.notes = o.notes || []).unshift({ id: uid(), ts: Date.now(), text, handId: null });
+    const note = { id: uid(), ts: Date.now(), text, handId: null };
+    (o.notes = o.notes || []).unshift(note);
+    const asHand = isHandHistoryNote(text);
+    if (asHand) await noteToHand(note, curOppId);
     o.updatedAt = Date.now();
     await dbPut("opponents", o);
     $("od-note").value = "";
+    if (asHand) toast("Saved as a hand", 2500);
     renderOppDetail(curOppId);
   };
   $("od-notes-convert").onclick = async () => {
@@ -4805,25 +4843,7 @@ function bindStatic() {
       return;
     }
     if (!confirm(`Create ${candidates.length} hand${candidates.length > 1 ? "s" : ""} from your shorthand notes? ${tendency ? tendency + " tendency-only note" + (tendency > 1 ? "s" : "") + " will be left alone." : ""}`)) return;
-    for (const { n, d } of candidates) {
-      const now = Date.now();
-      const rec = {
-        id: uid(), ts: now, updatedAt: now, hero: false,
-        heroPos: null, heroCards: null,
-        villains: d.villains.map((v) => ({ opponentId: v.opponentId, pos: v.pos || null,
-          cards: (v.cards || []).some(Boolean) ? v.cards : null })),
-        villainIds: [curOppId],
-        board: d.board, actions: d.actions,
-        effStack: null, blinds: null,
-        squid: (d.squidHave || d.squidLeft)
-          ? { have: d.squidHave ? Number(d.squidHave) : null, left: d.squidLeft ? Number(d.squidLeft) : null } : null,
-        note: n.text, srcNoteId: n.id,
-      };
-      rec.result = null; rec.showdown = false;
-      await dbPut("hands", rec);
-      HANDS.push(rec); _statsCache = null;
-      n.handId = rec.id;
-    }
+    for (const { n, d } of candidates) await noteToHand(n, curOppId, d);
     o.updatedAt = Date.now();
     await dbPut("opponents", o);
     toast(`Created ${candidates.length} hand${candidates.length > 1 ? "s" : ""}${tendency ? ` · ${tendency} tendency note${tendency > 1 ? "s" : ""} left alone` : ""}`, 4200);
