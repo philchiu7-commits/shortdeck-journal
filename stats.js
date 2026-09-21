@@ -3,6 +3,7 @@
    A stat is always [hits, chances]; the UI shows the raw x/y next to every percentage,
    because the sample is only the hands he chose to log. */
 
+const SD_MINR_X = 2;                             // a raise up to this many times the bet it raises is a min-raise (5% slack for rounded sizes)
 const SD_VOL = new Set(["limp", "call", "raise", "3bet", "4bet", "5bet", "jam", "bet"]);
 
 /* One villain's hand → tallies. put(key, cols, hit) adds a chance (and a hit) to each column. */
@@ -17,11 +18,16 @@ function sdHandEvents(h, idx, put) {
   const seq = { pre: [], flop: [], turn: [], river: [] };
   const cnt = { pre: { agg: 0, last: null, limps: 0 }, flop: { agg: 0, last: null, limps: 0 }, turn: { agg: 0, last: null, limps: 0 }, river: { agg: 0, last: null, limps: 0 } };
   const foldSt = {};
-  for (const a of h.actions || []) {
+  const ante = Number(h.blinds?.ante) || 0;
+  const to = estimatePot(h, h.actions).perAct;   // resolved raise-to amounts, one per action
+  let lastTo = ante;                             // the preflop bet a raise is raising: one ante until someone raises
+  for (const [ai, a] of (h.actions || []).entries()) {
     const s = seq[a.street];
     if (!s) continue;
     const c = cnt[a.street];
-    s.push({ actor: a.actor, act: a.act, aggBefore: c.agg, limpsBefore: c.limps, i: s.length });
+    const min = a.street === "pre" && isAgg(a.act) && !!a.size && lastTo > 0 && to[ai] > 0 && to[ai] <= SD_MINR_X * lastTo * 1.05;
+    s.push({ actor: a.actor, act: a.act, aggBefore: c.agg, limpsBefore: c.limps, i: s.length, min });
+    if (a.street === "pre" && isAgg(a.act) && to[ai] > 0) lastTo = to[ai];
     if (isAgg(a.act)) { c.agg++; c.last = a.actor; }
     else if (a.act === "limp") c.limps++;
     if (a.act === "fold" && !(a.actor in foldSt)) foldSt[a.actor] = STREETS.indexOf(a.street);
@@ -39,9 +45,10 @@ function sdHandEvents(h, idx, put) {
     if (f.aggBefore === 0) {
       put("limp", pc, f.act === "limp");
       if (f.limpsBefore > 0) put("iso", pc, isAgg(f.act));
+      else { put("open", pc, isAgg(f.act) && !f.min); put("minOpen", pc, isAgg(f.act) && f.min); }
     } else {
       put("cc", pc, f.act === "call");
-      if (f.aggBefore === 1) put("3bet", pc, isAgg(f.act));
+      if (f.aggBefore === 1) { put("3bet", pc, isAgg(f.act) && !f.min); put("min3bet", pc, isAgg(f.act) && f.min); }
     }
     if (f.act === "limp") {
       const r = pre.slice(1).find((x) => x.aggBefore > 0);          // his answer to a raise behind his limp
@@ -127,16 +134,17 @@ function sdStats(oppId, hands) {
 /* ---------- rendering ---------- */
 
 let statsTab = "pre";
-const SD_HUD = [["VPIP", "vpip"], ["PFR", "pfr"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Fold 3bet", "f3bet"], ["Iso", "iso"], ["Limp-fold", "limpFold"],
+const SD_HUD = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Iso", "iso"], ["Limp-fold", "limpFold"],
   ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
-const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-fold", "limpFold"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["3bet", "3bet"]];
+const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-fold", "limpFold"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
   ["VPIP / PFR", "Put chips in / raised at any point preflop, out of the hands where he acted preflop."],
   ["Limp", "First action was a limp, out of hands where no raise was out before he acted."],
   ["CC", "Cold call: his first action was calling a raise, out of hands where a raise was out first."],
-  ["3bet", "Re-raised a single open, out of hands where he faced one."],
+  ["Open · Min open", "First raise when nobody had limped or raised, out of hands where he was first in. A min-open is a raise of at most 2× the ante; those are counted only in Min open, never in Open (PFR still counts both)."],
+  ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet."],
   ["LRR · Limp-fold · Limp-call", "After he limped and a raise came behind: re-raised / folded / called, out of limps that faced a raise (his answer must be logged)."],
   ["Fold 3bet", "After he raised first and got 3bet: folded."],
