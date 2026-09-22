@@ -5128,7 +5128,7 @@ function bindStatic() {
         await refreshCache();
         await fixDxSeats();
         hideSheet();
-        toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands`);
+        toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands` + (counts.nlhe ? ` · rejected ${counts.nlhe} NLHE hand${counts.nlhe === 1 ? "" : "s"}` : ""));
         renderData();
       } catch (err) { toast("Import failed: " + err.message); }
     };
@@ -5141,7 +5141,7 @@ function bindStatic() {
       const counts = await importJSON(JSON.parse(await f.text()));
       await refreshCache();
       await fixDxSeats();
-      toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands`);
+      toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands` + (counts.nlhe ? ` · rejected ${counts.nlhe} NLHE hand${counts.nlhe === 1 ? "" : "s"}` : ""));
       renderData();
     } catch (err) { toast("Import failed: " + err.message); }
     e.target.value = "";

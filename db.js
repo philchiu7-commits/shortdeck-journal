@@ -247,10 +247,35 @@ function mergeOppRecords(into, from) {
    uniquely matches an existing profile, fold it in and remap its hands' villain
    refs — so re-logging hands for an existing opponent never spawns a duplicate.
    Never wipes existing data. */
+/* Short deck only: a 2–5 anywhere, small/big blinds, or a blind/straddle post means it's NLHE. */
+const NLHE_ACTS = new Set(["sb", "bb", "post", "straddle"]);
+function isNlheHand(h) {
+  const cards = [...(h.heroCards || []), ...(h.board || []), ...(h.villains || []).flatMap((v) => v.cards || []),
+    ...(h.hero?.cards || []), ...(h.winners || []).flatMap((w) => w.cards || [])];
+  if (cards.some((c) => /^[2-5]/.test(String(c || "").trim()))) return true;
+  if (h.blinds && (Number(h.blinds.sb) > 0 || Number(h.blinds.bb) > 0)) return true;
+  return (h.actions || []).some((a) => NLHE_ACTS.has(a.act) || a.actor === "straddle");
+}
+
 async function importJSON(data) {
+  if (data && data.app === "poker-journal")
+    throw new Error("that's an NLHE (poker-journal) file — this journal is short deck only");
   if (!data || data.app !== "shortdeck-journal" || !Array.isArray(data.opponents))
     throw new Error("Not a shortdeck-journal export file");
-  const counts = { opponents: 0, merged: 0, hands: 0, sessions: 0 };
+  const counts = { opponents: 0, merged: 0, hands: 0, sessions: 0, nlhe: 0 };
+  const nlhe = (data.hands || []).filter(isNlheHand);
+  if (nlhe.length) {
+    const inSD = new Set((data.hands || []).filter((h) => !isNlheHand(h)).flatMap((h) => h.villainIds || []));
+    const onlyNL = new Set(nlhe.flatMap((h) => h.villainIds || []).filter((id) => !inSD.has(id)));
+    const known = new Set((await dbAll("opponents")).map((o) => o.id));
+    // opponents who only appear in the rejected hands, brought in by this file with nothing of their own, stay out too
+    const bare = (o) => !Object.keys(o.reads || {}).length && !(o.exploits || []).length && !(o.notes || []).length;
+    data = { ...data, hands: data.hands.filter((h) => !isNlheHand(h)),
+      opponents: data.opponents.filter((o) => !(onlyNL.has(o.id) && !known.has(o.id) && bare(o))) };
+    counts.nlhe = nlhe.length;
+    if (!data.hands.length && !data.opponents.length)
+      throw new Error(`${nlhe.length} NLHE hand${nlhe.length === 1 ? "" : "s"} — this journal is short deck only, nothing imported`);
+  }
 
   const existing = await dbAll("opponents");
   const nameCount = {};
