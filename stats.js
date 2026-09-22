@@ -52,7 +52,7 @@ function sdHandEvents(h, idx, put) {
     }
     if (f.act === "limp") {
       const r = pre.slice(1).find((x) => x.aggBefore > 0);          // his answer to a raise behind his limp
-      if (r) { put("limpRR", pc, isAgg(r.act)); put("limpCall", pc, r.act === "call"); put("limpFold", pc, r.act === "fold"); }
+      if (r) { put("limpRR", pc, isAgg(r.act)); put("limpCall", pc, r.act === "call"); }
     }
     if (f.aggBefore === 0 && isAgg(f.act)) {
       const r = pre.slice(1).find((x) => x.aggBefore >= 2);         // his answer to a 3bet over his raise
@@ -138,9 +138,9 @@ function sdStats(oppId, hands) {
 /* ---------- rendering ---------- */
 
 let statsTab = "pre";
-const SD_HUD = [["VPIP", "vpip"], ["Iso", "iso"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Limp-call", "limpCall"], ["Limp-fold", "limpFold"],
+const SD_HUD = [["VPIP", "vpip"], ["Iso", "iso"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Limp-call", "limpCall"],
   ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
-const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["Limp-fold", "limpFold"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
+const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
@@ -150,7 +150,7 @@ const SD_DEFS = [
   ["Open · Min open", "First raise when nobody had limped or raised, out of hands where he was first in. A min-open is a raise of at most 2× the ante; those are counted only in Min open, never in Open."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet."],
-  ["LRR · Limp-call · Limp-fold", "After he limped and a raise came behind: re-raised / called / folded, out of limps that faced a raise (his answer must be logged)."],
+  ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged)."],
   ["Fold 3bet", "After he raised first and got 3bet: folded."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
   ["Cbet turn", "Bet the turn after cbetting the flop, out of turns where he acted first."],
@@ -193,7 +193,7 @@ function openStatSheet(el) {
 
 /* Hover: preflop stats show the hands on the range chart by his hole cards (only hands where
    his cards were logged can go on it); postflop stats and sizings list the hands. */
-const SD_PRE_KEYS = new Set(["vpip", "iso", "open", "minOpen", "limp", "cc", "3bet", "min3bet", "f3bet", "limpRR", "limpCall", "limpFold"]);
+const SD_PRE_KEYS = new Set(["vpip", "iso", "open", "minOpen", "limp", "cc", "3bet", "min3bet", "f3bet", "limpRR", "limpCall"]);
 const SD_HOV_C = { did: "#4fbf5a", didnt: "#5a6068" };
 function sdRangeMini(p) {
   const byId = new Map(HANDS.map((h) => [h.id, h]));
