@@ -477,7 +477,7 @@ function renderSizing(oppId, hands) {
         if (!c) return `<div class="stc none">–</div>`;
         const key = "sz|" + rid + "|" + x;
         sdSzT[key] = [c, c, [...new Set(ids[x])], [], streets ? null : split[x]];
-        return `<div class="stc stk${c === top ? " szTop" : ""}" data-stk="${key}"><b>${c}</b></div>`;
+        return `<div class="stc stk szF sz${kind.toUpperCase()}" style="--f:${(c / top).toFixed(2)}" data-stk="${key}"><b>${c}</b></div>`;
       }).join("")}</div>`;
     };
     const K = (k) => (k === "v" ? "Value" : "Bluff");

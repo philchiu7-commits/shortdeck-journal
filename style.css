@@ -958,7 +958,9 @@ textarea.noteedit { margin-bottom: 0; }
 .stdefs b { color: var(--text); }
 
 .szgap { height: 6px; }
-.stc.szTop { outline: 1px solid var(--accent); }
+.stc.szF { padding: 8px 0; color: #fff; background: color-mix(in srgb, var(--szc) calc(28% + 60% * var(--f)), var(--panel2)); }
+.stc.szV { --szc: #3fa34d; }
+.stc.szB { --szc: #c9463d; }
 .szsub { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 0 6px; }
 .szsub:first-child { margin-top: 0; }
 .stc.szTap, .stc.szClr { border: 0; color: inherit; font: inherit; cursor: pointer; width: 100%; -webkit-tap-highlight-color: transparent; }
