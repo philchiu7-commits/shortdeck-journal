@@ -1726,24 +1726,8 @@ function oppOrderCmp(stats) {
 }
 
 function oppRowHTML(o, st) {
-  // Exploits lead the front card — that's what Phil wants to see across
-  // the room. All exploits are shown unless individually hidden via the
-  // 🚫 toggle in the opponent detail (opt-out, not opt-in).
-  const exploitChips = (o.exploits || [])
-    .filter((e) => !e.hideFront)
-    .map((e) => {
-      const label = (e.abbr && e.abbr.trim()) ? e.abbr.trim() : autoShort(e.text);
-      return `<span class="excard" title="${esc(e.text)}">💡 ${esc(label)}</span>`;
-    }).join("");
-  // Then curated featured reads; otherwise fall back to strong reads (yes!/no!)
-  // so the card still has signal for opponents with no explicit curation.
-  const feat = featuredItems(o);
-  const featReadChips = feat.filter((it) => it.type === "read")
-    .map((it) => featuredChip(o, it)).filter(Boolean).join("");
-  const readChips = featReadChips || Object.entries(oppReads(o))
-    .filter(([id, s]) => isStrongRead(s) && readIsShown(o, id) && !(o.hiddenReads || {})[id])
-    .map(([id, s]) => readChip(id, s)).join("");
-  const chips = exploitChips + readChips;
+  // The list row is just type + name (+ looks-like); reads and exploits live on the detail page.
+  const chips = "";
   const showChips = !oppEditMode && chips;
   const handle = oppEditMode ? `<span class="draghandle" data-drag="${o.id}">⠿</span>` : "";
   const move = oppEditMode ? `<button class="movebtn" data-move="${o.id}">Group ▾</button>` : "";
