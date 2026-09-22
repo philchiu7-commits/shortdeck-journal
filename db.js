@@ -277,6 +277,8 @@ async function importJSON(data) {
       throw new Error(`${nlhe.length} NLHE hand${nlhe.length === 1 ? "" : "s"} — this journal is short deck only, nothing imported`);
   }
 
+  const log = { opponents: {}, hands: {}, sessions: {}, meta: [] };
+  const note = (store, id, prev) => { if (!(id in log[store])) log[store][id] = prev ? structuredClone(prev) : null; };
   const existing = await dbAll("opponents");
   const nameCount = {};
   for (const o of existing) nameCount[normName(o.name)] = (nameCount[normName(o.name)] || 0) + 1;
@@ -292,7 +294,8 @@ async function importJSON(data) {
       // fields (name, reads conflicts), but reads/exploits/notes union from
       // both — an import must never drop the other device's additions.
       const cur = await dbGet("opponents", rec.id);
-      if (!cur) { await dbPut("opponents", rec); counts.opponents++; continue; }
+      if (!cur) { note("opponents", rec.id, null); await dbPut("opponents", rec); counts.opponents++; continue; }
+      note("opponents", rec.id, cur);
       const [into, from] = (rec.updatedAt || 0) > (cur.updatedAt || 0) ? [rec, cur] : [cur, rec];
       mergeOppRecords(into, from);
       await dbPut("opponents", into);
@@ -303,11 +306,13 @@ async function importJSON(data) {
     const matchId = rn ? nameToId[rn] : null; // never name-merge blank-named records
     if (matchId) {                           // new id but known name — fold into the existing profile
       const into = await dbGet("opponents", matchId);
+      note("opponents", matchId, into);
       mergeOppRecords(into, rec);
       await dbPut("opponents", into);
       remap[rec.id] = matchId;
       counts.merged++;
     } else {                                 // genuinely new opponent
+      note("opponents", rec.id, null);
       await dbPut("opponents", rec);
       existingIds.add(rec.id);
       if (rn) nameToId[rn] = rec.id;         // later same-name incoming folds into this one too (blanks never)
@@ -323,12 +328,12 @@ async function importJSON(data) {
       if (Array.isArray(rec.villainIds)) rec.villainIds = [...new Set(rec.villainIds.map((x) => remap[x] || x))];
     }
     const cur = await dbGet("hands", rec.id);
-    if (!cur || (rec.updatedAt || rec.ts || 0) > (cur.updatedAt || cur.ts || 0)) { await dbPut("hands", rec); counts.hands++; }
+    if (!cur || (rec.updatedAt || rec.ts || 0) > (cur.updatedAt || cur.ts || 0)) { note("hands", rec.id, cur); await dbPut("hands", rec); counts.hands++; }
   }
   for (const rec of data.sessions || []) {
     if (!rec.id) continue;
     const cur = await dbGet("sessions", rec.id);
-    if (!cur || (rec.updatedAt || rec.ts || 0) > (cur.updatedAt || cur.ts || 0)) { await dbPut("sessions", rec); counts.sessions++; }
+    if (!cur || (rec.updatedAt || rec.ts || 0) > (cur.updatedAt || cur.ts || 0)) { note("sessions", rec.id, cur); await dbPut("sessions", rec); counts.sessions++; }
   }
   // At-table context (lineup/seats/ante/group UI) — via metaSet so the
   // localStorage survival mirror is seeded too. Only exportData's whitelist appears here.
@@ -344,6 +349,64 @@ async function importJSON(data) {
     if (hasRemap && r.key === "tableLineup" && Array.isArray(value))
       value = value.map((id) => remap[id] || id);
     await metaSet(r.key, value);
+    log.meta.push({ key: r.key, value });
   }
+  _pendingImport = log;
   return counts;
+}
+
+/* ---------- import undo ----------
+   importJSON notes every record it touched with its pre-import copy (null = new).
+   After the caller's post-import fixups, recordImport stamps each record's
+   updatedAt so undo can tell "still as imported" from "edited since" — edited
+   records are kept, never clobbered. Log lives in IDB meta only (not mirrored,
+   not exported). */
+const IMPORT_LOG_KEY = "importLog", IMPORT_LOG_MAX = 5;
+let _pendingImport = null;
+const _stamp = (r) => r ? (r.updatedAt || r.ts || 0) : null;
+async function recordImport(label, counts) {
+  const log = _pendingImport; _pendingImport = null;
+  if (!log) return;
+  const batch = { id: uid(), ts: Date.now(), label, counts: { ...counts } };
+  let any = log.meta.length > 0;
+  for (const store of ["opponents", "hands", "sessions"]) {
+    batch[store] = {};
+    for (const [id, prev] of Object.entries(log[store])) {
+      batch[store][id] = { prev, post: _stamp(await dbGet(store, id)) };
+      any = true;
+    }
+  }
+  if (!any) return;
+  batch.meta = log.meta;
+  const all = (await dbGet("meta", IMPORT_LOG_KEY))?.value || [];
+  await dbPut("meta", { key: IMPORT_LOG_KEY, value: [batch, ...all].slice(0, IMPORT_LOG_MAX) });
+}
+async function importLog() { return (await dbGet("meta", IMPORT_LOG_KEY))?.value || []; }
+async function undoImport(batchId) {
+  const all = await importLog();
+  const b = all.find((x) => x.id === batchId);
+  if (!b) throw new Error("import not found");
+  const res = { removed: 0, restored: 0, kept: 0, inUse: 0 };
+  for (const store of ["hands", "sessions", "opponents"]) {
+    const hands = store === "opponents" ? await dbAll("hands") : null;
+    const refd = (id) => hands.some((h) => h.opponentId === id || (h.villainIds || []).includes(id)
+      || (h.villains || []).some((v) => v.opponentId === id));
+    for (const [id, e] of Object.entries(b[store] || {})) {
+      const cur = await dbGet(store, id);
+      if (!cur) continue;                               // deleted since — leave it gone
+      if (_stamp(cur) !== e.post) { res.kept++; continue; }
+      if (!e.prev && hands && refd(id)) { res.inUse++; continue; }  // a hand outside this import still uses them
+      if (e.prev) { await dbPut(store, e.prev); res.restored++; }
+      else { await dbDel(store, id); res.removed++; }
+    }
+  }
+  for (const m of b.meta || []) {
+    const cur = (await dbGet("meta", m.key))?.value;
+    if (JSON.stringify(cur) === JSON.stringify(m.value)) {
+      await dbDel("meta", m.key);
+      try { localStorage.removeItem(_mirrorKey(m.key)); } catch {}
+    }
+  }
+  await dbPut("meta", { key: IMPORT_LOG_KEY, value: all.filter((x) => x !== b) });
+  return res;
 }

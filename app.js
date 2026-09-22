@@ -2876,6 +2876,7 @@ function renderData() {
     store.className = "sub2 warn";
   }
   $("data-stats").textContent = `${OPP.length} opponents · ${HANDS.length} hands`;
+  renderImportLog();
   metaGet("autoSnapshot").then((snap) => {
     if (!snap) { $("data-autobackup").textContent = "Auto-backup: not yet made — save a hand or open an opponent to create one."; return; }
     const secs = Math.floor((Date.now() - snap.ts) / 1000);
@@ -2884,6 +2885,21 @@ function renderData() {
     $("data-autobackup").textContent =
       `Auto-backup: updated ${ago} ago · ${c.opponents || 0} opps · ${c.hands || 0} hands. Refreshes on every change (stays inside the app; tap Save to write a file).`;
   });
+}
+
+async function renderImportLog() {
+  const log = await importLog();
+  const el = $("data-imports");
+  if (!log.length) { el.innerHTML = `<div class="muted sub2">None yet. Each JSON import is listed here and can be undone.</div>`; return; }
+  const when = (ts) => new Date(ts).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  el.innerHTML = log.map((b) => {
+    const c = b.counts || {};
+    const bits = [`${c.hands || 0} hand${c.hands === 1 ? "" : "s"}`, `${c.opponents || 0} new opp`];
+    if (c.merged) bits.push(`${c.merged} merged`);
+    return `<div class="importrow"><div class="grow"><div class="imlabel">${esc(b.label || "Import")}</div>
+      <div class="muted sub2">${when(b.ts)} · ${bits.join(" · ")}</div></div>
+      <button class="secondary" data-undoimport="${b.id}">Undo</button></div>`;
+  }).join("");
 }
 
 /* ================= Hand entry ================= */
@@ -5127,11 +5143,26 @@ function bindStatic() {
         const counts = await importJSON(JSON.parse(raw));
         await refreshCache();
         await fixDxSeats();
+        await recordImport("Pasted JSON", counts);
         hideSheet();
         toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands` + (counts.nlhe ? ` · rejected ${counts.nlhe} NLHE hand${counts.nlhe === 1 ? "" : "s"}` : ""));
         renderData();
       } catch (err) { toast("Import failed: " + err.message); }
     };
+  };
+  $("data-imports").onclick = async (e) => {
+    const btn = e.target.closest("[data-undoimport]");
+    if (!btn) return;
+    const b = (await importLog()).find((x) => x.id === btn.dataset.undoimport);
+    if (!b) return;
+    if (!confirm(`Undo "${b.label}"?\n\nHands, opponents and sessions it added are removed, and anything it overwrote goes back to how it was. Records you've edited since the import are kept.`)) return;
+    try {
+      const r = await undoImport(b.id);
+      await refreshCache();
+      toast(`Undone · ${r.removed} removed · ${r.restored} restored` + (r.kept ? ` · ${r.kept} kept (edited since)` : "")
+        + (r.inUse ? ` · ${r.inUse} opp kept (has other hands)` : ""));
+      renderData();
+    } catch (err) { toast("Undo failed: " + err.message); }
   };
   $("data-import").onclick = () => $("data-importfile").click();
   $("data-importfile").onchange = async (e) => {
@@ -5141,6 +5172,7 @@ function bindStatic() {
       const counts = await importJSON(JSON.parse(await f.text()));
       await refreshCache();
       await fixDxSeats();
+      await recordImport(f.name, counts);
       toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands` + (counts.nlhe ? ` · rejected ${counts.nlhe} NLHE hand${counts.nlhe === 1 ? "" : "s"}` : ""));
       renderData();
     } catch (err) { toast("Import failed: " + err.message); }

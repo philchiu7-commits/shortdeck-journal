@@ -994,3 +994,8 @@ textarea.noteedit { margin-bottom: 0; }
 .ptypemini .ptypename { font-size: 11px; font-weight: 600; color: var(--player-color, var(--text)); white-space: nowrap; }
 
 #stpop .spsplit { font-size: 13px; font-weight: 600; color: var(--accent); margin: 2px 0 6px; font-variant-numeric: tabular-nums; }
+.importrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line, #2a2f3a); }
+.importrow:first-child { border-top: 0; }
+.importrow .grow { flex: 1; min-width: 0; }
+.importrow .imlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.importrow button { margin: 0; flex: none; width: auto; padding: 8px 14px; }
