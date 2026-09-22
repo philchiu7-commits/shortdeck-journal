@@ -27,7 +27,7 @@ function sdHandEvents(h, idx, put) {
     if (!s) continue;
     const c = cnt[a.street];
     const min = a.street === "pre" && isAgg(a.act) && !!a.size && lastTo > 0 && to[ai] > 0 && to[ai] <= SD_MINR_X * lastTo * 1.05;
-    s.push({ actor: a.actor, act: a.act, aggBefore: c.agg, limpsBefore: c.limps, i: s.length, min });
+    s.push({ actor: a.actor, act: a.act, aggBefore: c.agg, aggBy: c.last, limpsBefore: c.limps, i: s.length, min });
     if (a.street === "pre" && isAgg(a.act) && to[ai] > 0) lastTo = to[ai];
     if (isAgg(a.act)) { c.agg++; c.last = a.actor; }
     else if (a.act === "limp") c.limps++;
@@ -97,6 +97,10 @@ function sdHandEvents(h, idx, put) {
     const ci = mf.findIndex((x) => x.act === "check");
     if (ci >= 0 && mf[ci + 1] && mf[ci + 1].aggBefore > 0) put("cr", cols, isAgg(mf[ci + 1].act));
   }
+  for (const [st, si, key] of [["turn", 2, "rT"], ["river", 3, "rR"]]) {    // his first answer to someone else's bet on the street
+    const x = mine(st).find((y) => y.aggBefore === 1 && y.aggBy !== me);
+    if (x) put(key, colsAt(si), isAgg(x.act));
+  }
   for (const st of ["flop", "turn", "river"])
     for (const x of mine(st)) if (isAgg(x.act) || x.act === "call") put("afq", ["all"], isAgg(x.act));
 
@@ -136,9 +140,9 @@ function sdStats(oppId, hands) {
 
 let statsTab = "pre";
 const SD_HUD = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Iso", "iso"], ["Limp-fold", "limpFold"],
-  ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
+  ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-fold", "limpFold"], ["Iso", "iso"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
-const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
+const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
   ["VPIP / PFR", "VPIP: put chips in at any point preflop. PFR: his first action was a raise (open, iso or 3bet), so a limp then re-raise is not PFR (see LRR). Both out of the hands where he acted preflop."],
@@ -152,6 +156,7 @@ const SD_DEFS = [
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
   ["Cbet turn", "Bet the turn after cbetting the flop, out of turns where he acted first."],
   ["Fold / Call / Raise vs cbet", "His first answer to a flop bet from the preflop raiser (Raise flop = the raise)."],
+  ["Raise turn / river", "His first action facing someone else's single bet on that street: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
   ["Check-raise", "Checked the flop, faced a bet, raised."],
   ["Donk lead", "Bet the flop into the preflop raiser before they acted."],
   ["HU IP / HU OOP / MW", "Heads-up in or out of position against the one other player who saw that street, or three-plus players. Only players you logged in the hand are counted."],
