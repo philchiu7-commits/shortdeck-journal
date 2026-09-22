@@ -979,3 +979,9 @@ textarea.noteedit { margin-bottom: 0; }
 #stpop .spgrid .rgcell { font-size: 10px; }
 #stpop .spkey { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 8px 2px; font-size: 11px; color: var(--muted); }
 #stpop .spkey .rgswatch { vertical-align: -2px; }
+.foldtitle { cursor: pointer; user-select: none; -webkit-user-select: none; }
+.foldchev { display: inline-block; width: 14px; font-size: 11px; color: var(--muted); transition: transform .15s; }
+[data-fold].folded .foldchev { transform: rotate(-90deg); }
+[data-fold].folded > :not(.cardpanel-head) { display: none !important; }
+[data-fold].folded > .cardpanel-head { margin-bottom: 0; }
+[data-fold].folded > .cardpanel-head > :not(.ptitle) { display: none; }

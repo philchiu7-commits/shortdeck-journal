@@ -747,6 +747,28 @@ function openReadProof(label, sub, ids, other, oppId) {
        : hit.map((h) => handRowHTML(h, oppId)).join("")}</div>`);
 }
 
+/* Opponent-page panels hide/show from their title; which ones are hidden is remembered
+   on this device (same for every opponent). */
+function bindFolds() {
+  let hidden = [];
+  try { hidden = JSON.parse(localStorage.getItem("sd-folds") || "[]"); } catch (e) {}
+  const panels = document.querySelectorAll("#view-opp [data-fold]");
+  for (const p of panels) {
+    const head = p.querySelector(".cardpanel-head");
+    const t = head && head.querySelector(".ptitle");
+    if (!t) continue;
+    t.classList.add("foldtitle");
+    t.setAttribute("role", "button");
+    t.insertAdjacentHTML("afterbegin", `<span class="foldchev" aria-hidden="true">▾</span>`);
+    p.classList.toggle("folded", hidden.includes(p.dataset.fold));
+    t.onclick = () => {
+      const on = p.classList.toggle("folded");
+      hidden = hidden.filter((x) => x !== p.dataset.fold).concat(on ? [p.dataset.fold] : []);
+      try { localStorage.setItem("sd-folds", JSON.stringify(hidden)); } catch (e) {}
+    };
+  }
+}
+
 /* FEATURE 2 — predictive defaults for hand entry, from history. */
 function predictEffStack() {
   const withStack = HANDS.filter((h) => h.effStack).sort((a, b) => b.ts - a.ts);
@@ -5050,6 +5072,7 @@ function bindStatic() {
   $("od-hands").onclick = handListClick;
   bindStats();
   bindSizing();
+  bindFolds();
 
   // hand detail
   $("hv-edit").onclick = () => {
