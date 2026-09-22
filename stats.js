@@ -47,8 +47,7 @@ function sdHandEvents(h, idx, put) {
       if (f.limpsBefore > 0) put("iso", pc, isAgg(f.act));
       else { put("open", pc, isAgg(f.act) && !f.min); put("minOpen", pc, isAgg(f.act) && f.min); }
     } else {
-      put("cc", pc, f.act === "call");
-      if (f.aggBefore === 1) { put("3bet", pc, isAgg(f.act) && !f.min); put("min3bet", pc, isAgg(f.act) && f.min); }
+      if (f.aggBefore === 1) { put("cc", pc, f.act === "call"); put("3bet", pc, isAgg(f.act) && !f.min); put("min3bet", pc, isAgg(f.act) && f.min); }
     }
     if (f.act === "limp") {
       const r = pre.slice(1).find((x) => x.aggBefore > 0);          // his answer to a raise behind his limp
@@ -155,7 +154,7 @@ const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw",
 const SD_DEFS = [
   ["VPIP", "VPIP: put chips in at any point preflop, out of the hands where he acted preflop."],
   ["Limp", "First action was a limp, out of hands where no raise was out before he acted."],
-  ["CC", "Cold call: his first action was calling a raise, out of hands where a raise was out first."],
+  ["CC", "Cold call: his first action was flat-calling a single raise, out of hands where exactly one raise was in front of him. Calls of a 3bet or squeeze don't count."],
   ["Min open", "First in (nobody had limped or raised) with a raise of at most 2× the ante, out of hands where he was first in."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet."],
