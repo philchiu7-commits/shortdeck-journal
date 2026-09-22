@@ -973,3 +973,4 @@ textarea.noteedit { margin-bottom: 0; }
 #stpop.hidden { display: none; }
 #stpop .sph { padding: 2px 8px 4px; font-size: 12px; }
 #stpop .spn { padding: 2px 8px; font-size: 11px; color: var(--muted); }
+.hh-fold { font-size: 10px; color: var(--muted); }

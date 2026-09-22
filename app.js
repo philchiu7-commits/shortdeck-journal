@@ -2680,7 +2680,10 @@ function handHistoryLineHTML(h, focusActor) {
   const streetPrefix = { pre: "Pre", flop: "Flop", turn: "Turn", river: "River" };
   const boardTiles = (cards) => cards.filter(Boolean).map((c) => tileHTML(c)).join("");
   const parts = [];
-  const idxAll = acts.map((_, i) => i).filter((i) => !focus || acts[i].actor === focus);
+  // Other players' folds are always shown, small: on a player's own rows (focus) their other actions are hidden but who folded still matters.
+  const smallFold = (i) => acts[i].act === "fold" && (focus ? acts[i].actor !== focus : multiway);
+  const seatOf = (actor) => (actor === "hero" ? h.heroPos : h.villains?.[Number(actor.slice(1))]?.pos) || shortActor(actor);
+  const idxAll = acts.map((_, i) => i).filter((i) => !focus || acts[i].actor === focus || smallFold(i));
   for (const st of STREETS) {
     const idxs = idxAll.filter((i) => acts[i].street === st);
     if (!idxs.length) continue;
@@ -2690,18 +2693,17 @@ function handHistoryLineHTML(h, focusActor) {
     else if (st === "river" && b[4]) head += boardTiles([b[4]]);
     // Multi-way hands (imports especially) are unreadable as a bare verb chain;
     // prefix each action with the actor so it's clear who's doing what.
-    // Runs of ≥2 consecutive folds compress to "N folds" — the names add nothing.
+    // Other players' folds are small; a run of them reads "HJ CO BN fold".
     const pieces = [];
     for (let k = 0; k < idxs.length; k++) {
       const i = idxs[k];
-      if (multiway && acts[i].act === "fold") {
+      if (smallFold(i)) {
         let run = 1;
-        while (k + run < idxs.length && acts[idxs[k + run]].act === "fold") run++;
-        if (run >= 2) {
-          pieces.push(`<span class="hh-act"><span class="hh-verb">${run} folds</span></span>`);
-          k += run - 1;
-          continue;
-        }
+        while (k + run < idxs.length && smallFold(idxs[k + run])) run++;
+        const seats = idxs.slice(k, k + run).map((j) => esc(seatOf(acts[j].actor))).join(" ");
+        pieces.push(`<span class="hh-fold">${seats} fold</span>`);
+        k += run - 1;
+        continue;
       }
       const v = esc(verb(acts[i], i));
       if (!multiway) { pieces.push(`<span class="hh-verb">${v}</span>`); continue; }
