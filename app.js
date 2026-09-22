@@ -1147,10 +1147,10 @@ const rangeBucketOf = (pos) => RANGE_BUCKETS.includes(pos) ? pos : /^U\d$/.test(
 const RANGE_SITS = [
   { id: "open",    label: "First in", acts: [["limp", "Limp"], ["raise", "Raise"], ["fold", "Fold"]] },
   { id: "vslimp",  label: "vs limp",  acts: [["limp", "Over-limp"], ["raise", "Iso"], ["fold", "Fold"]] },
-  { id: "vsraise", label: "vs raise", acts: [["call", "Call"], ["3bet", "3bet"], ["lrr", "Limp-reraise"], ["fold", "Fold"]] },
+  { id: "vsraise", label: "vs raise", acts: [["call", "Call"], ["3bet", "3bet"], ["lcall", "Limp-call"], ["lrr", "Limp-reraise"], ["fold", "Fold"]] },
 ];
 const RANGE_SIT_BY_ID = Object.fromEntries(RANGE_SITS.map((s) => [s.id, s]));
-const ACT_COLORS = { raise: "#d64848", "3bet": "#a02828", lrr: "#b36ad6", call: "#6bbf6b", limp: "#e5c04a", fold: "#7c8794" };
+const ACT_COLORS = { raise: "#d64848", "3bet": "#a02828", lrr: "#b36ad6", lcall: "#3f8f8f", call: "#6bbf6b", limp: "#e5c04a", fold: "#7c8794" };
 const RAISE_ACTS = new Set(["raise", "3bet", "4bet", "5bet", "jam", "bet"]);
 let rangeBucket = "BN", rangeSit = "open";
 /* Showdown evidence: hands where this villain showed cards, keyed
@@ -1158,7 +1158,7 @@ let rangeBucket = "BN", rangeSit = "open";
    the villain's FIRST preflop action: a raise → vsraise, a limp → vslimp,
    nothing → open. The villain's own first action is normalised to the
    situation's vocabulary (any raise after a raise = 3bet; BN check = limp).
-   A limp that then faces a raise also files his answer under vsraise (reraise = lrr). */
+   A limp that then faces a raise also files his answer under vsraise (reraise = lrr, call = lcall). */
 function rangeEvidence(oppId, hands) {
   const ev = {};
   for (const h of (hands || HANDS)) {
@@ -1184,14 +1184,14 @@ function rangeEvidence(oppId, hands) {
     if (act === "limp") {
       const j = pre.findIndex((a, k) => k > i && a.actor === me);
       if (j > 0 && pre.slice(i + 1, j).some((a) => RAISE_ACTS.has(a.act))) {
-        const a2 = RAISE_ACTS.has(pre[j].act) ? "lrr" : pre[j].act;
-        if (a2 === "lrr" || a2 === "call" || a2 === "fold") ((ev[bucket].vsraise ||= {})[hc] ||= []).push({ act: a2, id: h.id });
+        const a2 = RAISE_ACTS.has(pre[j].act) ? "lrr" : pre[j].act === "call" ? "lcall" : pre[j].act;
+        if (a2 === "lrr" || a2 === "lcall" || a2 === "fold") ((ev[bucket].vsraise ||= {})[hc] ||= []).push({ act: a2, id: h.id });
       }
     }
   }
   return ev;
 }
-const RG_LBL = { raise: "Raise", "3bet": "3bet", lrr: "Limp-reraise", call: "Call", limp: "Limp", fold: "Fold" };
+const RG_LBL = { raise: "Raise", "3bet": "3bet", lrr: "Limp-reraise", lcall: "Limp-call", call: "Call", limp: "Limp", fold: "Fold" };
 /* Distinct actions seen for a class, most common first; an old painted action leads. */
 function evidenceActs(ev, painted) {
   const n = {};
