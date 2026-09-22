@@ -5100,61 +5100,6 @@ function bindStatic() {
       renderData();
     } catch (e) { if (e?.name !== "AbortError") toast("Save failed: " + e.message); }
   };
-  $("data-copy").onclick = async () => {
-    try {
-      const json = JSON.stringify(await exportData());
-      await navigator.clipboard.writeText(json);
-      await metaSet("lastExportAt", Date.now());
-      toast(`Copied ${(json.length / 1024).toFixed(0)}KB to clipboard`);
-      renderData();
-    } catch (e) { toast("Copy failed: " + e.message); }
-  };
-  $("data-showjson").onclick = async () => {
-    try {
-      // compact + preview only: a MB-sized textarea freezes iOS Safari; Copy still takes the full backup
-      const json = JSON.stringify(await exportData());
-      const PREVIEW = 20000, cut = json.length > PREVIEW;
-      sheetGroup = "__showjson__";
-      showSheet(
-        `<div class="sheethead"><span class="t">Backup JSON — ${(json.length / 1024).toFixed(0)}KB</span>
-           <button data-sheetclose>Close</button></div>
-         <div class="sheetnote">${cut ? `Preview of the first ${PREVIEW / 1000}KB. Copy copies the whole backup.` : "Tap Copy, or long-press to select."}</div>
-         <div class="row"><button class="primary" id="showjson-copy">Copy all</button></div>
-         <textarea id="showjson-text" rows="14" readonly style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:11px;"></textarea>`);
-      const ta = document.getElementById("showjson-text");
-      ta.value = cut ? json.slice(0, PREVIEW) + "\n…" : json;
-      document.getElementById("showjson-copy").onclick = async () => {
-        try { await navigator.clipboard.writeText(json); toast("Copied"); return; } catch {}
-        const tmp = document.createElement("textarea");
-        tmp.value = json; tmp.setAttribute("readonly", ""); tmp.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
-        document.body.appendChild(tmp); tmp.select(); tmp.setSelectionRange(0, json.length);
-        const ok = document.execCommand("copy"); tmp.remove();
-        toast(ok ? "Copied" : "Copy failed — use Export JSON instead");
-      };
-    } catch (e) { toast("Show failed: " + e.message); }
-  };
-  $("data-paste-import").onclick = () => {
-    sheetGroup = "__pasteimport__";
-    showSheet(
-      `<div class="sheethead"><span class="t">Paste JSON to import</span>
-         <button data-sheetclose>Close</button></div>
-       <div class="sheetnote">Paste a full backup — id-based merge, newer wins.</div>
-       <textarea id="paste-json-text" rows="14" placeholder="Paste JSON here…" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:11px;"></textarea>
-       <div class="row"><button class="primary" id="paste-json-import">Import</button></div>`);
-    document.getElementById("paste-json-import").onclick = async () => {
-      const raw = document.getElementById("paste-json-text").value.trim();
-      if (!raw) { toast("Nothing to import"); return; }
-      try {
-        const counts = await importJSON(JSON.parse(raw));
-        await refreshCache();
-        await fixDxSeats();
-        await recordImport("Pasted JSON", counts);
-        hideSheet();
-        toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands` + (counts.nlhe ? ` · rejected ${counts.nlhe} NLHE hand${counts.nlhe === 1 ? "" : "s"}` : ""));
-        renderData();
-      } catch (err) { toast("Import failed: " + err.message); }
-    };
-  };
   $("data-imports").onclick = async (e) => {
     const btn = e.target.closest("[data-undoimport]");
     if (!btn) return;
