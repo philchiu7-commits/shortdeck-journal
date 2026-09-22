@@ -1140,7 +1140,7 @@ const RANGE_SITS = [
 const RANGE_SIT_BY_ID = Object.fromEntries(RANGE_SITS.map((s) => [s.id, s]));
 const ACT_COLORS = { raise: "#d64848", "3bet": "#a02828", call: "#6bbf6b", limp: "#e5c04a", fold: "#7c8794" };
 const RAISE_ACTS = new Set(["raise", "3bet", "4bet", "5bet", "jam", "bet"]);
-let rangeBucket = "BN", rangeSit = "open", rangeBrush = "raise";
+let rangeBucket = "BN", rangeSit = "open";
 /* Showdown evidence: hands where this villain showed cards, keyed
    bucket → situation → class → [{act, id}]. Situation = what happened before
    the villain's FIRST preflop action: a raise → vsraise, a limp → vslimp,
@@ -1170,11 +1170,21 @@ function rangeEvidence(oppId, hands) {
   }
   return ev;
 }
-/* Showdown-only cells (nothing painted) take the colour of what he most often did with the hand. */
-function evidenceAct(ev) {
+const RG_LBL = { raise: "Raise", "3bet": "3bet", call: "Call", limp: "Limp", fold: "Fold" };
+/* Distinct actions seen for a class, most common first; an old painted action leads. */
+function evidenceActs(ev, painted) {
   const n = {};
   for (const e of ev) n[e.act] = (n[e.act] || 0) + 1;
-  return Object.keys(n).sort((a, b) => n[b] - n[a])[0] || null;
+  const acts = Object.keys(n).sort((a, b) => n[b] - n[a]);
+  if (painted && !acts.includes(painted)) acts.unshift(painted);
+  return acts;
+}
+/* One colour, or hard-edged bands when he did more than one thing with the hand. */
+function actsBg(acts) {
+  const c = acts.map((a) => ACT_COLORS[a] || "#5a6068");
+  if (c.length < 2) return c[0];
+  const w = 100 / c.length;
+  return `linear-gradient(90deg,${c.map((x, i) => `${x} ${(i * w).toFixed(2)}% ${((i + 1) * w).toFixed(2)}%`).join(",")})`;
 }
 function rangeGridHTML(painted, evid) {
   const cells = [];
@@ -1182,14 +1192,11 @@ function rangeGridHTML(painted, evid) {
     for (let j = 0; j < RANKS.length; j++) {
       const hi = RANKS[i], lo = RANKS[j];
       const cls = i === j ? hi + hi : (i < j ? hi + lo + "s" : lo + hi + "o");
-      const act = painted[cls];
       const ev = evid[cls] || [];
-      const evAct = act ? null : evidenceAct(ev);
-      const evc = evAct ? ACT_COLORS[evAct] : "";
-      const style = act ? `background:${ACT_COLORS[act] || "#5a6068"};color:#fff;` : evc ? `background:${evc};color:#fff;` : "background:#1a1d23;color:#6b7078;";
-      const dots = ev.slice(0, 3).map((e) => `<i class="rgdot" style="background:${ACT_COLORS[e.act] || "#fff"}"></i>`).join("");
-      const badge = ev.length > 3 ? `<span class="rgn">${ev.length}</span>` : "";
-      cells.push(`<div class="rgcell tappable" data-rgcell="${cls}" data-rc="${i},${j}" data-evc="${evc}" style="${style}" title="${cls}${ev.length ? ` · seen ${ev.length}×` : ""}">${cls}${dots ? `<span class="rgdots">${dots}</span>` : ""}${badge}</div>`);
+      const acts = evidenceActs(ev, painted[cls]);
+      const style = acts.length ? `background:${actsBg(acts)};color:#fff;text-shadow:0 0 2px rgba(0,0,0,.6);` : "background:#1a1d23;color:#6b7078;";
+      const badge = ev.length ? `<span class="rgn">${ev.length}</span>` : "";
+      cells.push(`<div class="rgcell tappable" data-rgcell="${cls}" style="${style}" title="${cls}${ev.length ? ` · seen ${ev.length}×` : ""}">${cls}${badge}</div>`);
     }
   }
   return cells.join("");
@@ -1496,42 +1503,25 @@ function openNoteReviewSheet(note, oppId) {
    that class for the current bucket + situation. Rows open the hand. */
 function openRangeCellSheet(oppId, hc) {
   const ev = rangeEvidence(oppId)[rangeBucket]?.[rangeSit]?.[hc] || [];
-  const ids = new Set(ev.map((e) => e.id));
-  const hands = HANDS.filter((h) => ids.has(h.id)).sort((a, b) => b.ts - a.ts);
-  const rows = hands.map((h) => handRowHTML(h, oppId)).join("")
-    || `<div class="empty">No showdown hands with ${esc(hc)} from ${rangeBucket} (${RANGE_SIT_BY_ID[rangeSit].label.toLowerCase()}).</div>`;
+  const byId = new Map(HANDS.map((h) => [h.id, h]));
+  const acts = evidenceActs(ev).filter((a) => ev.some((e) => e.act === a));
+  const sect = (a) => {
+    const hs = [...new Set(ev.filter((e) => e.act === a).map((e) => e.id))].map((id) => byId.get(id)).filter(Boolean).sort((x, y) => y.ts - x.ts);
+    return `<div class="rgsec"><span class="rgswatch" style="background:${ACT_COLORS[a]}"></span> ${esc(RG_LBL[a] || a)} · ${hs.length}</div>${hs.map((h) => handRowHTML(h, oppId)).join("")}`;
+  };
+  const rows = acts.map(sect).join("")
+    || `<div class="empty">No hands with ${esc(hc)} from ${rangeBucket} (${RANGE_SIT_BY_ID[rangeSit].label.toLowerCase()}).</div>`;
   sheetGroup = "__rgcell__";
   showSheet(
-    `<div class="sheethead"><span class="t">${esc(hc)} · ${rangeBucket} · ${esc(RANGE_SIT_BY_ID[rangeSit].label)} · ${hands.length}</span>
+    `<div class="sheethead"><span class="t">${esc(hc)} · ${rangeBucket} · ${esc(RANGE_SIT_BY_ID[rangeSit].label)} · ${ev.length}</span>
        <button data-sheetclose>Close</button></div>
      <div class="list rgcell-hands">${rows}</div>`);
-}
-/* Sheet: copy the current situation's range from another position bucket. */
-function openRangeCopySheet(oppId) {
-  const ranges = oppById(oppId)?.ranges || {};
-  const lbl = RANGE_SIT_BY_ID[rangeSit].label;
-  const opts = RANGE_BUCKETS.filter((b) => b !== rangeBucket && Object.keys(ranges[b]?.[rangeSit] || {}).length)
-    .map((b) => `<button class="chip" data-rgcopyfrom="${b}">${b}<i>${Object.keys(ranges[b][rangeSit]).length}</i></button>`).join("");
-  sheetGroup = "__rgcopy__";
-  showSheet(
-    `<div class="sheethead"><span class="t">Copy "${esc(lbl)}" range into ${rangeBucket}</span><button data-sheetclose>Close</button></div>
-     <p class="muted sub2">Replaces what's painted for ${rangeBucket} · ${esc(lbl)}. Tweak from there.</p>
-     <div class="chiprow rgpicker">${opts || `<div class="empty">No other position has a "${esc(lbl)}" range yet.</div>`}</div>`);
 }
 function rangeSave(oppId) {
   const o = oppById(oppId);
   if (!o) return;
   o.updatedAt = Date.now();
   dbPut("opponents", o).catch(() => {});
-}
-/* Paint or erase one class. Returns true when something changed. */
-function rangeApply(oppId, cls, mode, act) {
-  const o = oppById(oppId);
-  if (!o) return false;
-  const r = ((o.ranges ||= {})[rangeBucket] ||= {})[rangeSit] ||= {};
-  if (mode === "erase") { if (!(cls in r)) return false; delete r[cls]; }
-  else { if (r[cls] === act) return false; r[cls] = act; }
-  return true;
 }
 function renderRanges(oppId, hands) {
   const o = oppById(oppId);
@@ -1540,7 +1530,6 @@ function renderRanges(oppId, hands) {
   const evAll = rangeEvidence(oppId, hands);
   const sit = RANGE_SIT_BY_ID[rangeSit] || RANGE_SITS[0];
   rangeSit = sit.id;
-  if (!sit.acts.some(([a]) => a === rangeBrush)) rangeBrush = sit.acts[0][0];
   const painted = ranges[rangeBucket]?.[rangeSit] || {};
   const evid = evAll[rangeBucket]?.[rangeSit] || {};
   const bucketChips = RANGE_BUCKETS.map((b) => {
@@ -1552,111 +1541,40 @@ function renderRanges(oppId, hands) {
     const n = Object.keys(ranges[rangeBucket]?.[x.id] || {}).length;
     return `<button class="chip mini${x.id === rangeSit ? " on" : ""}" data-rgsit="${x.id}">${esc(x.label)}${n ? `<i>${n}</i>` : ""}</button>`;
   }).join("");
-  const brushChips = sit.acts.map(([a, l]) =>
-    `<button class="rgbrush${rangeBrush === a ? " on" : ""}" data-rgbrush="${a}" style="--bc:${ACT_COLORS[a]}">${esc(l)}</button>`).join("");
+  const key = sit.acts.map(([a, l]) => `<span><span class="rgswatch" style="background:${ACT_COLORS[a]}"></span> ${esc(l)}</span>`).join("");
   const combos = rangeCombos(painted);
   const paintedN = Object.values(combos).reduce((t, n) => t + n, 0);
-  const summary = sit.acts.filter(([a]) => combos[a]).map(([a, l]) =>
-    `<span><span class="rgswatch" style="background:${ACT_COLORS[a]}"></span> ${esc(l)} <b>${pct(combos[a])}</b></span>`).join("")
-    + `<span>unknown <b>${pct(RANGE_TOTAL_COMBOS - paintedN)}</b></span>`;
   $("od-rangegrid").innerHTML = `
     <div class="rgpicker chiprow tight">${bucketChips}</div>
     <div class="rgpicker chiprow tight">${sitChips}</div>
-    <div class="rgbrushrow">${brushChips}</div>
+    <div class="rgsummary">${key}</div>
     <div class="rgblock"><div class="rggrid">${rangeGridHTML(painted, evid)}</div></div>
-    <div class="rgsummary">${summary}</div>
-    <div class="chiprow tight rgtools">
-      <button class="chip mini" data-rgcopy>Copy from…</button>
-      <button class="chip mini danger${paintedN ? "" : " hidden"}" data-rgclear>Clear ${rangeBucket}</button>
+    <div class="chiprow tight rgtools${paintedN ? "" : " hidden"}">
+      <button class="chip mini danger" data-rgclear>Clear old painted ${rangeBucket}</button>
     </div>`;
   $("od-rangelegend").innerHTML =
-    `<span class="rglegnote">Tap or drag to paint. Tap a painted cell with the same brush to clear it.</span>`
-    + `<span class="rglegnote">Cells fill in by themselves from showdowns (● dots). Long-press a cell to see those hands.</span>`;
+    `<span class="rglegnote">Cells fill in from hands where his cards were logged. A hand he played more than one way shows every colour. Tap a cell to see those hands.</span>`;
   const hint = $("od-rangehint");
-  if (hint) hint.textContent = `${rangeBucket} · ${sit.label} · ${pct(paintedN)} mapped`;
-}
-/* Tap / drag painting. Pointer capture is implicit on touch, so cells under
-   the finger are resolved with elementFromPoint. Same-brush tap = erase. */
-let rgDrag = null;
-function rangePaintCell(cell) {
-  if (!rangeApply(curOppId, cell.dataset.rgcell, rgDrag.mode, rangeBrush)) return;
-  rgDrag.changed = true;
-  const act = rgDrag.mode === "erase" ? null : rangeBrush;
-  const bg = act ? ACT_COLORS[act] : cell.dataset.evc || "#1a1d23";
-  cell.style.background = bg;
-  cell.style.color = act || cell.dataset.evc ? "#fff" : "#6b7078";
-}
-/* Fast swipes skip cells between pointer events — walk the grid line from
-   the previous cell to this one so a stroke never leaves gaps. */
-function rangePaintAt(cell) {
-  if (!rgDrag || !curOppId) return;
-  const [r, c] = cell.dataset.rc.split(",").map(Number);
-  const prev = rgDrag.last;
-  rgDrag.last = [r, c];
-  if (prev && (Math.abs(prev[0] - r) > 1 || Math.abs(prev[1] - c) > 1)) {
-    const steps = Math.max(Math.abs(prev[0] - r), Math.abs(prev[1] - c));
-    const grid = cell.parentElement;
-    for (let k = 1; k < steps; k++) {
-      const rr = Math.round(prev[0] + ((r - prev[0]) * k) / steps), cc = Math.round(prev[1] + ((c - prev[1]) * k) / steps);
-      const mid = grid.querySelector(`[data-rc="${rr},${cc}"]`);
-      if (mid) rangePaintCell(mid);
-    }
-  }
-  rangePaintCell(cell);
+  if (hint) hint.textContent = `${rangeBucket} · ${sit.label}`;
 }
 function bindRangeGrid() {
-  const host = $("od-rangegrid");
-  host.onclick = (e) => {
+  $("od-rangegrid").onclick = (e) => {
     if (!curOppId) return;
-    const b = e.target.closest("[data-rgbucket],[data-rgsit],[data-rgbrush],[data-rgcopy],[data-rgclear]");
+    const cell = e.target.closest("[data-rgcell]");
+    if (cell) { openRangeCellSheet(curOppId, cell.dataset.rgcell); return; }
+    const b = e.target.closest("[data-rgbucket],[data-rgsit],[data-rgclear]");
     if (!b) return;
     if (b.dataset.rgbucket) rangeBucket = b.dataset.rgbucket;
     else if (b.dataset.rgsit) rangeSit = b.dataset.rgsit;
-    else if (b.dataset.rgbrush) rangeBrush = b.dataset.rgbrush;
-    else if (b.hasAttribute("data-rgcopy")) { openRangeCopySheet(curOppId); return; }
     else if (b.hasAttribute("data-rgclear")) {
       const o = oppById(curOppId);
       if (!o?.ranges?.[rangeBucket]?.[rangeSit]) return;
-      if (!confirm(`Clear ${rangeBucket} · ${RANGE_SIT_BY_ID[rangeSit].label} range?`)) return;
+      if (!confirm(`Clear the old painted ${rangeBucket} · ${RANGE_SIT_BY_ID[rangeSit].label} range?`)) return;
       delete o.ranges[rangeBucket][rangeSit];
       rangeSave(curOppId);
     }
     renderRanges(curOppId);
   };
-  host.onpointerdown = (e) => {
-    const cell = e.target.closest("[data-rgcell]");
-    if (!cell || !curOppId) return;
-    e.preventDefault();
-    const cls = cell.dataset.rgcell;
-    const cur = oppById(curOppId)?.ranges?.[rangeBucket]?.[rangeSit]?.[cls];
-    rgDrag = { mode: cur === rangeBrush ? "erase" : "paint", changed: false, first: cell };
-    rangePaintAt(cell);
-    /* held still on one cell: undo that tap's paint and show the hands behind it */
-    rgDrag.timer = setTimeout(() => {
-      if (!rgDrag || rgDrag.last?.join() !== cell.dataset.rc) return;
-      if (rgDrag.changed) {
-        rangeApply(curOppId, cls, cur ? "paint" : "erase", cur);
-        rgDrag.changed = false;
-      }
-      rgDrag = null;
-      renderRanges(curOppId);
-      openRangeCellSheet(curOppId, cls);
-    }, 450);
-  };
-  host.onpointermove = (e) => {
-    if (!rgDrag) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-rgcell]");
-    if (el) rangePaintAt(el);
-    if (el && el !== rgDrag.first) clearTimeout(rgDrag.timer);
-  };
-  const end = () => {
-    if (!rgDrag) return;
-    const changed = rgDrag.changed;
-    clearTimeout(rgDrag.timer);
-    rgDrag = null;
-    if (changed && curOppId) { rangeSave(curOppId); renderRanges(curOppId); }
-  };
-  host.onpointerup = end; host.onpointercancel = end; host.onpointerleave = end;
 }
 
 /* ================= Opponents list ================= */
@@ -4443,19 +4361,6 @@ function sheetClick(e) {
   if (sheetGroup === "__rgcell__") {
     const r = e.target.closest("[data-hand]");
     if (r) { hideSheet(); location.hash = "#handview/" + r.dataset.hand; return; }
-  }
-  if (sheetGroup === "__rgcopy__") {
-    const b = e.target.closest("[data-rgcopyfrom]");
-    if (b && curOppId) {
-      const o = oppById(curOppId);
-      const src = o?.ranges?.[b.dataset.rgcopyfrom]?.[rangeSit];
-      if (src) {
-        ((o.ranges ||= {})[rangeBucket] ||= {})[rangeSit] = { ...src };
-        rangeSave(curOppId);
-      }
-      hideSheet(); renderRanges(curOppId);
-      return;
-    }
   }
   if (sheetGroup === "__notereview__") {
     const nb = e.target.closest("[data-nrconvert]");
