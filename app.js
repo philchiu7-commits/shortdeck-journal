@@ -2683,7 +2683,8 @@ function handHistoryLineHTML(h, focusActor) {
   // Other players' folds are always shown, small: on a player's own rows (focus) their other actions are hidden but who folded still matters.
   const smallFold = (i) => acts[i].act === "fold" && (focus ? acts[i].actor !== focus : multiway);
   const seatOf = (actor) => (actor === "hero" ? h.heroPos : h.villains?.[Number(actor.slice(1))]?.pos) || shortActor(actor);
-  const idxAll = acts.map((_, i) => i).filter((i) => !focus || acts[i].actor === focus || smallFold(i));
+  // Preflop shows every action (who opened, who folded, who 3bet); later streets on a player's own rows keep just his actions plus the folds.
+  const idxAll = acts.map((_, i) => i).filter((i) => !focus || acts[i].actor === focus || acts[i].street === "pre" || smallFold(i));
   for (const st of STREETS) {
     const idxs = idxAll.filter((i) => acts[i].street === st);
     if (!idxs.length) continue;
@@ -2693,21 +2694,21 @@ function handHistoryLineHTML(h, focusActor) {
     else if (st === "river" && b[4]) head += boardTiles([b[4]]);
     // Multi-way hands (imports especially) are unreadable as a bare verb chain;
     // prefix each action with the actor so it's clear who's doing what.
-    // Other players' folds are small; a run of them reads "HJ CO BN fold".
+    // Other players' folds are small: one reads "HJ fold", a run of them "5 folds".
+    const labelled = multiway || (focus && st === "pre");
     const pieces = [];
     for (let k = 0; k < idxs.length; k++) {
       const i = idxs[k];
       if (smallFold(i)) {
         let run = 1;
         while (k + run < idxs.length && smallFold(idxs[k + run])) run++;
-        const seats = idxs.slice(k, k + run).map((j) => esc(seatOf(acts[j].actor))).join(" ");
-        pieces.push(`<span class="hh-fold">${seats} fold</span>`);
+        pieces.push(`<span class="hh-fold">${run > 1 ? run + " folds" : esc(seatOf(acts[i].actor)) + " fold"}</span>`);
         k += run - 1;
         continue;
       }
       const v = esc(verb(acts[i], i));
-      if (!multiway) { pieces.push(`<span class="hh-verb">${v}</span>`); continue; }
-      const who = esc(shortActor(acts[i].actor));
+      if (!labelled) { pieces.push(`<span class="hh-verb">${v}</span>`); continue; }
+      const who = esc(focus ? seatOf(acts[i].actor) : shortActor(acts[i].actor));
       pieces.push(`<span class="hh-act"><span class="hh-who">${who}</span> <span class="hh-verb">${v}</span></span>`);
     }
     const chain = pieces.join(`<span class="hh-comma">,</span> `);
