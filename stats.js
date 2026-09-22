@@ -41,7 +41,7 @@ function sdHandEvents(h, idx, put) {
   if (pre.length) {
     const f = pre[0];
     put("vpip", pc, pre.some((x) => SD_VOL.has(x.act)));
-    put("pfr", pc, pre.some((x) => isAgg(x.act)));
+    put("pfr", pc, isAgg(f.act));
     if (f.aggBefore === 0) {
       put("limp", pc, f.act === "limp");
       if (f.limpsBefore > 0) put("iso", pc, isAgg(f.act));
@@ -140,10 +140,10 @@ const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min o
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
-  ["VPIP / PFR", "Put chips in / raised at any point preflop, out of the hands where he acted preflop."],
+  ["VPIP / PFR", "VPIP: put chips in at any point preflop. PFR: his first action was a raise (open, iso or 3bet), so a limp then re-raise is not PFR (see LRR). Both out of the hands where he acted preflop."],
   ["Limp", "First action was a limp, out of hands where no raise was out before he acted."],
   ["CC", "Cold call: his first action was calling a raise, out of hands where a raise was out first."],
-  ["Open · Min open", "First raise when nobody had limped or raised, out of hands where he was first in. A min-open is a raise of at most 2× the ante; those are counted only in Min open, never in Open (PFR still counts both)."],
+  ["Open · Min open", "First raise when nobody had limped or raised, out of hands where he was first in. A min-open is a raise of at most 2× the ante; those are counted only in Min open, never in Open (PFR counts both)."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet."],
   ["LRR · Limp-fold · Limp-call", "After he limped and a raise came behind: re-raised / folded / called, out of limps that faced a raise (his answer must be logged)."],
