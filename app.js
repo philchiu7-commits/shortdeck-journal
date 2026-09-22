@@ -5111,20 +5111,25 @@ function bindStatic() {
   };
   $("data-showjson").onclick = async () => {
     try {
-      const json = JSON.stringify(await exportData(), null, 2);
+      // compact + preview only: a MB-sized textarea freezes iOS Safari; Copy still takes the full backup
+      const json = JSON.stringify(await exportData());
+      const PREVIEW = 20000, cut = json.length > PREVIEW;
       sheetGroup = "__showjson__";
       showSheet(
         `<div class="sheethead"><span class="t">Backup JSON — ${(json.length / 1024).toFixed(0)}KB</span>
            <button data-sheetclose>Close</button></div>
-         <div class="sheetnote">Long-press to select all, then copy. Or tap Select all + Copy.</div>
-         <div class="row"><button class="secondary" id="showjson-selectall">Select all</button>
-           <button class="secondary" id="showjson-copy">Copy</button></div>
-         <textarea id="showjson-text" rows="14" readonly style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:11px;">${esc(json)}</textarea>`);
+         <div class="sheetnote">${cut ? `Preview of the first ${PREVIEW / 1000}KB. Copy copies the whole backup.` : "Tap Copy, or long-press to select."}</div>
+         <div class="row"><button class="primary" id="showjson-copy">Copy all</button></div>
+         <textarea id="showjson-text" rows="14" readonly style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:11px;"></textarea>`);
       const ta = document.getElementById("showjson-text");
-      document.getElementById("showjson-selectall").onclick = () => { ta.focus(); ta.select(); };
+      ta.value = cut ? json.slice(0, PREVIEW) + "\n…" : json;
       document.getElementById("showjson-copy").onclick = async () => {
-        try { await navigator.clipboard.writeText(json); toast("Copied"); }
-        catch { ta.focus(); ta.select(); document.execCommand("copy"); toast("Copied"); }
+        try { await navigator.clipboard.writeText(json); toast("Copied"); return; } catch {}
+        const tmp = document.createElement("textarea");
+        tmp.value = json; tmp.setAttribute("readonly", ""); tmp.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
+        document.body.appendChild(tmp); tmp.select(); tmp.setSelectionRange(0, json.length);
+        const ok = document.execCommand("copy"); tmp.remove();
+        toast(ok ? "Copied" : "Copy failed — use Export JSON instead");
       };
     } catch (e) { toast("Show failed: " + e.message); }
   };
