@@ -36,6 +36,7 @@ const READ_CYCLE = {
   "size-up-draws":   ["green", "yellow", "red"],
 };
 const readCycle = (id) => READ_CYCLE[id] || ["yes", "yes!", "no", "no!"];
+const SCALE_STAT = { "f-cbet-freq": "cbetF", "t-barrel2-freq": "cbetT", "f-xr-freq-pfr": "cr", "f-fold-to-xr": "fxr", "r-af": "afR" };
 const SCALE_READS = new Set(
   (typeof TENDENCY_TAGS !== "undefined" ? TENDENCY_TAGS : []).filter((t) => t.kind === "scale").map((t) => t.id));
 const isScaleRead = (id) => SCALE_READS.has(id);
@@ -2283,6 +2284,8 @@ function renderOppDetail(id) {
   if (curOppId !== id) { editNoteId = null; editExploitId = null; }
   curOppId = id;
   const mine = HANDS.filter((h) => (h.villainIds || []).includes(id));   // this villain's hands — scanned once, reused across the whole detail render
+  const ST = sdStats(id, mine).T;
+  sdStatT = ST;
   $("od-name").textContent = o.name;
   $("od-meta").textContent = [o.group, o.physical].filter(Boolean).join(" · ");
   // Player-type picker + pill: color-themes the opponent's list row and puts
@@ -2326,17 +2329,11 @@ function renderOppDetail(id) {
         `<button class="chip mini${st === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("");
       return `<div class="choiceread${active ? " on" : ""}"><span class="prlbl">${esc(lbl)}</span><div class="choiceopts">${opts}</div></div>`;
     }
-    if (isScaleRead(id)) {
-      const v = Math.max(0, Math.min(100, Number(st) || 0));
-      const active = readIsActive(id, st);
-      return `<div class="scaleread${active ? " on" : ""}" data-scaleid="${id}">
-        <div class="scaletop">
-          <span class="scalelbl">${esc(lbl)}</span>
-          <span class="scaleval">${active ? v + " · " + scaleBucket(v) : "off"}</span>
-          ${active ? `<button class="chip mini scaleclr" data-scaleclear="${id}" title="Clear">✕</button>` : ""}
-        </div>
-        <input type="range" min="0" max="100" step="1" value="${v}" data-scaleinput="${id}">
-      </div>`;
+    if (isScaleRead(id)) {                                            // computed from his logged hands, not a manual slider
+      const k = SCALE_STAT[id], r = k && ST[k + "|all"];
+      if (!r || !r[1]) return `<div class="scaleread statread"><span class="scalelbl">${esc(lbl)}</span><span class="scaleval">–</span></div>`;
+      const pc = Math.round((100 * r[0]) / r[1]);
+      return `<div class="scaleread statread on stk" data-stk="${k}|all"><span class="scalelbl">${esc(lbl)}</span><span class="scaleval"><b>${pc}%</b> · ${r[0]}/${r[1]}</span></div>`;
     }
     const base = bubble ? "bubble" : "chip mini";
     return `<button class="${base}${st ? " on " + STATE_CLASS[st] : ""}" data-tag="${id}">${esc(lbl)}</button>`;
@@ -4761,6 +4758,8 @@ function bindStatic() {
     renderOppDetail(curOppId);
   };
   $("od-tags").onclick = async (e) => {
+    const sk = e.target.closest("[data-stk]");
+    if (sk) { openStatSheet(sk); return; }
     const clr = e.target.closest("[data-scaleclear]");
     if (clr) {
       const o = oppById(curOppId);

@@ -82,6 +82,9 @@ function sdHandEvents(h, idx, put) {
       if (isAgg(f1.act)) {
         const t1 = mine("turn")[0];
         if (t1 && t1.aggBefore === 0) put("cbetT", colsAt(2), isAgg(t1.act));
+        const R = F.find((x) => x.i > f1.i && x.actor !== me && isAgg(x.act));      // his cbet got raised
+        const r = R && F.find((x) => x.actor === me && x.i > R.i);
+        if (r) put("fxr", cols, r.act === "fold");
       }
     }
     if (pfa && pfa !== me) {
@@ -107,6 +110,7 @@ function sdHandEvents(h, idx, put) {
   }
   for (const st of ["flop", "turn", "river"])
     for (const x of mine(st)) if (isAgg(x.act) || x.act === "call") put("afq", ["all"], isAgg(x.act));
+  for (const x of mine("river")) if (isAgg(x.act) || x.act === "call") put("afR", ["all"], isAgg(x.act));
 
   // ---- showdown: only hands that ran their course ----
   const liveEnd = parts.filter((p) => !(p in foldSt));
@@ -171,6 +175,7 @@ const SD_DEFS = [
 
 let sdStatT = {};                                // the tallies behind the stats now on screen
 let sdSzT = {};                                  // same for the sizing grid: "sz|flop-v|B50" → [n, n, handIds, []]
+const SD_EXTRA_ROWS = [["Fold to flop raise", "fxr"], ["River AF", "afR"]];
 const SD_COL_LBL = { all: "", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
 
 function statCell(r, k, c) {
@@ -187,7 +192,7 @@ function statProof(el) {
     const [st, kind] = c.split("-");
     return { r, sizing: true, label: `${st[0].toUpperCase() + st.slice(1)} ${kind === "v" ? "value" : "bluff"} · ${step} · ${r[0]} bet${r[0] === 1 ? "" : "s"}` };
   }
-  const name = [...SD_HUD, ...SD_PRE_ROWS, ...SD_POST_ROWS].find(([, kk]) => kk === k)?.[0] || k;
+  const name = [...SD_HUD, ...SD_PRE_ROWS, ...SD_POST_ROWS, ...SD_EXTRA_ROWS].find(([, kk]) => kk === k)?.[0] || k;
   const col = SD_COL_LBL[c] ?? c;
   return { r, label: `${name}${col ? " · " + col : ""} · ${r[0]}/${r[1]}` };
 }
