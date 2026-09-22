@@ -160,6 +160,7 @@ const SD_DEFS = [
 ];
 
 let sdStatT = {};                                // the tallies behind the stats now on screen
+let sdSzT = {};                                  // same for the sizing grid: "sz|flop-v|B50" → [n, n, handIds, []]
 const SD_COL_LBL = { all: "", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
 
 function statCell(r, k, c) {
@@ -169,9 +170,13 @@ function statCell(r, k, c) {
 
 /* Tap a stat → the hands behind it, split into "did it" and "had the chance, didn't". */
 function statProof(el) {
-  const key = el.dataset.stk, r = sdStatT[key];
+  const key = el.dataset.stk, r = sdStatT[key] || sdSzT[key];
   if (!r || !curOppId) return null;
-  const [k, c] = key.split("|");
+  const [k, c, step] = key.split("|");
+  if (k === "sz") {
+    const [st, kind] = c.split("-");
+    return { r, sizing: true, label: `${st[0].toUpperCase() + st.slice(1)} ${kind === "v" ? "value" : "bluff"} · ${step} · ${r[0]} bet${r[0] === 1 ? "" : "s"}` };
+  }
   const name = [...SD_HUD, ...SD_PRE_ROWS, ...SD_POST_ROWS].find(([, kk]) => kk === k)?.[0] || k;
   const col = SD_COL_LBL[c] ?? c;
   return { r, label: `${name}${col ? " · " + col : ""} · ${r[0]}/${r[1]}` };
@@ -179,7 +184,7 @@ function statProof(el) {
 function openStatSheet(el) {
   const p = statProof(el);
   if (!p) return;
-  openReadProof(p.label, "Newest first. Tap a hand to open it.", p.r[2], { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
+  openReadProof(p.label, "Newest first. Tap a hand to open it.", p.r[2], p.sizing ? null : { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
 }
 
 /* Desktop hover: a small popover with the hands that hit, showdowns first. Touch has no hover, so it taps into the sheet. */
@@ -198,7 +203,7 @@ function stPopShow(el) {
   stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>
     ${hit.length ? "" : `<div class="spn">Never did it, had the chance in:</div>`}
     ${show.map((h) => handRowHTML(h, curOppId)).join("")}
-    <div class="spn">${more > 0 ? `+${more} more · ` : ""}click for all, split by did / didn't</div>`;
+    <div class="spn">${more > 0 ? `+${more} more · ` : ""}click for all${p.sizing ? "" : ", split by did / didn't"}</div>`;
   stPop.classList.remove("hidden");
   const b = el.getBoundingClientRect(), w = stPop.offsetWidth, hgt = stPop.offsetHeight;
   const x = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2));
@@ -243,8 +248,10 @@ function renderStats(oppId, hands) {
 function bindStats() {
   const host = $("od-stats");
   if (matchMedia("(hover: hover)").matches) {
-    host.addEventListener("mouseover", (e) => { const c = e.target.closest("[data-stk]"); if (c) stPopShow(c); else stPopHide(); });
-    host.addEventListener("mouseleave", stPopHide);
+    for (const hh of [host, $("od-sizing")]) {
+      hh.addEventListener("mouseover", (e) => { const c = e.target.closest("[data-stk]"); if (c) stPopShow(c); else stPopHide(); });
+      hh.addEventListener("mouseleave", stPopHide);
+    }
     addEventListener("scroll", stPopHide, { passive: true });
   }
   host.onclick = (e) => {
@@ -319,7 +326,7 @@ function sdBetRatio(h, i) {
 }
 
 function sdSizingAuto(oppId, hands) {
-  const rows = {}, skipped = {}, why = {};
+  const rows = {}, ids = {}, skipped = {}, why = {};
   for (const [k] of SD_SZ_SKIPS) { skipped[k] = 0; why[k] = []; }
   let n = 0;
   for (const h of hands) {
@@ -349,16 +356,19 @@ function sdSizingAuto(oppId, hands) {
       const rid = a.street + "-" + k.toLowerCase();
       const cell = (rows[rid] = rows[rid] || {});
       cell[step] = (cell[step] || 0) + 1;
+      (ids[rid + "|" + step] ||= []).push(h.id);
       n++;
     }
   }
-  return { rows, n, skipped, why };
+  return { rows, ids, n, skipped, why };
 }
 
 function renderSizing(oppId, hands) {
   const host = $("od-sizing");
   if (!host) return;
   const A = sdSizingAuto(oppId, hands);
+  sdSzT = {};
+  stPopHide();
   const skips = SD_SZ_SKIPS.filter(([k]) => A.skipped[k]).map(([k, l]) => `${A.skipped[k]} bet${A.skipped[k] === 1 ? "" : "s"}: ${l}`);
   const cols = SD_SZ_STEPS.length;
   const headFor = (blankLast) => `<div class="strow sthead" style="--cols:${cols}"><div></div>${SD_SZ_STEPS.map((s) => `<div>${blankLast && s === "Jam" ? "" : s}</div>`).join("")}</div>`;
@@ -369,7 +379,12 @@ function renderSizing(oppId, hands) {
     return `<div class="strow" style="--cols:${cols}">${rowLbl(st, kind)}${SD_SZ_STEPS.map((x, i) => tail(st, kind, x, cell[x] || 0, top, i)).join("")}</div>`;
   }).join("")).join(`<div class="szgap"></div>`);
   const auto = grid((st, k) => A.rows[st + "-" + k.toLowerCase()] || {}, (st, k, x, c, top) =>
-    `<div class="stc${c ? "" : " none"}${c && c === top ? " szTop" : ""}">${c ? `<b>${c}</b>` : "–"}</div>`);
+  {
+    if (!c) return `<div class="stc none">–</div>`;
+    const key = "sz|" + st + "-" + k.toLowerCase() + "|" + x;
+    sdSzT[key] = [c, c, A.ids[key.slice(3)] || [], []];
+    return `<div class="stc stk${c === top ? " szTop" : ""}" data-stk="${key}"><b>${c}</b></div>`;
+  });
   /* Manual taps: the same grid, but every cell is a button that adds one. The
      seventh column has no Jam rung, so it holds the row's clear button. */
   const o = oppById(oppId), reads = o ? oppReads(o) : {};
@@ -394,6 +409,8 @@ function renderSizing(oppId, hands) {
 
 function bindSizing() {
   $("od-sizing").onclick = async (e) => {
+    const pc = e.target.closest("[data-stk]");
+    if (pc) { stPopHide(); openStatSheet(pc); return; }
     const clr = e.target.closest("[data-tallyclear]"), tap = e.target.closest("[data-tally]");
     if (!clr && !tap || !curOppId) return;
     const o = oppById(curOppId);
