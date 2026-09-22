@@ -990,3 +990,5 @@ textarea.noteedit { margin-bottom: 0; }
 [data-fold].folded > .cardpanel-head > :not(.ptitle) { display: none; }
 .ptypemini.set { width: auto; padding: 0 7px 0 5px; gap: 4px; }
 .ptypemini .ptypename { font-size: 11px; font-weight: 600; color: var(--player-color, var(--text)); white-space: nowrap; }
+
+#stpop .spsplit { font-size: 13px; font-weight: 600; color: var(--accent); margin: 2px 0 6px; font-variant-numeric: tabular-nums; }

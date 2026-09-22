@@ -188,8 +188,10 @@ function statProof(el) {
   if (!r || !curOppId) return null;
   const [k, c, step] = key.split("|");
   if (k === "sz") {
-    const [st, kind] = c.split("-"), rz = kind[0] === "r";
-    return { r, sizing: true, label: `${st[0].toUpperCase() + st.slice(1)} ${kind.slice(-1) === "v" ? "value" : "bluff"} ${rz ? "raise" : "bet"} · ${step} · ${r[0]} ${rz ? "raise" : "bet"}${r[0] === 1 ? "" : "s"}` };
+    const [st, kind] = c.split("-"), rz = kind[0] === "r", vb = kind.slice(-1) === "v" ? "value" : "bluff";
+    const split = r[4] && ["flop", "turn", "river"].map((x) => `${x[0].toUpperCase() + x.slice(1)} ${r[4][x] || 0}`).join(" · ");
+    const what = st === "all" ? vb[0].toUpperCase() + vb.slice(1) : `${st[0].toUpperCase() + st.slice(1)} ${vb}`;
+    return { r, sizing: true, split, label: `${what} ${rz ? "raise" : "bet"} · ${step} · ${r[0]} ${rz ? "raise" : "bet"}${r[0] === 1 ? "" : "s"}` };
   }
   const name = [...SD_HUD, ...SD_PRE_ROWS, ...SD_POST_ROWS, ...SD_EXTRA_ROWS].find(([, kk]) => kk === k)?.[0] || k;
   const col = SD_COL_LBL[c] ?? c;
@@ -198,7 +200,7 @@ function statProof(el) {
 function openStatSheet(el) {
   const p = statProof(el);
   if (!p) return;
-  openReadProof(p.label, "Showdowns first, then newest. Tap a hand to open it.", p.r[2], p.sizing ? null : { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
+  openReadProof(p.label + (p.split ? " (" + p.split + ")" : ""), "Showdowns first, then newest. Tap a hand to open it.", p.r[2], p.sizing ? null : { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
 }
 
 /* Hover: preflop stats show the hands on the range chart by his hole cards (only hands where
@@ -259,6 +261,7 @@ function stPopShow(el) {
   const show = (hit.length ? hit : miss).slice(0, 4);
   const more = hit.length + miss.length - show.length;
   stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>
+    ${p.split ? `<div class="spsplit">${esc(p.split)}</div>` : ""}
     ${R ? `<div class="spn">No hand here has his cards logged, so no range to show.</div>` : ""}
     ${hit.length ? "" : `<div class="spn">Never did it, had the chance in:</div>`}
     ${show.map((h) => handRowHTML(h, curOppId)).join("")}
@@ -353,26 +356,29 @@ function sdMadeClass(hole, board) {
   return m ? (m.value ? "V" : "B") : null;
 }
 
-const SD_SZ_STEPS = ["B25", "B33", "B50", "B66", "B100", "B150", "Jam"];
-const SD_SZ_CUTS = [[0.29, "B25"], [0.415, "B33"], [0.58, "B50"], [0.83, "B66"], [1.25, "B100"], [Infinity, "B150"]];
+const SD_SZ_STEPS = ["B33", "B50", "B66", "B75", "B100", "B150", "Jam"];
+const SD_SZ_CUTS = [[0.415, "B33"], [0.58, "B50"], [0.705, "B66"], [0.875, "B75"], [1.25, "B100"], [Infinity, "B150"]];
 const sdStepFor = (r) => SD_SZ_CUTS.find((c) => r < c[0])[1];
-const SD_RZ_STEPS = ["2.5x", "3x", "4x", "5x", "6x+", "Jam"];
-const SD_RZ_CUTS = [[2.75, "2.5x"], [3.5, "3x"], [4.5, "4x"], [5.5, "5x"], [Infinity, "6x+"]];
-const sdRzStepFor = (x) => SD_RZ_CUTS.find((c) => x < c[0])[1];
-/* A raise as a multiple of the bet it raised: raise-to ÷ bet-to on that street. → number | {skip} */
-function sdRaiseX(h, i) {
+/* A raise as a share of the pot: what he put in beyond calling ÷ the pot after his call
+   (so a pot-size raise is B100). → number | {skip} */
+function sdRaiseRatio(h, i) {
   const a = h.actions[i];
   if (!/^\$?\d+(\.\d+)?\s*k?$/i.test(String(a.size || "").trim())) return { skip: "noAmount" };
   for (let j = 0; j < i; j++) {
     const b = h.actions[j];
     if (AGG_ACTS.includes(b.act) && b.act !== "jam" && !SD_SZ_KNOWN.test(String(b.size || "").trim())) return { skip: "noPot" };
   }
-  const to = estimatePot(h, h.actions.slice(0, i + 1)).perAct;
-  let faced = 0;
-  for (let j = 0; j < i; j++) if (h.actions[j].street === a.street && AGG_ACTS.includes(h.actions[j].act)) faced = to[j] || faced;
-  if (!(faced > 0) || !(to[i] > 0)) return { skip: "noPot" };
-  const x = to[i] / faced;
-  return x > 1 && x <= 20 ? x : { skip: "badAmount" };
+  const pe = estimatePot(h, h.actions.slice(0, i)), to = estimatePot(h, h.actions.slice(0, i + 1)).perAct;
+  let faced = 0, own = 0;
+  for (let j = 0; j < i; j++) {
+    const b = h.actions[j];
+    if (b.street !== a.street) continue;
+    if (AGG_ACTS.includes(b.act)) faced = to[j] || faced;
+    if (b.actor === a.actor) own = to[j] || own;
+  }
+  if (!(faced > 0) || !(to[i] > faced) || !(pe.now > 0)) return { skip: faced > 0 ? "badAmount" : "noPot" };
+  const r = (to[i] - faced) / (pe.now + faced - own);
+  return r > 0 ? r : { skip: "badAmount" };
 }
 const SD_SZ_SKIPS = [
   ["noCards", "his cards or the board weren't logged"],
@@ -389,7 +395,7 @@ function sdBetRatio(h, i) {
   const a = h.actions[i];
   const t = String(a.size || "").trim();
   let m = /^(\d+(?:\.\d+)?)\s*%$/.exec(t);
-  if (m) { const p = parseFloat(m[1]) / 100; return p > 0 && p <= 3 ? p : { skip: "badAmount" }; }
+  if (m) { const p = parseFloat(m[1]) / 100; return p > 0 ? p : { skip: "badAmount" }; }
   m = /^\$?(\d+(?:\.\d+)?)\s*k?$/i.exec(t);
   if (!m) return { skip: "noAmount" };
   for (let j = 0; j < i; j++) {
@@ -402,7 +408,7 @@ function sdBetRatio(h, i) {
   for (let j = 0; j < i; j++) if (h.actions[j].street === a.street && h.actions[j].actor === a.actor) own = pre.perAct[j] || own;
   const inc = parseFloat(m[1]) - own;
   const r = inc / pre.now;
-  return r > 0 && r <= 3 ? r : { skip: "badAmount" };
+  return r > 0 ? r : { skip: "badAmount" };
 }
 
 function sdSizingAuto(oppId, hands) {
@@ -430,9 +436,9 @@ function sdSizingAuto(oppId, hands) {
       let step;
       if (a.act === "jam" || /^jam$/i.test(String(a.size || ""))) step = "Jam";
       else {
-        const r = raise ? sdRaiseX(h, i) : sdBetRatio(h, i);
+        const r = raise ? sdRaiseRatio(h, i) : sdBetRatio(h, i);
         if (typeof r !== "number") { miss(r.skip); continue; }
-        step = raise ? sdRzStepFor(r) : sdStepFor(r);
+        step = sdStepFor(r);
       }
       if (raise) nR++;
       const rid = a.street + "-" + (raise ? "r" : "") + k.toLowerCase();
@@ -452,25 +458,38 @@ function renderSizing(oppId, hands) {
   sdSzT = {};
   stPopHide();
   const skips = SD_SZ_SKIPS.filter(([k]) => A.skipped[k]).map(([k, l]) => `${A.skipped[k]} bet${A.skipped[k] === 1 ? "" : "s"}: ${l}`);
-  const grid = (steps, pre) => {
+  const STS = ["flop", "turn", "river"];
+  // streets: one row per street, or null = one row summing flop+turn+river (the split kept for hover / the sheet)
+  const grid = (steps, pre, streets) => {
     const cols = steps.length;
-    return `<div class="strow sthead" style="--cols:${cols}"><div></div>${steps.map((s) => `<div>${s}</div>`).join("")}</div>` + ["V", "B"].map((kind) => ["flop", "turn", "river"].map((st) => {
-      const rid = st + "-" + pre + kind.toLowerCase(), cell = A.rows[rid] || {};
+    const row = (kind, sts, lbl, rid) => {
+      const cell = {}, ids = {}, split = {};
+      for (const st of sts) for (const x of steps) {
+        const c = A.rows[st + "-" + pre + kind]?.[x] || 0;
+        if (!c) continue;
+        cell[x] = (cell[x] || 0) + c;
+        (split[x] ||= {})[st] = c;
+        (ids[x] ||= []).push(...(A.ids[st + "-" + pre + kind + "|" + x] || []));
+      }
       const top = Math.max(0, ...steps.map((x) => cell[x] || 0));
-      return `<div class="strow" style="--cols:${cols}"><div class="stlbl">${st[0].toUpperCase() + st.slice(1)} ${kind === "V" ? "Value" : "Bluff"}</div>${steps.map((x) => {
+      return `<div class="strow" style="--cols:${cols}"><div class="stlbl">${lbl}</div>${steps.map((x) => {
         const c = cell[x] || 0;
         if (!c) return `<div class="stc none">–</div>`;
         const key = "sz|" + rid + "|" + x;
-        sdSzT[key] = [c, c, A.ids[rid + "|" + x] || [], []];
+        sdSzT[key] = [c, c, [...new Set(ids[x])], [], streets ? null : split[x]];
         return `<div class="stc stk${c === top ? " szTop" : ""}" data-stk="${key}"><b>${c}</b></div>`;
       }).join("")}</div>`;
-    }).join("")).join(`<div class="szgap"></div>`);
+    };
+    const K = (k) => (k === "v" ? "Value" : "Bluff");
+    return `<div class="strow sthead" style="--cols:${cols}"><div></div>${steps.map((s) => `<div>${s}</div>`).join("")}</div>` + ["v", "b"].map((k) => streets
+      ? STS.map((st) => row(k, [st], `${st[0].toUpperCase() + st.slice(1)} ${K(k)}`, st + "-" + pre + k)).join("")
+      : row(k, STS, `${K(k)} <span class="muted">F+T+R</span>`, "all-" + pre + k)).join(streets ? `<div class="szgap"></div>` : "");
   };
   host.innerHTML = `
     <div class="szsub">Bets · % of pot${A.n ? ` · ${A.n} bet${A.n === 1 ? "" : "s"}` : ""}</div>
-    <div class="sttable">${grid(SD_SZ_STEPS, "")}</div>
-    <div class="szsub">Raises · × the bet he raised${A.nR ? ` · ${A.nR} raise${A.nR === 1 ? "" : "s"}` : ""}</div>
-    <div class="sttable">${grid(SD_RZ_STEPS, "r")}</div>
+    <div class="sttable">${grid(SD_SZ_STEPS, "", true)}</div>
+    <div class="szsub">Raises · % of pot after calling${A.nR ? ` · ${A.nR} raise${A.nR === 1 ? "" : "s"}` : ""}</div>
+    <div class="sttable">${grid(SD_SZ_STEPS, "r", false)}</div>
     <div class="stnote">From hands where his cards were logged, so bluffs he never showed aren't here — read the Bluff rows as a floor. Value = trips+ with his own cards, an overpair, or two pair with both his cards. On a flush board (3+ of a suit) or a four-to-a-straight board only trips+ is value, and on a paired board two pair isn't. Everything else, draws and top pair included, counts as a bluff.${
       skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>`;
 }

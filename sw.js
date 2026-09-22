@@ -1,5 +1,5 @@
 /* Service worker: cache the app shell so it runs offline once installed. */
-const CACHE = "shortdeck-v58";
+const CACHE = "shortdeck-v59";
 const PREFIX = "shortdeck-";   // other apps share this origin on GitHub Pages
 const ASSETS = [
   ".", "index.html", "style.css", "app.js", "stats.js", "db.js", "vocab.js", "pinyin.js",
