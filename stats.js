@@ -357,7 +357,7 @@ function sdMadeClass(hole, board) {
 }
 
 const SD_SZ_STEPS = ["B33", "B50", "B66", "B75", "B100", "B150", "Jam"];
-const SD_SZ_CUTS = [[0.415, "B33"], [0.58, "B50"], [0.705, "B66"], [0.875, "B75"], [1.25, "B100"], [Infinity, "B150"]];
+const SD_SZ_CUTS = [[0.415, "B33"], [0.58, "B50"], [0.705, "B66"], [0.875, "B75"], [1.25, "B100"], [1.6, "B150"], [Infinity, "Jam"]]   // bigger than B150 counts as a jam; a logged jam is Jam at any size;
 const sdStepFor = (r) => SD_SZ_CUTS.find((c) => r < c[0])[1];
 /* A raise as a share of the pot: what he put in beyond calling ÷ the pot after his call
    (so a pot-size raise is B100). → number | {skip} */
