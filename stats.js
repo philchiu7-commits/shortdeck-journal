@@ -89,6 +89,11 @@ function sdHandEvents(h, idx, put) {
       if (A && A.actor === pfa) {                                    // the first flop bet was the raiser's: a cbet
         const r = F.find((x) => x.actor === me && x.i > A.i);
         if (r) { put("fcb", cols, r.act === "fold"); put("ccb", cols, r.act === "call"); put("rcb", cols, isAgg(r.act)); }
+        if (r && r.act === "call") {                                 // called the flop cbet: his answer to the raiser's turn barrel
+          const T = seq.turn, B = T.find((x) => isAgg(x.act));
+          const r2 = B && B.actor === pfa && T.find((x) => x.actor === me && x.i > B.i);
+          if (r2) put("fcbT", colsAt(2), r2.act === "fold");
+        }
       }
       const fp = F.find((x) => x.actor === pfa);
       if (fp && f1.i < fp.i && f1.aggBefore === 0) put("donk", cols, isAgg(f1.act));
@@ -138,16 +143,16 @@ function sdStats(oppId, hands) {
 /* ---------- rendering ---------- */
 
 let statsTab = "pre";
-const SD_HUD = [["VPIP", "vpip"], ["Iso", "iso"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Limp-call", "limpCall"],
-  ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
+const SD_HUD = [["VPIP", "vpip"], ["Iso", "iso"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Limp-call", "limpCall"],
+  ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
-const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
+const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Fold to turn cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
   ["VPIP", "VPIP: put chips in at any point preflop, out of the hands where he acted preflop."],
   ["Limp", "First action was a limp, out of hands where no raise was out before he acted."],
   ["CC", "Cold call: his first action was calling a raise, out of hands where a raise was out first."],
-  ["Open · Min open", "First raise when nobody had limped or raised, out of hands where he was first in. A min-open is a raise of at most 2× the ante; those are counted only in Min open, never in Open."],
+  ["Min open", "First in (nobody had limped or raised) with a raise of at most 2× the ante, out of hands where he was first in."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet."],
   ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged)."],
@@ -155,6 +160,7 @@ const SD_DEFS = [
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
   ["Cbet turn", "Bet the turn after cbetting the flop, out of turns where he acted first."],
   ["Fold / Call / Raise vs cbet", "His first answer to a flop bet from the preflop raiser (Raise flop = the raise)."],
+  ["Fold to turn cbet", "He called the raiser's flop cbet, then the raiser bet the turn too: folded, out of those turn barrels he faced."],
   ["Raise turn / river", "His first action facing someone else's single bet on that street: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
   ["Check-raise", "Checked the flop, faced a bet, raised."],
   ["Donk lead", "Bet the flop into the preflop raiser before they acted."],

@@ -1739,7 +1739,7 @@ function oppRowHTML(o, st) {
   // Tap the badge — filled with the type icon when set, empty circle otherwise
   // — to open a bottom-sheet picker without leaving the opponent list.
   const typePill = type
-    ? `<button class="ptypemini set" data-ptype-open="${o.id}" title="${esc(type.label)} — tap to change">${type.icon}</button>`
+    ? `<button class="ptypemini set" data-ptype-open="${o.id}" title="${esc(type.label)} — tap to change">${type.icon}<span class="ptypename">${esc(type.label)}</span></button>`
     : `<button class="ptypemini empty" data-ptype-open="${o.id}" title="Set player type">◦</button>`;
   return `<div class="lrow opprow${typeCls}${oppEditMode ? " editing" : ""}" data-opp="${o.id}"${typeStyle}>
     ${handle}

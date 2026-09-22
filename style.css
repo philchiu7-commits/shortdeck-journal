@@ -934,10 +934,11 @@ textarea.noteedit { margin-bottom: 0; }
 .rdhead .rdn { margin-left: auto; font-variant-numeric: tabular-nums; }
 
 /* Stats — HUD chips + per-seat / postflop tables */
-.sthud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
-.stchip { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 2px 4px; text-align: center; min-width: 0; }
+.sthud { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin-bottom: 10px; }
+@media (max-width: 420px) { .sthud { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.stchip { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 1px 2px; text-align: center; min-width: 0; }
 .stchip label { display: block; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stchip b { display: block; font-size: 17px; line-height: 1.2; }
+.stchip b { display: block; font-size: 14px; line-height: 1.15; }
 .stchip i, .stc i { display: block; font-style: normal; font-size: 9px; color: var(--muted); }
 .stchip.thin b, .stc.thin b { opacity: .5; }
 .sttabs { margin-bottom: 8px; }
@@ -985,3 +986,5 @@ textarea.noteedit { margin-bottom: 0; }
 [data-fold].folded > :not(.cardpanel-head) { display: none !important; }
 [data-fold].folded > .cardpanel-head { margin-bottom: 0; }
 [data-fold].folded > .cardpanel-head > :not(.ptitle) { display: none; }
+.ptypemini.set { width: auto; padding: 0 7px 0 5px; gap: 4px; }
+.ptypemini .ptypename { font-size: 11px; font-weight: 600; color: var(--player-color, var(--text)); white-space: nowrap; }
