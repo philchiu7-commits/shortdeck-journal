@@ -969,9 +969,14 @@ textarea.noteedit { margin-bottom: 0; }
 
 .stk { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .stk:hover { outline: 1px solid var(--accent); }
-#stpop { position: fixed; z-index: 60; width: min(360px, calc(100vw - 16px)); max-height: 60vh; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.5); padding: 6px 4px; pointer-events: none; }
+#stpop { position: fixed; z-index: 60; width: min(360px, calc(100vw - 16px)); max-height: 85vh; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.5); padding: 6px 4px; pointer-events: none; }
 #stpop.hidden { display: none; }
 #stpop .sph { padding: 2px 8px 4px; font-size: 12px; }
 #stpop .spn { padding: 2px 8px; font-size: 11px; color: var(--muted); }
 .hh-fold { font-size: 10px; color: var(--muted); }
 .rgsec { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 4px 4px; }
+.sthov { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+#stpop .spgrid { width: 100%; aspect-ratio: 1 / 1; padding: 2px 6px; box-sizing: border-box; }
+#stpop .spgrid .rgcell { font-size: 10px; }
+#stpop .spkey { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 8px 2px; font-size: 11px; color: var(--muted); }
+#stpop .spkey .rgswatch { vertical-align: -2px; }

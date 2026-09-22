@@ -188,7 +188,46 @@ function statProof(el) {
 function openStatSheet(el) {
   const p = statProof(el);
   if (!p) return;
-  openReadProof(p.label, "Newest first. Tap a hand to open it.", p.r[2], p.sizing ? null : { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
+  openReadProof(p.label, "Showdowns first, then newest. Tap a hand to open it.", p.r[2], p.sizing ? null : { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
+}
+
+/* Hover mode, picked at the top of Stats: "hands" lists the hands, "range" shows them on the
+   range chart by his hole cards (only hands where his cards were logged can go on it). */
+let sdHov = (() => { try { return localStorage.getItem("sd-hov") === "range" ? "range" : "hands"; } catch (e) { return "hands"; } })();
+const SD_HOV_C = { did: "#4fbf5a", didnt: "#5a6068" };
+function sdRangeMini(p) {
+  const byId = new Map(HANDS.map((h) => [h.id, h]));
+  const ev = {};
+  let known = 0, total = 0;
+  const add = (ids, act) => {
+    for (const id of new Set(ids || [])) {
+      const h = byId.get(id);
+      if (!h) continue;
+      total++;
+      const v = (h.villains || []).find((x) => x.opponentId === curOppId);
+      const hc = v && handClass(v.cards);
+      if (!hc) continue;
+      known++;
+      ((ev[hc] ||= {})[act] = (ev[hc][act] || 0) + 1);
+    }
+  };
+  add(p.r[2], "did");
+  if (!p.sizing) add(p.r[3], "didnt");
+  if (!known) return { known, total, html: "" };
+  const cells = [];
+  for (let i = 0; i < RANKS.length; i++) for (let j = 0; j < RANKS.length; j++) {
+    const hi = RANKS[i], lo = RANKS[j];
+    const cls = i === j ? hi + hi : (i < j ? hi + lo + "s" : lo + hi + "o");
+    const e = ev[cls];
+    const acts = e ? ["did", "didnt"].filter((a) => e[a]) : [];
+    const bg = !acts.length ? "background:#1a1d23;color:#6b7078;"
+      : `background:${acts.length > 1 ? `linear-gradient(90deg,${SD_HOV_C.did} 0 50%,${SD_HOV_C.didnt} 50% 100%)` : SD_HOV_C[acts[0]]};color:#fff;text-shadow:0 0 2px rgba(0,0,0,.6);`;
+    const n = e ? (e.did || 0) + (e.didnt || 0) : 0;
+    cells.push(`<div class="rgcell" style="${bg}">${cls}${n ? `<span class="rgn">${n}</span>` : ""}</div>`);
+  }
+  const key = `<div class="spkey"><span><span class="rgswatch" style="background:${SD_HOV_C.did}"></span> ${p.sizing ? "Bet it" : "Did it"}</span>${
+    p.sizing ? "" : `<span><span class="rgswatch" style="background:${SD_HOV_C.didnt}"></span> Had the chance, didn't</span>`}</div>`;
+  return { known, total, html: `<div class="rggrid spgrid">${cells.join("")}</div>${key}` };
 }
 
 /* Desktop hover: a small popover with the hands that hit, showdowns first. Touch has no hover, so it taps into the sheet. */
@@ -197,17 +236,26 @@ function stPopHide() { if (stPop) stPop.classList.add("hidden"); }
 function stPopShow(el) {
   const p = statProof(el);
   if (!p) return;
+  if (!stPop) { stPop = document.createElement("div"); stPop.id = "stpop"; document.body.appendChild(stPop); }
+  const R = sdHov === "range" ? sdRangeMini(p) : null;
+  if (R && R.known) {
+    stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>${R.html}
+      <div class="spn">${R.known < R.total ? `${R.known} of ${R.total} hands had his cards · ` : ""}click for the hands</div>`;
+    return stPopPlace(el);
+  }
   const byId = new Map(HANDS.map((h) => [h.id, h]));
-  const sd = (h) => handWinner(h)?.how === "showdown" ? 1 : 0;      // hands that went to showdown lead, newest first within each group
-  const pick = (l) => [...new Set(l)].map((x) => byId.get(x)).filter(Boolean).sort((a, b) => sd(b) - sd(a) || b.ts - a.ts);
+  const pick = (l) => [...new Set(l)].map((x) => byId.get(x)).filter(Boolean).sort(showdownFirst(curOppId));
   const hit = pick(p.r[2]), miss = pick(p.r[3]);
   const show = (hit.length ? hit : miss).slice(0, 4);
   const more = hit.length + miss.length - show.length;
-  if (!stPop) { stPop = document.createElement("div"); stPop.id = "stpop"; document.body.appendChild(stPop); }
   stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>
+    ${R ? `<div class="spn">No hand here has his cards logged, so no range to show.</div>` : ""}
     ${hit.length ? "" : `<div class="spn">Never did it, had the chance in:</div>`}
     ${show.map((h) => handRowHTML(h, curOppId)).join("")}
     <div class="spn">${more > 0 ? `+${more} more · ` : ""}click for all${p.sizing ? "" : ", split by did / didn't"}</div>`;
+  stPopPlace(el);
+}
+function stPopPlace(el) {
   stPop.classList.remove("hidden");
   const b = el.getBoundingClientRect(), w = stPop.offsetWidth, hgt = stPop.offsetHeight;
   const x = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2));
@@ -239,6 +287,10 @@ function renderStats(oppId, hands) {
     ? table(SD_PRE_ROWS, seats.map((s) => [s, s === "all" ? "All" : s]))
     : table(SD_POST_ROWS, SD_POST_COLS);
   host.innerHTML = `
+    <div class="sthov">Hover shows
+      <button class="chip mini${sdHov === "hands" ? " on" : ""}" data-sthov="hands">Hands</button>
+      <button class="chip mini${sdHov === "range" ? " on" : ""}" data-sthov="range">Range chart</button>
+    </div>
     <div class="sthud">${hud}</div>
     <div class="chiprow tight sttabs">
       <button class="chip mini${statsTab === "pre" ? " on" : ""}" data-sttab="pre">Preflop by seat</button>
@@ -261,6 +313,13 @@ function bindStats() {
   host.onclick = (e) => {
     const c = e.target.closest("[data-stk]");
     if (c) { stPopHide(); openStatSheet(c); return; }
+    const hv = e.target.closest("[data-sthov]");
+    if (hv) {
+      sdHov = hv.dataset.sthov;
+      try { localStorage.setItem("sd-hov", sdHov); } catch (err) {}
+      for (const x of host.querySelectorAll("[data-sthov]")) x.classList.toggle("on", x === hv);
+      return;
+    }
     const b = e.target.closest("[data-sttab]");
     if (!b || !curOppId) return;
     statsTab = b.dataset.sttab;
@@ -389,45 +448,16 @@ function renderSizing(oppId, hands) {
     sdSzT[key] = [c, c, A.ids[key.slice(3)] || [], []];
     return `<div class="stc stk${c === top ? " szTop" : ""}" data-stk="${key}"><b>${c}</b></div>`;
   });
-  /* Manual taps: the same grid, but every cell is a button that adds one. The
-     seventh column has no Jam rung, so it holds the row's clear button. */
-  const o = oppById(oppId), reads = o ? oppReads(o) : {};
-  const tapId = (st, k) => `size-${st}-${k.toLowerCase()}`;
-  let tapped = 0;
-  const manual = grid((st, k) => reads[tapId(st, k)] || {}, (st, k, x, c, top, i) => {
-    const id = tapId(st, k);
-    if (x === "Jam") return (reads[id] && tallyLeader(reads[id]))
-      ? `<button class="stc szClr" data-tallyclear="${id}" title="Clear this row" aria-label="Clear this row">✕</button>` : `<div></div>`;
-    tapped += c;
-    return `<button class="stc szTap${c ? "" : " none"}${c && c === top ? " szTop" : ""}" data-tally="${id}" data-val="${x}" aria-label="${x}">${c ? `<b>${c}</b>` : "+"}</button>`;
-  }, true);
   host.innerHTML = `
     <div class="szsub">From hands${A.n ? ` · ${A.n} bet${A.n === 1 ? "" : "s"}` : ""}</div>
     <div class="sttable">${auto}</div>
     <div class="stnote">From hands where his cards were logged, so bluffs he never showed aren't here — read the Bluff rows as a floor. Value = trips+ with his own cards, an overpair, or two pair with both his cards. On a flush board (3+ of a suit) or a four-to-a-straight board only trips+ is value, and on a paired board two pair isn't. Everything else, draws and top pair included, counts as a bluff.${
-      skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>
-    <div class="szsub">Your taps${tapped ? ` · ${tapped}` : ""}</div>
-    <div class="sttable">${manual}</div>
-    <div class="stnote">Tap a size when you see him bet it as value or as a bluff.</div>`;
+      skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>`;
 }
 
 function bindSizing() {
-  $("od-sizing").onclick = async (e) => {
+  $("od-sizing").onclick = (e) => {
     const pc = e.target.closest("[data-stk]");
-    if (pc) { stPopHide(); openStatSheet(pc); return; }
-    const clr = e.target.closest("[data-tallyclear]"), tap = e.target.closest("[data-tally]");
-    if (!clr && !tap || !curOppId) return;
-    const o = oppById(curOppId);
-    if (!o) return;
-    const reads = oppReads(o);
-    if (clr) delete reads[clr.dataset.tallyclear];
-    else {
-      const id = tap.dataset.tally, v = tap.dataset.val;
-      const counts = reads[id] && typeof reads[id] === "object" ? reads[id] : (reads[id] = {});
-      counts[v] = (counts[v] || 0) + 1;
-    }
-    o.updatedAt = Date.now();
-    await dbPut("opponents", o);
-    renderOppDetail(curOppId);
+    if (pc) { stPopHide(); openStatSheet(pc); }
   };
 }

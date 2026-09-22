@@ -720,9 +720,19 @@ function exploitSignals(facts) {
 /* Sheet: the hands behind one read — the hands he did it in, and the hands that
    offered the same chance and went another way. N hands is a claim; N of M is
    what decides whether the read is true. Rows open the hand. */
+/* Hand-list order: hands that went to showdown, then ones where this opponent's
+   cards are known (shown / mucked face up), then the rest — newest first in each. */
+function showdownFirst(oppId) {
+  const rank = (h) => {
+    if (handWinner(h)?.how === "showdown") return 2;
+    const v = (h.villains || []).find((x) => x.opponentId === oppId);
+    return v && (v.cards || []).filter(Boolean).length === 2 ? 1 : 0;
+  };
+  return (a, b) => rank(b) - rank(a) || b.ts - a.ts;
+}
 function openReadProof(label, sub, ids, other, oppId) {
   const byId = new Map(HANDS.map((h) => [h.id, h]));
-  const pick = (l) => [...new Set(l || [])].map((x) => byId.get(x)).filter(Boolean).sort((a, b) => b.ts - a.ts);
+  const pick = (l) => [...new Set(l || [])].map((x) => byId.get(x)).filter(Boolean).sort(showdownFirst(oppId));
   const hit = pick(ids), miss = pick(other && other.ids);
   if (!hit.length && !miss.length) return;
   const block = (t, l) => l.length
@@ -1137,17 +1147,18 @@ const rangeBucketOf = (pos) => RANGE_BUCKETS.includes(pos) ? pos : /^U\d$/.test(
 const RANGE_SITS = [
   { id: "open",    label: "First in", acts: [["limp", "Limp"], ["raise", "Raise"], ["fold", "Fold"]] },
   { id: "vslimp",  label: "vs limp",  acts: [["limp", "Over-limp"], ["raise", "Iso"], ["fold", "Fold"]] },
-  { id: "vsraise", label: "vs raise", acts: [["call", "Call"], ["3bet", "3bet"], ["fold", "Fold"]] },
+  { id: "vsraise", label: "vs raise", acts: [["call", "Call"], ["3bet", "3bet"], ["lrr", "Limp-reraise"], ["fold", "Fold"]] },
 ];
 const RANGE_SIT_BY_ID = Object.fromEntries(RANGE_SITS.map((s) => [s.id, s]));
-const ACT_COLORS = { raise: "#d64848", "3bet": "#a02828", call: "#6bbf6b", limp: "#e5c04a", fold: "#7c8794" };
+const ACT_COLORS = { raise: "#d64848", "3bet": "#a02828", lrr: "#b36ad6", call: "#6bbf6b", limp: "#e5c04a", fold: "#7c8794" };
 const RAISE_ACTS = new Set(["raise", "3bet", "4bet", "5bet", "jam", "bet"]);
 let rangeBucket = "BN", rangeSit = "open";
 /* Showdown evidence: hands where this villain showed cards, keyed
    bucket → situation → class → [{act, id}]. Situation = what happened before
    the villain's FIRST preflop action: a raise → vsraise, a limp → vslimp,
    nothing → open. The villain's own first action is normalised to the
-   situation's vocabulary (any raise after a raise = 3bet; BN check = limp). */
+   situation's vocabulary (any raise after a raise = 3bet; BN check = limp).
+   A limp that then faces a raise also files his answer under vsraise (reraise = lrr). */
 function rangeEvidence(oppId, hands) {
   const ev = {};
   for (const h of (hands || HANDS)) {
@@ -1169,10 +1180,18 @@ function rangeEvidence(oppId, hands) {
     else if (act === "check" || (act === "call" && !raised)) act = "limp";
     else if (act !== "call" && act !== "limp" && act !== "fold") continue;
     (((ev[bucket] ||= {})[sit] ||= {})[hc] ||= []).push({ act, id: h.id });
+    // limped, then a raise came in behind: his answer goes in "vs raise" too, a reraise as limp-reraise
+    if (act === "limp") {
+      const j = pre.findIndex((a, k) => k > i && a.actor === me);
+      if (j > 0 && pre.slice(i + 1, j).some((a) => RAISE_ACTS.has(a.act))) {
+        const a2 = RAISE_ACTS.has(pre[j].act) ? "lrr" : pre[j].act;
+        if (a2 === "lrr" || a2 === "call" || a2 === "fold") ((ev[bucket].vsraise ||= {})[hc] ||= []).push({ act: a2, id: h.id });
+      }
+    }
   }
   return ev;
 }
-const RG_LBL = { raise: "Raise", "3bet": "3bet", call: "Call", limp: "Limp", fold: "Fold" };
+const RG_LBL = { raise: "Raise", "3bet": "3bet", lrr: "Limp-reraise", call: "Call", limp: "Limp", fold: "Fold" };
 /* Distinct actions seen for a class, most common first; an old painted action leads. */
 function evidenceActs(ev, painted) {
   const n = {};
@@ -1508,7 +1527,7 @@ function openRangeCellSheet(oppId, hc) {
   const byId = new Map(HANDS.map((h) => [h.id, h]));
   const acts = evidenceActs(ev).filter((a) => ev.some((e) => e.act === a));
   const sect = (a) => {
-    const hs = [...new Set(ev.filter((e) => e.act === a).map((e) => e.id))].map((id) => byId.get(id)).filter(Boolean).sort((x, y) => y.ts - x.ts);
+    const hs = [...new Set(ev.filter((e) => e.act === a).map((e) => e.id))].map((id) => byId.get(id)).filter(Boolean).sort(showdownFirst(oppId));
     return `<div class="rgsec"><span class="rgswatch" style="background:${ACT_COLORS[a]}"></span> ${esc(RG_LBL[a] || a)} · ${hs.length}</div>${hs.map((h) => handRowHTML(h, oppId)).join("")}`;
   };
   const rows = acts.map(sect).join("")
