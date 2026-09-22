@@ -52,7 +52,7 @@ function sdHandEvents(h, idx, put) {
     }
     if (f.act === "limp") {
       const r = pre.slice(1).find((x) => x.aggBefore > 0);          // his answer to a raise behind his limp
-      if (r) { put("limpRR", pc, isAgg(r.act)); put("limpFold", pc, r.act === "fold"); put("limpCall", pc, r.act === "call"); }
+      if (r) { put("limpRR", pc, isAgg(r.act)); put("limpFold", pc, r.act === "fold"); }
     }
     if (f.aggBefore === 0 && isAgg(f.act)) {
       const r = pre.slice(1).find((x) => x.aggBefore >= 2);         // his answer to a 3bet over his raise
@@ -136,7 +136,7 @@ function sdStats(oppId, hands) {
 let statsTab = "pre";
 const SD_HUD = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Iso", "iso"], ["Limp-fold", "limpFold"],
   ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
-const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-fold", "limpFold"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
+const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-fold", "limpFold"], ["Iso", "iso"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
@@ -146,7 +146,7 @@ const SD_DEFS = [
   ["Open · Min open", "First raise when nobody had limped or raised, out of hands where he was first in. A min-open is a raise of at most 2× the ante; those are counted only in Min open, never in Open (PFR counts both)."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet."],
-  ["LRR · Limp-fold · Limp-call", "After he limped and a raise came behind: re-raised / folded / called, out of limps that faced a raise (his answer must be logged)."],
+  ["LRR · Limp-fold", "After he limped and a raise came behind: re-raised / folded, out of limps that faced a raise (his answer must be logged)."],
   ["Fold 3bet", "After he raised first and got 3bet: folded."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
   ["Cbet turn", "Bet the turn after cbetting the flop, out of turns where he acted first."],
