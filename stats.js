@@ -191,9 +191,9 @@ function openStatSheet(el) {
   openReadProof(p.label, "Showdowns first, then newest. Tap a hand to open it.", p.r[2], p.sizing ? null : { ids: p.r[3], yes: "Did it", no: "Had the chance, didn't" }, curOppId);
 }
 
-/* Hover mode, picked at the top of Stats: "hands" lists the hands, "range" shows them on the
-   range chart by his hole cards (only hands where his cards were logged can go on it). */
-let sdHov = (() => { try { return localStorage.getItem("sd-hov") === "range" ? "range" : "hands"; } catch (e) { return "hands"; } })();
+/* Hover: preflop stats show the hands on the range chart by his hole cards (only hands where
+   his cards were logged can go on it); postflop stats and sizings list the hands. */
+const SD_PRE_KEYS = new Set(["vpip", "iso", "open", "minOpen", "limp", "cc", "3bet", "min3bet", "f3bet", "limpRR", "limpCall", "limpFold"]);
 const SD_HOV_C = { did: "#4fbf5a", didnt: "#5a6068" };
 function sdRangeMini(p) {
   const byId = new Map(HANDS.map((h) => [h.id, h]));
@@ -237,7 +237,7 @@ function stPopShow(el) {
   const p = statProof(el);
   if (!p) return;
   if (!stPop) { stPop = document.createElement("div"); stPop.id = "stpop"; document.body.appendChild(stPop); }
-  const R = sdHov === "range" ? sdRangeMini(p) : null;
+  const R = SD_PRE_KEYS.has(el.dataset.stk.split("|")[0]) ? sdRangeMini(p) : null;
   if (R && R.known) {
     stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>${R.html}
       <div class="spn">${R.known < R.total ? `${R.known} of ${R.total} hands had his cards · ` : ""}click for the hands</div>`;
@@ -287,10 +287,6 @@ function renderStats(oppId, hands) {
     ? table(SD_PRE_ROWS, seats.map((s) => [s, s === "all" ? "All" : s]))
     : table(SD_POST_ROWS, SD_POST_COLS);
   host.innerHTML = `
-    <div class="sthov">Hover shows
-      <button class="chip mini${sdHov === "hands" ? " on" : ""}" data-sthov="hands">Hands</button>
-      <button class="chip mini${sdHov === "range" ? " on" : ""}" data-sthov="range">Range chart</button>
-    </div>
     <div class="sthud">${hud}</div>
     <div class="chiprow tight sttabs">
       <button class="chip mini${statsTab === "pre" ? " on" : ""}" data-sttab="pre">Preflop by seat</button>
@@ -313,13 +309,6 @@ function bindStats() {
   host.onclick = (e) => {
     const c = e.target.closest("[data-stk]");
     if (c) { stPopHide(); openStatSheet(c); return; }
-    const hv = e.target.closest("[data-sthov]");
-    if (hv) {
-      sdHov = hv.dataset.sthov;
-      try { localStorage.setItem("sd-hov", sdHov); } catch (err) {}
-      for (const x of host.querySelectorAll("[data-sthov]")) x.classList.toggle("on", x === hv);
-      return;
-    }
     const b = e.target.closest("[data-sttab]");
     if (!b || !curOppId) return;
     statsTab = b.dataset.sttab;

@@ -975,7 +975,6 @@ textarea.noteedit { margin-bottom: 0; }
 #stpop .spn { padding: 2px 8px; font-size: 11px; color: var(--muted); }
 .hh-fold { font-size: 10px; color: var(--muted); }
 .rgsec { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 4px 4px; }
-.sthov { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
 #stpop .spgrid { width: 100%; aspect-ratio: 1 / 1; padding: 2px 6px; box-sizing: border-box; }
 #stpop .spgrid .rgcell { font-size: 10px; }
 #stpop .spkey { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 8px 2px; font-size: 11px; color: var(--muted); }
