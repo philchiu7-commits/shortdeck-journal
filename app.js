@@ -372,6 +372,8 @@ const mdAir = (m) => !!m && !m.ownPair;                // no pair of his own: th
 const fMade = (f, st) => f.md[st];
 const fBluffed = (f, st) => mdBluff(f.md[st]);
 const fValue = (f, st) => mdValue(f.md[st]);
+/* Raised that street with a hand that isn't a bluff (value, or cards unknown): not evidence of bluff-raising either way. */
+const fRaisedValue = (f, st) => fDid(f, st, "raise", "jam") && !fBluffed(f, st);
 /* The street he actually put money in on, latest first — the hand's own verdict. */
 const fBetSt = (f) => STREETS3.filter((st) => fFired(f, st) && f.md[st]).pop() || null;
 const fBetMade = (f) => { const st = fBetSt(f); return st ? f.md[st] : null; };
@@ -424,16 +426,16 @@ const READ_EVIDENCE = [
     chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "call") },
   { id: "station-r", state: "yes", th: 5, yes: "Called the river", no: "Faced a river bet, didn't call",
     chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
-  { id: "bluff-raise-f", state: "yes", th: 4, yes: "Raised a flop bet", no: "Faced a flop bet, didn't raise",
-    chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "raise", "jam") },
-  { id: "bluff-raise-t", state: "yes", th: 3, yes: "Raised a turn bet", no: "Faced a turn bet, didn't raise",
-    chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "raise", "jam") },
-  { id: "bluff-raise-r", state: "yes", th: 3, yes: "Raised a river bet", no: "Faced a river bet, didn't raise",
-    chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "raise", "jam") },
-  { id: "br-fdsd", yes: "Raised a flop bet", no: "Faced a flop bet, didn't raise",
-    chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "raise", "jam") },
-  { id: "br-worst", yes: "Raised a flop bet", no: "Faced a flop bet, didn't raise",
-    chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "raise", "jam") },
+  { id: "bluff-raise-f", state: "yes", th: 4, yes: "Bluff-raised a flop bet", no: "Faced a flop bet, didn't bluff-raise",
+    chance: (f) => f.faced.flop && !fRaisedValue(f, "flop"), did: (f) => fDid(f, "flop", "raise", "jam") && fBluffed(f, "flop") },
+  { id: "bluff-raise-t", state: "yes", th: 3, yes: "Bluff-raised a turn bet", no: "Faced a turn bet, didn't bluff-raise",
+    chance: (f) => f.faced.turn && !fRaisedValue(f, "turn"), did: (f) => fDid(f, "turn", "raise", "jam") && fBluffed(f, "turn") },
+  { id: "bluff-raise-r", state: "yes", th: 3, yes: "Bluff-raised a river bet", no: "Faced a river bet, didn't bluff-raise",
+    chance: (f) => f.faced.river && !fRaisedValue(f, "river"), did: (f) => fDid(f, "river", "raise", "jam") && fBluffed(f, "river") },
+  { id: "br-fdsd", yes: "Bluff-raised a flop bet", no: "Faced a flop bet, didn't bluff-raise",
+    chance: (f) => f.faced.flop && !fRaisedValue(f, "flop"), did: (f) => fDid(f, "flop", "raise", "jam") && fBluffed(f, "flop") },
+  { id: "br-worst", yes: "Bluff-raised a flop bet", no: "Faced a flop bet, didn't bluff-raise",
+    chance: (f) => f.faced.flop && !fRaisedValue(f, "flop"), did: (f) => fDid(f, "flop", "raise", "jam") && fBluffed(f, "flop") },
   { id: "call-nut-ip-f", yes: "Called the flop", no: "Faced a flop bet, didn't call", chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "call") },
   { id: "call-nut-ip-t", yes: "Called the turn", no: "Faced a turn bet, didn't call", chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "call") },
   { id: "call-nut-ip-r", yes: "Called the river", no: "Faced a river bet, didn't call", chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
