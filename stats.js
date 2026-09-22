@@ -43,7 +43,7 @@ function sdHandEvents(h, idx, put) {
     const f = pre[0];
     put("vpip", pc, pre.some((x) => SD_VOL.has(x.act)));
     if (f.aggBefore === 0) {
-      put("limp", pc, f.act === "limp");
+      if (f.act !== "check" && posOf(me) !== "BN") put("limp", pc, f.act === "limp");   // the button's double ante is already in: he checks, he can't limp
       if (f.limpsBefore > 0) put("iso", pc, isAgg(f.act));
       else { put("open", pc, isAgg(f.act) && !f.min); put("minOpen", pc, isAgg(f.act) && f.min); }
     } else {
@@ -153,7 +153,7 @@ const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to 
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
   ["VPIP", "VPIP: put chips in at any point preflop, out of the hands where he acted preflop."],
-  ["Limp", "First action was a limp, out of hands where no raise was out before he acted."],
+  ["Limp", "First action was a limp, out of hands where no raise was out before he acted. Not counted on the button: his double ante is already in, so he can only check or raise."],
   ["CC", "Cold call: his first action was flat-calling a single raise, out of hands where exactly one raise was in front of him. Calls of a 3bet or squeeze don't count."],
   ["Min open", "First in (nobody had limped or raised) with a raise of at most 2× the ante, out of hands where he was first in."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
