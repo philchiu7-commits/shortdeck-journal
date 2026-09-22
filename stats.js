@@ -4,6 +4,7 @@
    because the sample is only the hands he chose to log. */
 
 const SD_MINR_X = 2;                             // a raise up to this many times the bet it raises is a min-raise (5% slack for rounded sizes)
+const SD_MINR = new Set(["minOpen", "min3bet"]);
 const SD_VOL = new Set(["limp", "call", "raise", "3bet", "4bet", "5bet", "jam", "bet"]);
 
 /* One villain's hand → tallies. put(key, cols, hit) adds a chance (and a hit) to each column. */
@@ -136,7 +137,7 @@ function sdStats(oppId, hands) {
 let statsTab = "pre";
 const SD_HUD = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Iso", "iso"], ["Limp-fold", "limpFold"],
   ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
-const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Open", "open"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-fold", "limpFold"], ["Iso", "iso"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
+const SD_PRE_ROWS = [["VPIP", "vpip"], ["PFR", "pfr"], ["Min open", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-fold", "limpFold"], ["Iso", "iso"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Raise flop", "rcb"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
@@ -214,14 +215,15 @@ function renderStats(oppId, hands) {
   const g = (key, col) => T[key + "|" + col];
   $("od-statshint").textContent = n ? `${n} logged hand${n === 1 ? "" : "s"}` : "";
   if (!n) { host.innerHTML = `<div class="empty">No hands logged for this player yet.</div>`; return; }
-  const hud = SD_HUD.map(([l, k]) => {
+  const used = ([, k]) => !SD_MINR.has(k) || (g(k, "all")?.[0] || 0) > 0;     // min-raise stats only show for players who do it
+  const hud = SD_HUD.filter(used).map(([l, k]) => {
     const r = g(k, "all");
     return `<div class="stchip${r && r[1] ? " stk" : ""}${!r || r[1] < 5 ? " thin" : ""}"${r && r[1] ? ` data-stk="${k}|all"` : ""}><label>${esc(l)}</label><b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b><i>${r && r[1] ? `${r[0]}/${r[1]}` : "no data"}</i></div>`;
   }).join("");
   const seats = ["all", ...RANGE_BUCKETS];
   const table = (rows, cols, cw) => {
     const head = `<div class="strow sthead" style="--cols:${cols.length}"><div></div>${cols.map(([, l]) => `<div>${esc(l)}</div>`).join("")}</div>`;
-    return head + rows.map(([l, k]) =>
+    return head + rows.filter(used).map(([l, k]) =>
       `<div class="strow" style="--cols:${cols.length}"><div class="stlbl">${esc(l)}</div>${cols.map(([c]) => statCell(g(k, c), k, c)).join("")}</div>`).join("");
   };
   const body = statsTab === "pre"
