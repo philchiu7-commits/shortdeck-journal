@@ -147,6 +147,7 @@ function sdStats(oppId, hands) {
 /* ---------- rendering ---------- */
 
 let statsTab = "pre";
+let sdMinHide = localStorage.getItem("sd-minhide") === "1";   // MinO/Iso and Min 3bet are noise once you've read them; the chip stays so they can come back
 /* Two blocks, not one wall: a preflop number and a river number answer
    different questions and were being read off one grid. WTSD/W$SD are
    showdown, which is where the postflop block ends. */
@@ -360,14 +361,35 @@ function stPopShow(el) {
     <div class="spn">${more > 0 ? `+${more} more · ` : ""}click for all${p.sizing ? "" : ", split by did / didn't"}</div>`;
   stPopPlace(el);
 }
+/* Never cover the stat being read: below it, else above, else beside it — and if
+   nothing fits, the roomier vertical gap with the popover clipped to that gap. */
 function stPopPlace(el) {
   stPop.classList.remove("hidden");
-  const b = el.getBoundingClientRect(), w = stPop.offsetWidth, hgt = stPop.offsetHeight;
-  const x = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2));
-  const y = b.bottom + 6 + hgt > innerHeight ? Math.max(8, b.top - hgt - 6) : b.bottom + 6;
-  stPop.style.left = x + "px"; stPop.style.top = y + "px";
-  const h2 = stPop.offsetHeight;                                  // the grids settle a few px taller once laid out
-  stPop.style.top = Math.max(8, Math.min(innerHeight - h2 - 8, y)) + "px";
+  stPop.style.maxHeight = "";
+  const M = 8, G = 6;
+  const put = () => {
+    const b = el.getBoundingClientRect(), w = stPop.offsetWidth, h = stPop.offsetHeight;
+    const clip = (v, lim) => Math.max(0, Math.min(lim, v));        // a half-scrolled stat anchors to its visible edge
+    const bt = clip(b.top, innerHeight), bb = clip(b.bottom, innerHeight);
+    const bl = clip(b.left, innerWidth), br = clip(b.right, innerWidth);
+    const below = innerHeight - bb - G - M, above = bt - G - M;
+    const right = innerWidth - br - G - M, left = bl - G - M;
+    const mid = (c, s, lim) => Math.max(M, Math.min(lim - s - M, c - s / 2));
+    let x, y;
+    if (h <= below || h <= above) {
+      y = h <= below ? bb + G : bt - h - G;
+      x = mid(b.left + b.width / 2, w, innerWidth);
+    } else if (w <= right || w <= left) {
+      x = w <= right ? br + G : bl - w - G;
+      y = mid(b.top + b.height / 2, h, innerHeight);
+    } else {
+      stPop.style.maxHeight = Math.max(below, above) + "px";
+      y = below >= above ? bb + G : Math.max(M, bt - stPop.offsetHeight - G);
+      x = mid(b.left + b.width / 2, w, innerWidth);
+    }
+    stPop.style.left = x + "px"; stPop.style.top = y + "px";
+  };
+  put(); put();                                                   // the grids settle a few px taller once laid out
 }
 
 function renderStats(oppId, hands) {
@@ -379,7 +401,8 @@ function renderStats(oppId, hands) {
   const g = (key, col) => T[key + "|" + col];
   $("od-statshint").textContent = n ? `${n} logged hand${n === 1 ? "" : "s"}` : "";
   if (!n) { host.innerHTML = `<div class="empty">No hands logged for this player yet.</div>`; return; }
-  const used = ([, k]) => !SD_MINR.has(k) || (g(k, "all")?.[0] || 0) > 0;     // min-raise stats only show for players who do it
+  const hasMin = [...SD_MINR].some((k) => (g(k, "all")?.[0] || 0) > 0);
+  const used = ([, k]) => !SD_MINR.has(k) || (!sdMinHide && (g(k, "all")?.[0] || 0) > 0);   // min-raise stats show only for players who do it, and only while un-hidden
   const hudBlock = (rows) => rows.filter(used).map(([l, k]) => {
     const r = g(k, "all");
     return `<div class="stchip${r && r[1] ? " stk" : ""}${!r || r[1] < 5 ? " thin" : ""}"${r && r[1] ? ` data-stk="${k}|all"` : ""}><label>${esc(l)}</label><b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b><i>${r && r[1] ? `${r[0]}/${r[1]}` : "no data"}</i></div>`;
@@ -401,6 +424,7 @@ function renderStats(oppId, hands) {
     <div class="chiprow tight sttabs">
       <button class="chip mini${statsTab === "pre" ? " on" : ""}" data-sttab="pre">Preflop by seat</button>
       <button class="chip mini${statsTab === "post" ? " on" : ""}" data-sttab="post">Postflop</button>
+      ${hasMin ? `<button class="chip mini${sdMinHide ? "" : " on"}" data-minr>Min raises</button>` : ""}
     </div>
     <div class="sttable">${body}</div>
     <div class="stnote">Counted only from hands you logged, so read these as tendencies, not true frequencies. Faded = under 5 chances. U8/U9 count as U7.</div>
@@ -419,9 +443,10 @@ function bindStats() {
   host.onclick = (e) => {
     const c = e.target.closest("[data-stk]");
     if (c) { stPopHide(); openStatSheet(c); return; }
-    const b = e.target.closest("[data-sttab]");
-    if (!b || !curOppId) return;
-    statsTab = b.dataset.sttab;
+    const b = e.target.closest("[data-sttab]"), m = e.target.closest("[data-minr]");
+    if ((!b && !m) || !curOppId) return;
+    if (m) { sdMinHide = !sdMinHide; localStorage.setItem("sd-minhide", sdMinHide ? "1" : "0"); }
+    else statsTab = b.dataset.sttab;
     renderStats(curOppId, HANDS.filter((h) => (h.villainIds || []).includes(curOppId)));
   };
 }
