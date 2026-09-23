@@ -52,7 +52,7 @@ function sdHandEvents(h, idx, put) {
     }
     if (f.act === "limp") {
       const r = pre.slice(1).find((x) => x.aggBefore > 0);          // his answer to a raise behind his limp
-      if (r) { put("limpRR", pc, isAgg(r.act) && !r.min); put("limpRRany", pc, isAgg(r.act)); put("limpCall", pc, r.act === "call"); }   // a min re-raise isn't a limp-reraise; limpRRany is hidden, it feeds the limp-call model range
+      if (r) { put("limpRR", pc, isAgg(r.act) && !r.min); put("limpCall", pc, r.act === "call"); }   // a min re-raise isn't a limp-reraise
     }
     if (f.aggBefore === 0 && isAgg(f.act)) {
       const r = pre.slice(1).find((x) => x.aggBefore >= 2);         // his answer to a 3bet over his raise
@@ -248,58 +248,79 @@ function sdRangeMini(p) {
 }
 
 /* ---------- model range: a frequency read as a range width ----------
-   Short-deck hot-and-cold order — each class's equity against one random hand,
-   40k deals through this app's own score5 (flush > boat, A6789 straight).
-   It's an equity ladder, not a playability ladder: suited connectors sit lower
-   than they play. */
-const SD_RANK = [
-  "AA", "KK", "QQ", "JJ", "TT", "AKs", "AQs", "AJs", "AKo",
-  "KQs", "AQo", "KJs", "AJo", "ATs", "QJs", "KQo", "KTs", "QTs",
-  "JTs", "A9s", "99", "KJo", "QJo", "ATo", "QTo", "JTo", "KTo",
-  "A8s", "A9o", "A8o", "A7s", "T9s", "K9s", "Q9s", "J9s", "A6s",
-  "K9o", "T9o", "J9o", "Q9o", "A7o", "88", "98s", "K8s", "J8s",
-  "T8s", "A6o", "Q8s", "K7s", "98o", "T8o", "J8o", "K8o", "Q8o",
-  "97s", "K6s", "K7o", "J7s", "T7s", "Q7s", "77", "97o", "87s",
-  "K6o", "Q6s", "96s", "Q7o", "J7o", "T7o", "J6s", "87o", "Q6o",
-  "T6s", "96o", "86s", "J6o", "T6o", "66", "76s", "86o", "76o"
-];
+   One ordering per stat, not one ladder for all of them: each is the order a
+   7-max short-deck solution takes that action in, averaged over the seats, ties
+   broken by hot-and-cold equity. They disagree on purpose — 3bets are ace-heavy
+   with no connectors, cold-calls are pairs and suited playability with AA
+   nowhere near the top, isos are suited-led (JTs over QQ). One equity ladder
+   ordered every one of them wrong. */
+const SD_ORDER = {
+  vpip: "AA KK QQ JJ TT AKs AJs AKo KQs AQo KJs ATs QJs KQo KTs QTs A9s 99 KJo QJo "
+    + "ATo QTo JTo KTo A8s A7s T9s K9s J9s A6s 88 98s K8s T8s 77 66 AQs AJo JTs "
+    + "Q9s T9o 97s K6s K7s A9o J8s Q8s T7s K9o A8o J9o Q9o T8o Q7s Q6s T6s A7o "
+    + "87s J7s A6o 98o J8o K8o Q8o K7o 96s J6s 86s T7o 97o K6o Q7o J7o 87o Q6o "
+    + "96o J6o T6o 76s 86o 76o",
+  limp: "A6s 88 K8s 77 66 99 JJ Q9s T8s JTo TT 97s 98s T9o QTs QJo KJo A7s QTo KQo "
+    + "J9s QJs KQs AJs K7s ATo QQ AJo K6s J8s AQo 87s T9s T7s KTo K9s Q8s 96s KJs "
+    + "AKo AQs A9s ATs 86s 98o T8o J9o KK A9o T6s JTs KTs Q9o Q7s A8o Q6s A8s A7o "
+    + "J7s K9o J6s 76s 97o AA K8o AKs J8o A6o Q8o K7o T7o 87o K6o 96o J7o 86o Q6o "
+    + "J6o Q7o T6o 76o",
+  iso: "AKs AA A8s JTs KTs KK ATs AQs A9s K9s AKo KJs KTo T9s AQo AJo QQ ATo AJs "
+    + "K9o KQs QJs A9o KQo J9s QTo A7s KJo QJo QTs K7s K6s Q6s J8o T6o A8o K7o "
+    + "98s Q7o T8s TT T9o Q7s JTo J8s 96o K6o Q8s T7o T6s T8o Q8o J6o 98o 97o T7s "
+    + "K8o JJ Q6o J6s Q9s 99 J9o K8s A6s Q9o A7o 88 A6o 97s J7s 77 87s 96s J7o "
+    + "87o 86s 66 76s 86o 76o",
+  "3bet": "AA AKs AKo KK A7s AQs QJs ATo K7s A8s QQ KJo KTs A8o A9o K8s ATs KTo JTs "
+    + "Q8s QTs QJo JTo AJo K6s KJs T8o JJ TT AJs KQs AQo KQo A9s 99 QTo T9s K9s "
+    + "Q9s J9s A6s K9o T9o J9o Q9o A7o 88 98s J8s T8s A6o 98o J8o K8o Q8o 97s K7o "
+    + "J7s T7s Q7s 77 97o 87s K6o Q6s 96s Q7o J7o T7o J6s 87o Q6o T6s 96o 86s J6o "
+    + "T6o 66 76s 86o 76o",
+  limpRR: "AA AKs AKo KK JTs ATo AJo KTo AQo A8s T9s K9s AQs KJo A6s QJs QQ A9o T9o "
+    + "A7s QTs JJ TT AJs KQs KJs ATs KQo KTs A9s 99 QJo QTo JTo A8o Q9s J9s K9o "
+    + "J9o Q9o A7o 88 98s K8s J8s T8s A6o Q8s K7s 98o T8o J8o K8o Q8o 97s K6s K7o "
+    + "J7s T7s Q7s 77 97o 87s K6o Q6s 96s Q7o J7o T7o J6s 87o Q6o T6s 96o 86s J6o "
+    + "T6o 66 76s 86o 76o",
+  cc: "JJ TT AJs KQs AQo KQo A9s 99 QTo T9s J9s 98s KJs AJo JTo QTs JTs QJo KTs "
+    + "ATs KTo QQ A8s ATo T8s QJs AQs KJo T9o KK K9s Q9s A6s 88 J8s 97s AKo A7s "
+    + "66 AKs T7s 87s Q8s J9o K8s A9o 96s T8o AA A8o K9o Q9o A7o A6o K7s 98o J8o "
+    + "K8o Q8o K6s K7o J7s Q7s 77 97o K6o Q6s Q7o J7o T7o J6s 87o Q6o T6s 96o 86s "
+    + "J6o T6o 76s 86o 76o",
+  limpCall: "KQs KJs KTs A9s QTo JJ QTs JTo TT QJs QQ AJs T8s ATs T9s AQs AQo KQo KJo "
+    + "ATo AJo 99 QJo J9s JTs KTo A8s Q9s KK A7s J8s AKo T9o 98s K9s AA AKs A9o "
+    + "A8o A6s K9o J9o Q9o A7o 88 K8s A6o Q8s K7s 98o T8o J8o K8o Q8o 97s K6s K7o "
+    + "J7s T7s Q7s 77 97o 87s K6o Q6s 96s Q7o J7o T7o J6s 87o Q6o T6s 96o 86s J6o "
+    + "T6o 66 76s 86o 76o",
+};
+const SD_ORDER_VERB = { vpip: "plays", limp: "limps", iso: "isos", "3bet": "3bets", limpRR: "limp-reraises", cc: "cold-calls", limpCall: "limp-calls" };
 const SD_COMBOS = (c) => (c[0] === c[1] ? 6 : c[2] === "s" ? 4 : 12);
 const SD_COMBOS_ALL = 630;
-/* Stats that get a model range. Value = keys whose frequency comes off the top
-   first, because those hands raised instead: a cold-call range is the slice
-   under his 3bets, a limp-call range the slice under his limp-reraises. */
-const SD_MODEL = { vpip: [], iso: [], limp: [], "3bet": [], limpRR: [], cc: ["3bet", "min3bet"], limpCall: ["limpRRany"] };
-function sdTopRange(pct, skip) {
-  const lo = SD_COMBOS_ALL * skip, hi = SD_COMBOS_ALL * Math.min(1, skip + pct);
+function sdTopRange(pct, order) {
+  const hi = SD_COMBOS_ALL * Math.min(1, pct);
   const set = new Set();
   let cum = 0;
-  for (const c of SD_RANK) {
-    const next = cum + SD_COMBOS(c);
-    if (next > lo && cum < hi) set.add(c);
-    cum = next;
+  for (const c of order) {
     if (cum >= hi) break;
+    set.add(c);
+    cum += SD_COMBOS(c);
   }
   return set;
 }
 /* The grid the stat implies, next to the grid of what he actually showed. */
 function sdModelGrid(key, col) {
-  if (!(key in SD_MODEL)) return null;
+  if (!(key in SD_ORDER)) return null;
   const r = sdStatT[key + "|" + col];
   if (!r || !r[1]) return null;
   const pct = r[0] / r[1];
-  let skip = 0;
-  for (const k of SD_MODEL[key]) { const s = sdStatT[k + "|" + col]; if (s && s[1]) skip += s[0] / s[1]; }
-  skip = Math.min(0.95, skip);
-  const set = sdTopRange(pct, skip);
+  const set = sdTopRange(pct, SD_ORDER[key].split(" "));
   const cells = [];
   for (let i = 0; i < RANKS.length; i++) for (let j = 0; j < RANKS.length; j++) {
     const hi = RANKS[i], lo = RANKS[j];
     const cls = i === j ? hi + hi : (i < j ? hi + lo + "s" : lo + hi + "o");
     cells.push(`<div class="rgcell${set.has(cls) ? " mdon" : ""}">${cls}</div>`);
   }
-  const p = (x) => Math.round(100 * x);
-  return { cap: skip ? `Top ${p(skip)}\u2013${p(Math.min(1, skip + pct))}%` : `Top ${p(pct)}%`,
-    note: skip ? `${p(pct)}% of the spot, below his ${p(skip)}% raising range` : `${p(pct)}% of the spot`,
+  const p = Math.round(100 * pct);
+  return { cap: `Widest ${p}%`,
+    note: `the ${p}% a solver ${SD_ORDER_VERB[key]} here, widest first`,
     html: `<div class="rggrid spgrid mdgrid">${cells.join("")}</div>` };
 }
 
