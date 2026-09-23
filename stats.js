@@ -52,7 +52,7 @@ function sdHandEvents(h, idx, put) {
     }
     if (f.act === "limp") {
       const r = pre.slice(1).find((x) => x.aggBefore > 0);          // his answer to a raise behind his limp
-      if (r) { put("limpRR", pc, isAgg(r.act) && !r.min); put("limpCall", pc, r.act === "call"); }   // a min re-raise isn't a limp-reraise
+      if (r) { put("limpRR", pc, isAgg(r.act) && !r.min); put("limpRRany", pc, isAgg(r.act)); put("limpCall", pc, r.act === "call"); }   // a min re-raise isn't a limp-reraise; limpRRany is hidden, it feeds the limp-call model range
     }
     if (f.aggBefore === 0 && isAgg(f.act)) {
       const r = pre.slice(1).find((x) => x.aggBefore >= 2);         // his answer to a 3bet over his raise
@@ -243,6 +243,62 @@ function sdRangeMini(p) {
   return { known, total, html: `<div class="rggrid spgrid">${cells.join("")}</div>${key}` };
 }
 
+/* ---------- model range: a frequency read as a range width ----------
+   Short-deck hot-and-cold order — each class's equity against one random hand,
+   40k deals through this app's own score5 (flush > boat, A6789 straight).
+   It's an equity ladder, not a playability ladder: suited connectors sit lower
+   than they play. */
+const SD_RANK = [
+  "AA", "KK", "QQ", "JJ", "TT", "AKs", "AQs", "AJs", "AKo",
+  "KQs", "AQo", "KJs", "AJo", "ATs", "QJs", "KQo", "KTs", "QTs",
+  "JTs", "A9s", "99", "KJo", "QJo", "ATo", "QTo", "JTo", "KTo",
+  "A8s", "A9o", "A8o", "A7s", "T9s", "K9s", "Q9s", "J9s", "A6s",
+  "K9o", "T9o", "J9o", "Q9o", "A7o", "88", "98s", "K8s", "J8s",
+  "T8s", "A6o", "Q8s", "K7s", "98o", "T8o", "J8o", "K8o", "Q8o",
+  "97s", "K6s", "K7o", "J7s", "T7s", "Q7s", "77", "97o", "87s",
+  "K6o", "Q6s", "96s", "Q7o", "J7o", "T7o", "J6s", "87o", "Q6o",
+  "T6s", "96o", "86s", "J6o", "T6o", "66", "76s", "86o", "76o"
+];
+const SD_COMBOS = (c) => (c[0] === c[1] ? 6 : c[2] === "s" ? 4 : 12);
+const SD_COMBOS_ALL = 630;
+/* Stats that get a model range. Value = keys whose frequency comes off the top
+   first, because those hands raised instead: a cold-call range is the slice
+   under his 3bets, a limp-call range the slice under his limp-reraises. */
+const SD_MODEL = { vpip: [], iso: [], limp: [], "3bet": [], limpRR: [], cc: ["3bet", "min3bet"], limpCall: ["limpRRany"] };
+function sdTopRange(pct, skip) {
+  const lo = SD_COMBOS_ALL * skip, hi = SD_COMBOS_ALL * Math.min(1, skip + pct);
+  const set = new Set();
+  let cum = 0;
+  for (const c of SD_RANK) {
+    const next = cum + SD_COMBOS(c);
+    if (next > lo && cum < hi) set.add(c);
+    cum = next;
+    if (cum >= hi) break;
+  }
+  return set;
+}
+/* The grid the stat implies, next to the grid of what he actually showed. */
+function sdModelGrid(key, col) {
+  if (!(key in SD_MODEL)) return null;
+  const r = sdStatT[key + "|" + col];
+  if (!r || !r[1]) return null;
+  const pct = r[0] / r[1];
+  let skip = 0;
+  for (const k of SD_MODEL[key]) { const s = sdStatT[k + "|" + col]; if (s && s[1]) skip += s[0] / s[1]; }
+  skip = Math.min(0.95, skip);
+  const set = sdTopRange(pct, skip);
+  const cells = [];
+  for (let i = 0; i < RANKS.length; i++) for (let j = 0; j < RANKS.length; j++) {
+    const hi = RANKS[i], lo = RANKS[j];
+    const cls = i === j ? hi + hi : (i < j ? hi + lo + "s" : lo + hi + "o");
+    cells.push(`<div class="rgcell${set.has(cls) ? " mdon" : ""}">${cls}</div>`);
+  }
+  const p = (x) => Math.round(100 * x);
+  return { cap: skip ? `Top ${p(skip)}\u2013${p(Math.min(1, skip + pct))}%` : `Top ${p(pct)}%`,
+    note: skip ? `${p(pct)}% of the spot, below his ${p(skip)}% raising range` : `${p(pct)}% of the spot`,
+    html: `<div class="rggrid spgrid mdgrid">${cells.join("")}</div>` };
+}
+
 /* Desktop hover: a small popover with the hands that hit, showdowns first. Touch has no hover, so it taps into the sheet. */
 let stPop = null;
 function stPopHide() { if (stPop) stPop.classList.add("hidden"); }
@@ -250,10 +306,20 @@ function stPopShow(el) {
   const p = statProof(el);
   if (!p) return;
   if (!stPop) { stPop = document.createElement("div"); stPop.id = "stpop"; document.body.appendChild(stPop); }
-  const R = SD_PRE_KEYS.has(el.dataset.stk.split("|")[0]) ? sdRangeMini(p) : null;
+  const [sk, sc] = el.dataset.stk.split("|");
+  const R = SD_PRE_KEYS.has(sk) ? sdRangeMini(p) : null;
+  const M = sdModelGrid(sk, sc);
+  const modelCol = M ? `<div class="spcol"><div class="spcap">${esc(M.cap)}</div>${M.html}<div class="spn">${esc(M.note)}</div></div>` : "";
+  stPop.classList.toggle("wide", !!(M && R && R.known));
   if (R && R.known) {
-    stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>${R.html}
+    stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>
+      <div class="spgrids"><div class="spcol"><div class="spcap">What he showed</div>${R.html}</div>${modelCol}</div>
       <div class="spn">${R.known < R.total ? `${R.known} of ${R.total} hands had his cards · ` : ""}click for the hands</div>`;
+    return stPopPlace(el);
+  }
+  if (M) {
+    stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>${modelCol}
+      <div class="spn">${R ? "No hand here has his cards logged" : ""}${R ? " · " : ""}click for the hands</div>`;
     return stPopPlace(el);
   }
   const byId = new Map(HANDS.map((h) => [h.id, h]));
@@ -275,6 +341,8 @@ function stPopPlace(el) {
   const x = Math.max(8, Math.min(innerWidth - w - 8, b.left + b.width / 2 - w / 2));
   const y = b.bottom + 6 + hgt > innerHeight ? Math.max(8, b.top - hgt - 6) : b.bottom + 6;
   stPop.style.left = x + "px"; stPop.style.top = y + "px";
+  const h2 = stPop.offsetHeight;                                  // the grids settle a few px taller once laid out
+  stPop.style.top = Math.max(8, Math.min(innerHeight - h2 - 8, y)) + "px";
 }
 
 function renderStats(oppId, hands) {
@@ -482,9 +550,10 @@ function renderSizing(oppId, hands) {
       }).join("")}</div>`;
     };
     const K = (k) => (k === "v" ? "Value" : "Bluff");
-    return `<div class="strow sthead" style="--cols:${cols}"><div></div>${steps.map((s) => `<div>${s}</div>`).join("")}</div>` + ["v", "b"].map((k) => streets
-      ? STS.map((st) => row(k, [st], `${st[0].toUpperCase() + st.slice(1)} ${K(k)}`, st + "-" + pre + k)).join("")
-      : row(k, STS, `${K(k)} <span class="muted">F+T+R</span>`, "all-" + pre + k)).join(streets ? `<div class="szgap"></div>` : "");
+    const head = `<div class="strow sthead" style="--cols:${cols}"><div></div>${steps.map((s) => `<div>${s}</div>`).join("")}</div>`;
+    return head + (streets                                        // value next to its own bluff row, street by street
+      ? STS.map((st) => ["v", "b"].map((k) => row(k, [st], `${st[0].toUpperCase() + st.slice(1)} ${K(k)}`, st + "-" + pre + k)).join("")).join(`<div class="szgap"></div>`)
+      : ["v", "b"].map((k) => row(k, STS, `${K(k)} <span class="muted">F+T+R</span>`, "all-" + pre + k)).join(""));
   };
   host.innerHTML = `
     <div class="szsub">Bets · % of pot${A.n ? ` · ${A.n} bet${A.n === 1 ? "" : "s"}` : ""}</div>
