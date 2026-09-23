@@ -527,6 +527,12 @@ function sdSizingAuto(oppId, hands) {
   return { rows, ids, n: n - nR, nR, skipped, why };
 }
 
+/* Columns Phil has hidden — sizes this player never uses just eat width. Kept per device. */
+let sdSzHide = new Set((() => { try { return JSON.parse(localStorage.getItem("sd-szhide")) || []; } catch { return []; } })());
+function sdSzSteps() {
+  const s = SD_SZ_STEPS.filter((x) => !sdSzHide.has(x));
+  return s.length ? s : SD_SZ_STEPS;                             // never hide everything
+}
 function renderSizing(oppId, hands) {
   const host = $("od-sizing");
   if (!host) return;
@@ -562,11 +568,17 @@ function renderSizing(oppId, hands) {
       ? STS.map((st) => ["v", "b"].map((k) => row(k, [st], `${st[0].toUpperCase() + st.slice(1)} ${K(k)}`, st + "-" + pre + k)).join("")).join(`<div class="szgap"></div>`)
       : ["v", "b"].map((k) => row(k, STS, `${K(k)} <span class="muted">F+T+R</span>`, "all-" + pre + k)).join(""));
   };
+  const steps = sdSzSteps();
+  const hidden = SD_SZ_STEPS.filter((x) => !steps.includes(x));
   host.innerHTML = `
+    <div class="szcols">${SD_SZ_STEPS.map((x) => {
+      const on = steps.includes(x);
+      return `<button class="chip mini szcol${on ? " on" : ""}" data-szcol="${x}" title="${on ? "Hide" : "Show"} ${x}">${x}</button>`;
+    }).join("")}${hidden.length ? `<span class="muted szcolhint">${hidden.length} hidden</span>` : ""}</div>
     <div class="szsub">Bets · % of pot${A.n ? ` · ${A.n} bet${A.n === 1 ? "" : "s"}` : ""}</div>
-    <div class="sttable">${grid(SD_SZ_STEPS, "", true)}</div>
+    <div class="sttable">${grid(steps, "", true)}</div>
     <div class="szsub">Raises · % of pot after calling${A.nR ? ` · ${A.nR} raise${A.nR === 1 ? "" : "s"}` : ""}</div>
-    <div class="sttable">${grid(SD_SZ_STEPS, "r", false)}</div>
+    <div class="sttable">${grid(steps, "r", false)}</div>
     <div class="stnote">From hands where his cards were logged, so bluffs he never showed aren't here — read the Bluff rows as a floor. Value = trips+ with his own cards, an overpair, or two pair with both his cards. On a flush board (3+ of a suit) or a four-to-a-straight board only trips+ is value, and on a paired board two pair isn't. Everything else, draws and top pair included, counts as a bluff.${
       skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>`;
 }
@@ -574,6 +586,15 @@ function renderSizing(oppId, hands) {
 function bindSizing() {
   $("od-sizing").onclick = (e) => {
     const pc = e.target.closest("[data-stk]");
-    if (pc) { stPopHide(); openStatSheet(pc); }
+    if (pc) { stPopHide(); openStatSheet(pc); return; }
+    const cb = e.target.closest("[data-szcol]");
+    if (!cb || !curOppId) return;
+    const x = cb.dataset.szcol;
+    if (sdSzHide.has(x)) sdSzHide.delete(x);
+    else if (sdSzSteps().length > 1) sdSzHide.add(x);              // the last column stays
+    else return;
+    try { localStorage.setItem("sd-szhide", JSON.stringify([...sdSzHide])); } catch {}
+    stPopHide();
+    renderSizing(curOppId, HANDS.filter((h) => (h.villainIds || []).includes(curOppId)));
   };
 }

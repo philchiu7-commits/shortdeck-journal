@@ -1010,3 +1010,9 @@ textarea.noteedit { margin-bottom: 0; }
 #stpop .spcap { padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--text); }
 #stpop .mdgrid .rgcell { background: #1a1d23; color: #6b7078; }
 #stpop .mdgrid .rgcell.mdon { background: #3e78c8; color: #fff; }
+
+/* Sizings: hide the columns this player never uses */
+.szcols { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 4px; }
+.szcol { opacity: .45; }
+.szcol.on { opacity: 1; }
+.szcolhint { font-size: 11px; }
