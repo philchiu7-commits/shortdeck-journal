@@ -147,8 +147,12 @@ function sdStats(oppId, hands) {
 /* ---------- rendering ---------- */
 
 let statsTab = "pre";
-const SD_HUD = [["VPIP", "vpip"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Limp-call", "limpCall"],
-  ["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
+/* Two blocks, not one wall: a preflop number and a river number answer
+   different questions and were being read off one grid. WTSD/W$SD are
+   showdown, which is where the postflop block ends. */
+const SD_HUD_PRE = [["VPIP", "vpip"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Limp-call", "limpCall"]];
+const SD_HUD_POST = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
+const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Fold to turn cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
@@ -355,7 +359,7 @@ function renderStats(oppId, hands) {
   $("od-statshint").textContent = n ? `${n} logged hand${n === 1 ? "" : "s"}` : "";
   if (!n) { host.innerHTML = `<div class="empty">No hands logged for this player yet.</div>`; return; }
   const used = ([, k]) => !SD_MINR.has(k) || (g(k, "all")?.[0] || 0) > 0;     // min-raise stats only show for players who do it
-  const hud = SD_HUD.filter(used).map(([l, k]) => {
+  const hudBlock = (rows) => rows.filter(used).map(([l, k]) => {
     const r = g(k, "all");
     return `<div class="stchip${r && r[1] ? " stk" : ""}${!r || r[1] < 5 ? " thin" : ""}"${r && r[1] ? ` data-stk="${k}|all"` : ""}><label>${esc(l)}</label><b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b><i>${r && r[1] ? `${r[0]}/${r[1]}` : "no data"}</i></div>`;
   }).join("");
@@ -369,7 +373,10 @@ function renderStats(oppId, hands) {
     ? table(SD_PRE_ROWS, seats.map((s) => [s, s === "all" ? "All" : s]))
     : table(SD_POST_ROWS, SD_POST_COLS);
   host.innerHTML = `
-    <div class="sthud">${hud}</div>
+    <div class="sthudlbl">Preflop</div>
+    <div class="sthud">${hudBlock(SD_HUD_PRE)}</div>
+    <div class="sthudlbl">Postflop</div>
+    <div class="sthud">${hudBlock(SD_HUD_POST)}</div>
     <div class="chiprow tight sttabs">
       <button class="chip mini${statsTab === "pre" ? " on" : ""}" data-sttab="pre">Preflop by seat</button>
       <button class="chip mini${statsTab === "post" ? " on" : ""}" data-sttab="post">Postflop</button>
