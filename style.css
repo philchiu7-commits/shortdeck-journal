@@ -946,7 +946,10 @@ textarea.noteedit { margin-bottom: 0; }
 .stchip b { display: block; font-size: 14px; line-height: 1.15; }
 .stchip i, .stc i { display: block; font-style: normal; font-size: 9px; color: var(--muted); }
 .stchip.thin b, .stc.thin b { opacity: .5; }
-.sttabs { margin-bottom: 8px; }
+.sttabs { margin-bottom: 8px; align-items: center; }
+/* not a tab: a quiet aside at the far end, so it never reads as a third view */
+.ghostbtn { margin-left: auto; background: none; border: 0; color: var(--muted); opacity: .6; font-size: 11px; padding: 4px 2px; cursor: pointer; white-space: nowrap; flex: none; }
+.ghostbtn:active { opacity: 1; }
 .sttable { display: flex; flex-direction: column; gap: 2px; }
 .strow { display: grid; grid-template-columns: 62px repeat(var(--cols), minmax(0, 1fr)); gap: 2px; align-items: center; }
 .sthead { font-size: 10px; color: var(--muted); text-align: center; text-transform: uppercase; }

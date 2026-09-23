@@ -424,7 +424,7 @@ function renderStats(oppId, hands) {
     <div class="chiprow tight sttabs">
       <button class="chip mini${statsTab === "pre" ? " on" : ""}" data-sttab="pre">Preflop by seat</button>
       <button class="chip mini${statsTab === "post" ? " on" : ""}" data-sttab="post">Postflop</button>
-      ${hasMin ? `<button class="chip mini${sdMinHide ? "" : " on"}" data-minr>Min raises</button>` : ""}
+      ${hasMin ? `<button class="ghostbtn" data-minr>${sdMinHide ? "show" : "hide"} min raises</button>` : ""}
     </div>
     <div class="sttable">${body}</div>
     <div class="stnote">Counted only from hands you logged, so read these as tendencies, not true frequencies. Faded = under 5 chances. U8/U9 count as U7.</div>
