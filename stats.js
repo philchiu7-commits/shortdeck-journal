@@ -151,7 +151,8 @@ let sdMinHide = localStorage.getItem("sd-minhide") === "1";   // MinO/Iso and Mi
 /* Two blocks, not one wall: a preflop number and a river number answer
    different questions and were being read off one grid. WTSD/W$SD are
    showdown, which is where the postflop block ends. */
-const SD_HUD_PRE = [["VPIP", "vpip"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"], ["Limp-call", "limpCall"]];
+/* Two questions, one row each: how he enters a pot, then how the raising war goes. */
+const SD_HUD_PRE = [["VPIP", "vpip"], ["Limp", "limp"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"]];
 const SD_HUD_POST = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
@@ -418,7 +419,7 @@ function renderStats(oppId, hands) {
     : table(SD_POST_ROWS, SD_POST_COLS);
   host.innerHTML = `
     <div class="sthudlbl">Preflop</div>
-    <div class="sthud">${hudBlock(SD_HUD_PRE)}</div>
+    <div class="sthud pre4">${hudBlock(SD_HUD_PRE)}</div>
     <div class="sthudlbl">Postflop</div>
     <div class="sthud">${hudBlock(SD_HUD_POST)}</div>
     <div class="chiprow tight sttabs">
