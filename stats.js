@@ -51,7 +51,7 @@ function sdHandEvents(h, idx, put) {
     }
     if (f.act === "limp") {
       const r = pre.slice(1).find((x) => x.aggBefore > 0);          // his answer to a raise behind his limp
-      if (r) { put("limpRR", pc, isAgg(r.act)); put("limpCall", pc, r.act === "call"); }
+      if (r) { put("limpRR", pc, isAgg(r.act) && !r.min); put("limpCall", pc, r.act === "call"); }   // a min re-raise isn't a limp-reraise
     }
     if (f.aggBefore === 0 && isAgg(f.act)) {
       const r = pre.slice(1).find((x) => x.aggBefore >= 2);         // his answer to a 3bet over his raise
@@ -158,7 +158,7 @@ const SD_DEFS = [
   ["Min open", "First in (nobody had limped or raised) with a raise of at most 2× the ante, out of hands where he was first in."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet."],
-  ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged)."],
+  ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged). A min re-raise (at most double the raise he faced) doesn't count as an LRR."],
   ["Fold 3bet", "After he raised first and got 3bet: folded."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
   ["Cbet turn", "Bet the turn after cbetting the flop, out of turns where he acted first."],
