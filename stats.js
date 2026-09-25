@@ -81,7 +81,13 @@ function sdHandEvents(h, idx, put) {
       put("cbetF", cols, isAgg(f1.act));
       if (isAgg(f1.act)) {
         const t1 = mine("turn")[0];
-        if (t1 && t1.aggBefore === 0) put("cbetT", colsAt(2), isAgg(t1.act));
+        if (t1 && t1.aggBefore === 0) {
+          put("cbetT", colsAt(2), isAgg(t1.act));
+          if (isAgg(t1.act)) {
+            const v1 = mine("river")[0];
+            if (v1 && v1.aggBefore === 0) put("cbetR", colsAt(3), isAgg(v1.act));
+          }
+        }
         const R = F.find((x) => x.i > f1.i && x.actor !== me && isAgg(x.act));      // his cbet got raised
         const r = R && F.find((x) => x.actor === me && x.i > R.i);
         if (r) put("fxr", cols, r.act === "fold");
@@ -91,11 +97,18 @@ function sdHandEvents(h, idx, put) {
       const A = F.find((x) => isAgg(x.act));
       if (A && A.actor === pfa) {                                    // the first flop bet was the raiser's: a cbet
         const r = F.find((x) => x.actor === me && x.i > A.i);
-        if (r) { put("fcb", cols, r.act === "fold"); put("ccb", cols, r.act === "call"); put("rcb", cols, isAgg(r.act)); }
+        if (r) { put("fcb", cols, r.act === "fold"); put("rcb", cols, isAgg(r.act)); }
         if (r && r.act === "call") {                                 // called the flop cbet: his answer to the raiser's turn barrel
           const T = seq.turn, B = T.find((x) => isAgg(x.act));
           const r2 = B && B.actor === pfa && T.find((x) => x.actor === me && x.i > B.i);
-          if (r2) put("fcbT", colsAt(2), r2.act === "fold");
+          if (r2) {
+            put("fcbT", colsAt(2), r2.act === "fold");
+            if (r2.act === "call") {                                 // and called the turn barrel: his answer to the river one
+              const V = seq.river, B2 = V.find((x) => isAgg(x.act));
+              const r3 = B2 && B2.actor === pfa && V.find((x) => x.actor === me && x.i > B2.i);
+              if (r3) put("fcbR", colsAt(3), r3.act === "fold");
+            }
+          }
         }
       }
       const fp = F.find((x) => x.actor === pfa);
@@ -156,7 +169,7 @@ const SD_HUD_PRE = [["VPIP", "vpip"], ["Limp", "limp"], ["Limp-call", "limpCall"
 const SD_HUD_POST = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
-const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold to cbet", "fcb"], ["Call cbet", "ccb"], ["Fold to turn cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
+const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet river", "cbetR"], ["Fold to cbet", "fcb"], ["Fold to turn cbet", "fcbT"], ["Fold to river cbet", "fcbR"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
   ["VPIP", "VPIP: put chips in at any point preflop, out of the hands where he acted preflop."],
@@ -168,9 +181,9 @@ const SD_DEFS = [
   ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged). A min re-raise (at most double the raise he faced) doesn't count as an LRR."],
   ["Fold 3bet", "After he raised first and got 3bet: folded."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
-  ["Cbet turn", "Bet the turn after cbetting the flop, out of turns where he acted first."],
-  ["Fold / Call / Raise vs cbet", "His first answer to a flop bet from the preflop raiser (Raise flop = the raise)."],
-  ["Fold to turn cbet", "He called the raiser's flop cbet, then the raiser bet the turn too: folded, out of those turn barrels he faced."],
+  ["Cbet turn / river", "Kept barrelling after his own cbet, out of the streets where he acted first having bet the one before. Cbet river counts only hands he cbet the flop and the turn."],
+  ["Fold / Raise vs cbet", "His first answer to a flop bet from the preflop raiser (Raise flop = the raise). Calls are the rest."],
+  ["Fold to turn / river cbet", "He called the raiser's cbet, the raiser barrelled again: folded, out of those barrels he faced. The river one counts only hands he called the flop and the turn."],
   ["Raise turn / river", "His first action facing someone else's single bet on that street: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
   ["Check-raise", "Checked the flop, faced a bet, raised."],
   ["Donk lead", "Bet the flop into the preflop raiser before they acted."],
@@ -427,7 +440,7 @@ function renderStats(oppId, hands) {
       <button class="chip mini${statsTab === "post" ? " on" : ""}" data-sttab="post">Postflop</button>
       ${hasMin ? `<button class="ghostbtn" data-minr>${sdMinHide ? "show" : "hide"} min raises</button>` : ""}
     </div>
-    <div class="sttable">${body}</div>
+    <div class="sttable${statsTab === "post" ? " wlbl" : ""}">${body}</div>
     <div class="stnote">Counted only from hands you logged, so read these as tendencies, not true frequencies. Faded = under 5 chances. U8/U9 count as U7.</div>
     <details class="stdefs"><summary>How these are counted</summary>${SD_DEFS.map(([a, b]) => `<p><b>${esc(a)}</b> — ${esc(b)}</p>`).join("")}</details>`;
 }
