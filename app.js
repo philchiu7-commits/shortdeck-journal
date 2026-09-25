@@ -8,6 +8,9 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g,
 let OPP = [], HANDS = [];
 let _statsCache = null;   // oppStats() memo — invalidated on every HANDS mutation
 let curOppId = null, curHandId = null;
+/* Hand player: a snapshot of one opponent's shown hands, in the order the Hands
+   panel listed them (so the active filters carry into the review). */
+let handPlay = null, handPlayIds = [];
 let editNoteId = null, editExploitId = null;
 let storageDurable = false;
 let showSuggestedExploits = {};   // per-opponent toggle for suggested exploits (oppId -> bool)
@@ -1033,6 +1036,7 @@ function route() {
     return;
   }
   const v = VIEWS.includes(view) ? view : "opponents";
+  if (v !== "handview" && v !== "opp") handPlay = null;
   // Leaving a specific opponent, or navigating to a different one → drop filters.
   if (v !== "opp" || arg !== curOppId) { resetHandFilters(); noCardsOpen = false; }
   VIEWS.forEach((x) => $("view-" + x).classList.toggle("hidden", x !== v));
@@ -2532,6 +2536,9 @@ function renderOppDetail(id) {
   // collapsed group so they don't bury the reviewable spots.
   const seen = hands.filter((h) => cardsSeen(h, id));
   const noCards = hands.filter((h) => !cardsSeen(h, id));
+  handPlayIds = seen.map((h) => h.id);
+  $("od-play").classList.toggle("hidden", !seen.length);
+  $("od-play").textContent = `▶ Play ${seen.length}`;
   const seenHTML = seen.map((h) => handRowHTML(h, id)).join("");
   const noCardsHTML = noCards.length
     ? `<div class="grouphead nocardshead">
@@ -2753,7 +2760,7 @@ function handText(h) {
    then one block per street (board so far, new cards bright), then one
    line per action: position · name · (hole cards on first preflop line)
    · "opens to 40K". */
-function handHTML(h) {
+function handHTML(h, focusOpp) {
   const raw = isRawSize(h);
   const posOf = (actor) => actor === "hero" ? h.heroPos : h.villains?.[Number(actor.slice(1))]?.pos;
   const cardsOf = (actor) => actor === "hero" ? h.heroCards : h.villains?.[Number(actor.slice(1))]?.cards;
@@ -2763,7 +2770,8 @@ function handHTML(h) {
   const seatH = (actor) => {
     const v = actor === "hero" ? null : h.villains?.[Number(actor.slice(1))];
     const stk = v?.chips ? `<span class="hv-stack">${stackStr(v.chips)}</span>` : "";
-    return `<div class="hv-seat">${posB(actor)}<b>${esc(actorLabel(h, actor))}</b>${hole(cardsOf(actor))}${stk}</div>`;
+    const foc = focusOpp && v && v.opponentId === focusOpp ? " hv-focus" : "";
+    return `<div class="hv-seat${foc}">${posB(actor)}<b>${esc(actorLabel(h, actor))}</b>${hole(cardsOf(actor))}${stk}</div>`;
   };
   const seats = [];
   if (h.hero !== false) seats.push(seatH("hero"));
@@ -2855,7 +2863,22 @@ function renderHandView(id) {
   const h = HANDS.find((x) => x.id === id);
   if (!h) { location.hash = "#opponents"; return; }
   curHandId = id;
-  $("hv-text").innerHTML = handHTML(h);
+  const list = handPlayList(), i = list.indexOf(id);
+  $("hv-text").innerHTML = handHTML(h, i >= 0 ? handPlay.oppId : null);
+  const nav = $("hv-nav");
+  nav.classList.toggle("hidden", i < 0);
+  $("view-handview").classList.toggle("playing", i >= 0);   // keeps Delete clear of the floating stepper
+  if (i < 0) return;
+  nav.querySelector("[data-hvstep='-1']").disabled = i === 0;
+  nav.querySelector("[data-hvstep='1']").disabled = i === list.length - 1;
+  $("hv-count").textContent = `${oppById(handPlay.oppId)?.name || "Hand"} · ${i + 1}/${list.length}`;
+}
+/* Deleted hands drop out of the reel rather than dead-ending it. */
+const handPlayList = () => handPlay ? handPlay.ids.filter((x) => HANDS.some((h) => h.id === x)) : [];
+function handStep(d) {
+  const list = handPlayList(), i = list.indexOf(curHandId), j = i + d;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  location.hash = "#handview/" + list[j];
 }
 
 /* ================= Data / backup ================= */
@@ -5069,11 +5092,34 @@ function bindStatic() {
     renderOppDetail(curOppId);
   };
   $("od-hands").onclick = handListClick;
+  $("od-play").onclick = () => {
+    if (!handPlayIds.length) return;
+    handPlay = { oppId: curOppId, ids: handPlayIds.slice() };
+    location.hash = "#handview/" + handPlayIds[0];
+  };
   bindStats();
   bindSizing();
   bindFolds();
 
   // hand detail
+  $("hv-nav").onclick = (e) => {
+    const b = e.target.closest("[data-hvstep]");
+    if (b && !b.disabled) handStep(Number(b.dataset.hvstep));
+  };
+  // Swipe the hand itself (left = next), and arrow keys on a desktop.
+  let swX = 0, swY = 0;
+  $("view-handview").addEventListener("touchstart", (e) => {
+    const t = e.changedTouches[0]; swX = t.clientX; swY = t.clientY;
+  }, { passive: true });
+  $("view-handview").addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0], dx = t.clientX - swX, dy = t.clientY - swY;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2) handStep(dx < 0 ? 1 : -1);
+  }, { passive: true });
+  document.addEventListener("keydown", (e) => {
+    if ($("hv-nav").classList.contains("hidden") || $("view-handview").classList.contains("hidden")) return;
+    if (e.key === "ArrowLeft") handStep(-1);
+    else if (e.key === "ArrowRight") handStep(1);
+  });
   $("hv-edit").onclick = () => {
     const h = HANDS.find((x) => x.id === curHandId);
     if (h) { loadHandIntoDraft(h); location.hash = "#hand"; }

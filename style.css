@@ -1021,3 +1021,21 @@ textarea.noteedit { margin-bottom: 0; }
 .szcol { opacity: .45; }
 .szcol.on { opacity: 1; }
 .szcolhint { font-size: 11px; }
+
+/* ---- hand player: step through one opponent's shown hands ----
+   Floats above the tabbar so the thumb never leaves the bottom of the screen. */
+.hvnav {
+  position: fixed; left: 0; right: 0; bottom: calc(72px + env(safe-area-inset-bottom)); z-index: 11;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  width: fit-content; margin: 0 auto; padding: 4px 6px;
+  background: rgba(20,23,30,.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line); border-radius: 999px; box-shadow: 0 4px 16px rgba(0,0,0,.45);
+}
+.hvstep {
+  background: none; border: 0; color: var(--accent); font-size: 22px; line-height: 1;
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+}
+.hvstep:disabled { color: var(--muted); opacity: .35; }
+#hv-count { color: var(--muted); font-size: 12px; font-weight: 600; min-width: 92px; text-align: center; }
+.hv-seat.hv-focus b { color: var(--accent); }   /* the player you're reviewing, among seven seats */
+#view-handview.playing #hv-delete { margin-bottom: 96px; }

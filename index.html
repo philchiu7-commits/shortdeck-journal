@@ -96,6 +96,7 @@
   </div>
   <div class="panel" data-fold="hands">
     <div class="cardpanel-head"><span class="ptitle">Hands</span>
+      <button id="od-play" class="linkbtn hidden" title="Step through the hands where you saw this player's cards">▶ Play</button>
       <button id="od-hf-clear" class="linkbtn hidden">Clear filters</button></div>
     <div id="od-handfilters" class="handfilters"></div>
     <div id="od-hands" class="list"></div>
@@ -177,6 +178,11 @@
   </header>
   <div id="hv-text" class="handview"></div>
   <button id="hv-delete" class="danger">Delete hand</button>
+  <div id="hv-nav" class="hvnav hidden">
+    <button class="hvstep" data-hvstep="-1" aria-label="Previous hand">‹</button>
+    <span id="hv-count"></span>
+    <button class="hvstep" data-hvstep="1" aria-label="Next hand">›</button>
+  </div>
 </section>
 
 <!-- ===== Data / backup ===== -->
