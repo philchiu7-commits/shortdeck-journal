@@ -174,8 +174,15 @@
   <header class="vhead">
     <button class="backbtn" data-back aria-label="Back">‹</button>
     <h1>Hand</h1>
+    <button id="hv-list" class="iconbtn hidden" title="All hands" aria-label="Hand list">☰</button>
     <button id="hv-edit" class="iconbtn" title="Edit" aria-label="Edit hand">✎</button>
   </header>
+  <div id="hv-rail-backdrop" class="railbd hidden"></div>
+  <aside id="hv-rail" class="hvrail hidden">
+    <div class="hvrail-head"><span id="hv-rail-title"></span>
+      <button id="hv-rail-close" class="iconbtn" aria-label="Close list">✕</button></div>
+    <div id="hv-rail-list"></div>
+  </aside>
   <div id="hv-felt"></div>
   <div id="hv-text" class="handview"></div>
   <button id="hv-delete" class="danger">Delete hand</button>

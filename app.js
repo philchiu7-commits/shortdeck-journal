@@ -994,6 +994,32 @@ function actPhrase(a, raw = false) {
   const { verb, sz, to } = actParts(a, raw);
   return verb + (sz ? (to ? " to " : " ") + sz : "");
 }
+/* One action in the entry pad's own language: "B50" is half the pot, the same
+   chips the B33/B50/B66 buttons put in. Derived from the resolved amount, so a
+   hand typed in chips still reads as a pot fraction. Preflop stays in antes and
+   multiples — that's how short-deck opens are read. */
+function sizeTag(h, i) {
+  const acts = h.actions || [], a = acts[i];
+  if (!a) return "";
+  if (a.act === "fold" || a.act === "check" || a.act === "call" || a.act === "limp") return a.act;
+  const raw = isRawSize(h), lbl = a.size ? sizeLabel(a.size, raw) : "";
+  if (a.size === "Jam" || a.act === "jam") return "JAM";
+  if (a.street === "pre") return lbl || a.act;
+  const pe = estimatePot(h, acts.slice(0, i + 1)), lvl = pe.perAct[i], b = pe.pre[i];
+  if (!lvl || !b || !b.pot) return lbl || a.act;
+  // A bet the stack couldn't cover is a jam, whatever percentage was typed.
+  if (Number(h.effStack) && lvl >= Number(h.effStack)) return "JAM";
+  const pct = Math.round(((lvl - b.curBet) / b.pot) * 100);
+  return pct > 0 ? "B" + pct : (lbl || a.act);
+}
+/* What the seat says on the felt: postflop in pot-%, preflop in the usual prose. */
+function replaySay(h, i) {
+  const a = (h.actions || [])[i];
+  if (!a) return "";
+  if (a.street === "pre" || ["fold", "check", "call", "limp"].includes(a.act)) return actPhrase(a, isRawSize(h));
+  const t = sizeTag(h, i);
+  return t === "JAM" ? "jams" : actVerb(a) + " " + t;
+}
 
 /* ---------- bottom sheet ---------- */
 function showSheet(html) {
@@ -1037,7 +1063,7 @@ function route() {
   }
   const v = VIEWS.includes(view) ? view : "opponents";
   if (v !== "handview" && v !== "opp") handPlay = null;
-  if (v !== "handview") replayStop();
+  if (v !== "handview") { replayStop(); railOpen(false); }
   // Leaving a specific opponent, or navigating to a different one → drop filters.
   if (v !== "opp" || arg !== curOppId) { resetHandFilters(); noCardsOpen = false; }
   VIEWS.forEach((x) => $("view-" + x).classList.toggle("hidden", x !== v));
@@ -2884,7 +2910,7 @@ function replayHTML(h, k) {
     const sl = slots[S.slot(x.pos)];
     // Pull the ring in a little: the seat pills are taller than the dots the
     // geometry was drawn for, and the top/bottom ones would hang off the felt.
-    const sx = 50 + (sl[0] - 50) * 0.97, sy = 50 + (sl[1] - 50) * 0.87;
+    const sx = 50 + (sl[0] - 50) * 0.88, sy = 50 + (sl[1] - 50) * 0.87;
     const up = cur && cur.actor === x.p;
     const out = folded.has(x.p);
     const shown = (x.cards || []).some(Boolean);
@@ -2893,12 +2919,12 @@ function replayHTML(h, k) {
     const cards = `<div class="rcards${shown ? "" : " back"}">${shown ? tilesHTML(x.cards) : "<i></i><i></i>"}</div>`;
     const stk = x.chips ? `<span class="tstack">${stackStr(x.chips)}${ante > 1 ? ` · ${Math.round(x.chips / ante)}a` : ""}</span>` : "";
     const dB = x.pos === "BN" ? `<span class="tdealer">D</span>` : "";
-    const say = up ? `<div class="rsay">${esc(actPhrase(cur, raw))}</div>` : "";
+    const say = up ? `<div class="rsay">${esc(replaySay(h, k - 1))}</div>` : "";
     felt += `<div class="rseat${x.p === "hero" ? " hero" : ""}${out ? " out" : ""}${up ? " up" : ""}" style="left:${sx}%;top:${sy}%">
-      ${cards}<div class="rpill"><span class="tpos">${esc(x.pos)}</span><span class="tnm">${esc(x.name)}</span>${stk}</div>${dB}${say}</div>`;
+      ${cards}<div class="rpill"><span class="tpos">${esc(x.pos)}</span><span class="tnm">${esc(x.name)}</span>${stk}${dB}</div>${say}</div>`;
     const bet = pe.contrib[x.p] || 0;
     if (bet && !out) {   // chips pushed a third of the way toward the middle, like a real table
-      const bx = sx + (50 - sx) * 0.52, by = sy + (50 - sy) * 0.52;
+      const bx = sx + (50 - sx) * 0.45, by = sy + (50 - sy) * 0.45;
       felt += `<div class="rbet" style="left:${bx.toFixed(1)}%;top:${by.toFixed(1)}%">${potStr(bet, raw)}</div>`;
     }
   }
@@ -2916,16 +2942,31 @@ function replayHTML(h, k) {
   acts.forEach((a, i) => { if (first[a.street] == null) first[a.street] = i + 1; });
   const jump = STREETS.map((st) => first[st] == null ? "" :
     `<button class="rchip${street === st && (k || st === "pre") ? " on" : ""}" data-rst="${st}">${st === "pre" ? "Pre" : st[0].toUpperCase() + st.slice(1)}</button>`).join("");
+  // Every action as a chip, in order, sized the way the entry pad sizes them.
+  // Tap one to put the felt on that decision.
+  const posOf = {};
+  S.parts.forEach((x) => { posOf[x.p] = x.pos; });
+  let seen = null;
+  const strip = acts.map((a, i) => {
+    const sep = a.street === seen ? "" : `<span class="rssep">${(a.street === "pre" ? "pre" : a.street).toUpperCase()}</span>`;
+    seen = a.street;
+    const agg = ["bet", "raise", "3bet", "4bet", "5bet", "jam"].includes(a.act);
+    return `${sep}<button class="ract${i === k - 1 ? " on" : ""}${agg ? " agg" : ""}${a.act === "fold" ? " out" : ""}" data-rjump="${i + 1}">
+        <span class="ra-p">${esc(posOf[a.actor] || "")}</span><span class="ra-t">${esc(sizeTag(h, i))}</span></button>`;
+  }).join("");
+  // ⏭ leaves this hand for the next one in the reel — stepping to the end is what ▶ is for.
+  const reel = handPlayList(), ri = reel.indexOf(h.id);
   const ctl = `<div class="rctl">
       <div class="chiprow tight">${jump}</div>
       <div class="rtrans">
-        <button data-rgo="0" aria-label="Start">⏮</button>
+        <button data-rgo="0" aria-label="Restart">↺</button>
         <button data-rstep="-1" aria-label="Back"${k === 0 ? " disabled" : ""}>◀</button>
         <button data-rplay class="rplay" aria-label="Play">${replayTimer ? "❚❚" : "▶"}</button>
         <button data-rstep="1" aria-label="Forward"${done ? " disabled" : ""}>▶</button>
-        <button data-rgo="end" aria-label="End">⏭</button>
+        <button data-hvstep="1" aria-label="Next hand"${ri < 0 || ri === reel.length - 1 ? " disabled" : ""}>⏭</button>
         <span class="rcount">${k}/${acts.length}</span>
-      </div></div>`;
+      </div>
+      ${strip ? `<div class="rstrip">${strip}</div>` : ""}</div>`;
   return `<div class="rfelt">${felt}</div>${ctl}`;
 }
 
@@ -2933,6 +2974,9 @@ function renderReplay() {
   const h = HANDS.find((x) => x.id === curHandId);
   if (!h) return;
   $("hv-felt").innerHTML = replayHTML(h, replayStep);
+  // Scroll the strip itself rather than scrollIntoView, which would drag the page.
+  const strip = $("hv-felt").querySelector(".rstrip"), on = strip && strip.querySelector(".ract.on");
+  if (on) strip.scrollLeft = on.offsetLeft - strip.clientWidth / 2 + on.offsetWidth / 2;
 }
 function replayGo(k) {
   const h = HANDS.find((x) => x.id === curHandId);
@@ -2986,6 +3030,7 @@ function renderHandView(id) {
   const list = handPlayList(), i = list.indexOf(id);
   $("hv-text").innerHTML = handHTML(h, i >= 0 ? handPlay.oppId : null);
   renderReplay();
+  renderRail();
   const nav = $("hv-nav");
   nav.classList.toggle("hidden", i < 0);
   $("view-handview").classList.toggle("playing", i >= 0);   // keeps Delete clear of the floating stepper
@@ -2993,6 +3038,39 @@ function renderHandView(id) {
   nav.querySelector("[data-hvstep='-1']").disabled = i === 0;
   nav.querySelector("[data-hvstep='1']").disabled = i === list.length - 1;
   $("hv-count").textContent = `${oppById(handPlay.oppId)?.name || "Hand"} · ${i + 1}/${list.length}`;
+}
+/* The reel as a scrollable list — the way to skip to a hand ten back without
+   stepping through the ones between. */
+function renderRail() {
+  const list = handPlayList(), focus = handPlay ? handPlay.oppId : null;
+  $("hv-list").classList.toggle("hidden", list.length < 2);
+  if (list.length < 2) { railOpen(false); return; }
+  $("hv-rail-title").textContent = `${oppById(focus)?.name || "Hands"} · ${list.length}`;
+  $("hv-rail-list").innerHTML = list.map((id, i) => {
+    const h = HANDS.find((x) => x.id === id);
+    if (!h) return "";
+    const vi = focus ? (h.villains || []).findIndex((v) => v.opponentId === focus) : -1;
+    const who = vi >= 0 ? h.villains[vi] : { pos: h.heroPos, cards: h.heroCards };
+    const cards = (who.cards || []).some(Boolean) ? tilesHTML(who.cards) : `<span class="rl-none">· ·</span>`;
+    const n = Number(h.seats) || ((h.villains || []).length + (h.hero === false ? 0 : 1));
+    const win = handWinner(h);
+    const seat = vi >= 0 ? "v" + vi : (h.hero === false ? null : "hero");
+    const res = win && seat ? (win.winners.includes(seat) ? (win.winners.length > 1 ? "chop" : "won") : "lost") : null;
+    return `<button class="rlrow${id === curHandId ? " on" : ""}" data-railhand="${esc(id)}">
+        <span class="rl-n">${i + 1}</span>
+        <span class="rl-c">${cards}</span>
+        <span class="rl-p">${esc(who.pos || "")}</span>
+        <span class="rl-m">${n}p ${esc(blindsStr(h, isRawSize(h)))}</span>
+        ${res ? `<span class="dot ${res}"></span>` : ""}
+      </button>`;
+  }).join("");
+}
+function railOpen(v) {
+  $("hv-rail").classList.toggle("hidden", !v);
+  $("hv-rail-backdrop").classList.toggle("hidden", !v);
+  if (!v) return;
+  const on = $("hv-rail-list").querySelector(".rlrow.on");
+  if (on) $("hv-rail-list").scrollTop = on.offsetTop - $("hv-rail-list").clientHeight / 2;
 }
 /* Deleted hands drop out of the reel rather than dead-ending it. */
 const handPlayList = () => handPlay ? handPlay.ids.filter((x) => HANDS.some((h) => h.id === x)) : [];
@@ -3856,8 +3934,10 @@ function estimatePot(src, actions) {
   const potNow = () => pot + Object.values(contrib).reduce((a, x) => a + x, 0);
   const atStart = { pre: potNow() };             // pot as each street begins
   const perAct = [];                             // resolved "to" amount per action
+  const pre = [];                                // pot + level facing each action, for pot-% labels
   for (const a of actions || []) {
     if (a.street !== street) { pot = potNow(); contrib = {}; street = a.street; curBet = 0; atStart[street] = pot; }
+    pre.push({ pot: potNow(), curBet });
     if (a.act === "fold" || a.act === "check") { perAct.push(0); continue; }
     if (a.act === "limp") { contrib[a.actor] = unit; curBet = Math.max(curBet, unit); perAct.push(unit); continue; }
     if (a.act === "call") { if (curBet) contrib[a.actor] = curBet; perAct.push(curBet); continue; }
@@ -3878,7 +3958,7 @@ function estimatePot(src, actions) {
     curBet = Math.max(curBet, lvl);
     perAct.push(lvl);
   }
-  return { atStart, now: potNow(), curBet, perAct, contrib: { ...contrib } };
+  return { atStart, now: potNow(), curBet, perAct, pre, contrib: { ...contrib } };
 }
 const potStr = (n, raw = false) => !n ? "" :
   raw
@@ -5225,13 +5305,13 @@ function bindStatic() {
   // hand detail
   $("hv-felt").onclick = (e) => {
     const st = e.target.closest("[data-rst]"), sp = e.target.closest("[data-rstep]"), go = e.target.closest("[data-rgo]");
+    const hs = e.target.closest("[data-hvstep]"), jp = e.target.closest("[data-rjump]");
     if (e.target.closest("[data-rplay]")) return replayToggle();
     replayStop();
+    if (hs) return hs.disabled ? null : handStep(Number(hs.dataset.hvstep));
+    if (jp) return replayGo(Number(jp.dataset.rjump));
     if (sp) return replayGo(replayStep + Number(sp.dataset.rstep));
-    if (go) {
-      const h = HANDS.find((x) => x.id === curHandId);
-      return replayGo(go.dataset.rgo === "end" ? (h?.actions || []).length : 0);
-    }
+    if (go) return replayGo(0);
     if (st) {                                                // jump to the first action of that street
       const h = HANDS.find((x) => x.id === curHandId), acts = h?.actions || [];
       const i = acts.findIndex((a) => a.street === st.dataset.rst);
@@ -5241,6 +5321,15 @@ function bindStatic() {
   $("hv-nav").onclick = (e) => {
     const b = e.target.closest("[data-hvstep]");
     if (b && !b.disabled) handStep(Number(b.dataset.hvstep));
+  };
+  $("hv-list").onclick = () => railOpen($("hv-rail").classList.contains("hidden"));
+  $("hv-rail-close").onclick = () => railOpen(false);
+  $("hv-rail-backdrop").onclick = () => railOpen(false);
+  $("hv-rail-list").onclick = (e) => {
+    const b = e.target.closest("[data-railhand]");
+    if (!b) return;
+    railOpen(false);
+    if (b.dataset.railhand !== curHandId) location.hash = "#handview/" + b.dataset.railhand;
   };
   // Swipe the hand itself (left = next), and arrow keys on a desktop.
   let swX = 0, swY = 0;
@@ -5321,7 +5410,11 @@ function bindStatic() {
 function handListClick(e) {
   if (e.target.closest("[data-nocards]")) { noCardsOpen = !noCardsOpen; if (curOppId) renderOppDetail(curOppId); return; }
   const r = e.target.closest("[data-hand]");
-  if (r) location.hash = "#handview/" + r.dataset.hand;
+  if (!r) return;
+  // Tapping a row browses the same filtered set the Play button would, so the
+  // stepper and the hand list are there without going back first.
+  if (handPlayIds.includes(r.dataset.hand)) handPlay = { oppId: curOppId, ids: handPlayIds.slice() };
+  location.hash = "#handview/" + r.dataset.hand;
 }
 
 async function loadBlindsDefault() {
