@@ -1037,6 +1037,7 @@ function route() {
   }
   const v = VIEWS.includes(view) ? view : "opponents";
   if (v !== "handview" && v !== "opp") handPlay = null;
+  if (v !== "handview") replayStop();
   // Leaving a specific opponent, or navigating to a different one → drop filters.
   if (v !== "opp" || arg !== curOppId) { resetHandFilters(); noCardsOpen = false; }
   VIEWS.forEach((x) => $("view-" + x).classList.toggle("hidden", x !== v));
@@ -2536,9 +2537,9 @@ function renderOppDetail(id) {
   // collapsed group so they don't bury the reviewable spots.
   const seen = hands.filter((h) => cardsSeen(h, id));
   const noCards = hands.filter((h) => !cardsSeen(h, id));
-  handPlayIds = seen.map((h) => h.id);
-  $("od-play").classList.toggle("hidden", !seen.length);
-  $("od-play").textContent = `▶ Play ${seen.length}`;
+  handPlayIds = hands.map((h) => h.id);                 // the reel is whatever the filters left
+  $("od-play").classList.toggle("hidden", !hands.length);
+  $("od-play").textContent = `▶ Play ${hands.length}`;
   const seenHTML = seen.map((h) => handRowHTML(h, id)).join("");
   const noCardsHTML = noCards.length
     ? `<div class="grouphead nocardshead">
@@ -2836,6 +2837,124 @@ function handHTML(h, focusOpp) {
   return html;
 }
 
+/* ================= Replayer =================
+   Every hand view opens on a felt: the ring as it was seated, stepped one action
+   at a time. Short deck, so stacks read in antes and the button's double ante is
+   the only live money preflop. The pot math is re-run over each prefix rather
+   than copied here — estimatePot stays the single source of sizing truth. */
+let replayStep = 0, replayTimer = null;
+const REPLAY_MS = 1100;
+
+/* Who sat where. Ring grows until every logged position fits, then rotates so
+   Hero (or the first villain in a hand Hero sat out) is at the bottom. */
+function replaySeats(h) {
+  const parts = [];
+  if (h.hero !== false && h.heroPos) parts.push({ p: "hero", pos: h.heroPos, name: "You", cards: h.heroCards, chips: h.effStack });
+  (h.villains || []).forEach((v, i) => {
+    if (v.pos) parts.push({ p: "v" + i, pos: v.pos, name: oppById(v.opponentId)?.name || `V${i + 1}`, cards: v.cards, chips: v.chips });
+  });
+  let n = Math.max(4, Math.min(9, Number(h.seats) || parts.length));
+  while (n < 9 && parts.some((x) => !ringFor(n).includes(x.pos))) n++;
+  const ring = ringFor(n), ai = Math.max(0, ring.indexOf((parts[0] || {}).pos));
+  return { ring, n, parts, slot: (pos) => (((ring.indexOf(pos) - ai) % n) + n) % n };
+}
+
+function replayHTML(h, k) {
+  const acts = h.actions || [];
+  k = Math.max(0, Math.min(acts.length, k));
+  const raw = isRawSize(h), ante = Number(h.blinds?.ante) || 0;
+  const pe = estimatePot(h, acts.slice(0, k));
+  const cur = k ? acts[k - 1] : null, street = cur ? cur.street : "pre";
+  const done = k === acts.length;
+  const folded = new Set(acts.slice(0, k).filter((a) => a.act === "fold").map((a) => a.actor));
+  const upTo = { pre: 0, flop: 3, turn: 4, river: 5 };
+  const S = replaySeats(h), slots = slotsFor(S.n);
+  if (!S.parts.length) return "";                  // nobody was given a seat — nothing to replay
+  const inFront = Object.values(pe.contrib).reduce((a, x) => a + x, 0);
+
+  // Board: what this street has dealt, all of it once the hand is over.
+  const board = (h.board || []).slice(0, done ? 5 : upTo[street]).filter(Boolean);
+  const pot = Math.max(0, pe.now - inFront);
+  const centre = `<div class="rcentre">
+      ${board.length ? `<div class="rboard">${tilesHTML(board)}</div>` : ""}
+      <div class="rpot">Pot ${pot ? potStr(pot, raw) : "—"}</div></div>`;
+
+  let felt = `<div class="feltoval"></div>${centre}`;
+  for (const x of S.parts) {
+    const sl = slots[S.slot(x.pos)];
+    // Pull the ring in a little: the seat pills are taller than the dots the
+    // geometry was drawn for, and the top/bottom ones would hang off the felt.
+    const sx = 50 + (sl[0] - 50) * 0.97, sy = 50 + (sl[1] - 50) * 0.87;
+    const up = cur && cur.actor === x.p;
+    const out = folded.has(x.p);
+    const shown = (x.cards || []).some(Boolean);
+    // Hole cards face up when they were seen, backs otherwise — the seat still
+    // has to read as a player holding two cards.
+    const cards = `<div class="rcards${shown ? "" : " back"}">${shown ? tilesHTML(x.cards) : "<i></i><i></i>"}</div>`;
+    const stk = x.chips ? `<span class="tstack">${stackStr(x.chips)}${ante > 1 ? ` · ${Math.round(x.chips / ante)}a` : ""}</span>` : "";
+    const dB = x.pos === "BN" ? `<span class="tdealer">D</span>` : "";
+    const say = up ? `<div class="rsay">${esc(actPhrase(cur, raw))}</div>` : "";
+    felt += `<div class="rseat${x.p === "hero" ? " hero" : ""}${out ? " out" : ""}${up ? " up" : ""}" style="left:${sx}%;top:${sy}%">
+      ${cards}<div class="rpill"><span class="tpos">${esc(x.pos)}</span><span class="tnm">${esc(x.name)}</span>${stk}</div>${dB}${say}</div>`;
+    const bet = pe.contrib[x.p] || 0;
+    if (bet && !out) {   // chips pushed a third of the way toward the middle, like a real table
+      const bx = sx + (50 - sx) * 0.52, by = sy + (50 - sy) * 0.52;
+      felt += `<div class="rbet" style="left:${bx.toFixed(1)}%;top:${by.toFixed(1)}%">${potStr(bet, raw)}</div>`;
+    }
+  }
+  if (done) {
+    const win = handWinner(h);
+    const txt = win
+      ? (win.winners.length > 1 ? "Chop — " : "") + win.winners.map((w) => actorLabel(h, w)).join(" & ") +
+        (win.winners.length > 1 ? "" : " wins" + (win.how === "showdown" ? " at showdown" : ""))
+      : "";
+    if (txt) felt += `<div class="rend">${esc(txt)}</div>`;
+  }
+
+  // Controls: jump to a street, step an action at a time, or let it run.
+  const first = {};
+  acts.forEach((a, i) => { if (first[a.street] == null) first[a.street] = i + 1; });
+  const jump = STREETS.map((st) => first[st] == null ? "" :
+    `<button class="rchip${street === st && (k || st === "pre") ? " on" : ""}" data-rst="${st}">${st === "pre" ? "Pre" : st[0].toUpperCase() + st.slice(1)}</button>`).join("");
+  const ctl = `<div class="rctl">
+      <div class="chiprow tight">${jump}</div>
+      <div class="rtrans">
+        <button data-rgo="0" aria-label="Start">⏮</button>
+        <button data-rstep="-1" aria-label="Back"${k === 0 ? " disabled" : ""}>◀</button>
+        <button data-rplay class="rplay" aria-label="Play">${replayTimer ? "❚❚" : "▶"}</button>
+        <button data-rstep="1" aria-label="Forward"${done ? " disabled" : ""}>▶</button>
+        <button data-rgo="end" aria-label="End">⏭</button>
+        <span class="rcount">${k}/${acts.length}</span>
+      </div></div>`;
+  return `<div class="rfelt">${felt}</div>${ctl}`;
+}
+
+function renderReplay() {
+  const h = HANDS.find((x) => x.id === curHandId);
+  if (!h) return;
+  $("hv-felt").innerHTML = replayHTML(h, replayStep);
+}
+function replayGo(k) {
+  const h = HANDS.find((x) => x.id === curHandId);
+  if (!h) return;
+  const n = (h.actions || []).length;
+  replayStep = Math.max(0, Math.min(n, k));
+  if (replayStep >= n) replayStop();
+  renderReplay();
+}
+function replayStop() {
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+}
+function replayToggle() {
+  if (replayTimer) { replayStop(); renderReplay(); return; }
+  const h = HANDS.find((x) => x.id === curHandId);
+  const n = (h?.actions || []).length;
+  if (!n) return;
+  if (replayStep >= n) replayStep = 0;                 // replaying a finished hand starts it over
+  replayTimer = setInterval(() => replayGo(replayStep + 1), REPLAY_MS);
+  replayGo(replayStep + 1);
+}
+
 /* ================= Table (tonight's lineup) + hand detail ================= */
 
 /* One glance mid-session: the seat ring from the lineup sheet, each opponent
@@ -2863,8 +2982,10 @@ function renderHandView(id) {
   const h = HANDS.find((x) => x.id === id);
   if (!h) { location.hash = "#opponents"; return; }
   curHandId = id;
+  replayStop(); replayStep = 0;                               // every hand opens at the deal
   const list = handPlayList(), i = list.indexOf(id);
   $("hv-text").innerHTML = handHTML(h, i >= 0 ? handPlay.oppId : null);
+  renderReplay();
   const nav = $("hv-nav");
   nav.classList.toggle("hidden", i < 0);
   $("view-handview").classList.toggle("playing", i >= 0);   // keeps Delete clear of the floating stepper
@@ -3757,7 +3878,7 @@ function estimatePot(src, actions) {
     curBet = Math.max(curBet, lvl);
     perAct.push(lvl);
   }
-  return { atStart, now: potNow(), curBet, perAct };
+  return { atStart, now: potNow(), curBet, perAct, contrib: { ...contrib } };
 }
 const potStr = (n, raw = false) => !n ? "" :
   raw
@@ -5102,6 +5223,21 @@ function bindStatic() {
   bindFolds();
 
   // hand detail
+  $("hv-felt").onclick = (e) => {
+    const st = e.target.closest("[data-rst]"), sp = e.target.closest("[data-rstep]"), go = e.target.closest("[data-rgo]");
+    if (e.target.closest("[data-rplay]")) return replayToggle();
+    replayStop();
+    if (sp) return replayGo(replayStep + Number(sp.dataset.rstep));
+    if (go) {
+      const h = HANDS.find((x) => x.id === curHandId);
+      return replayGo(go.dataset.rgo === "end" ? (h?.actions || []).length : 0);
+    }
+    if (st) {                                                // jump to the first action of that street
+      const h = HANDS.find((x) => x.id === curHandId), acts = h?.actions || [];
+      const i = acts.findIndex((a) => a.street === st.dataset.rst);
+      if (i >= 0) replayGo(i + 1);
+    }
+  };
   $("hv-nav").onclick = (e) => {
     const b = e.target.closest("[data-hvstep]");
     if (b && !b.disabled) handStep(Number(b.dataset.hvstep));

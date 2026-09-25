@@ -1039,3 +1039,49 @@ textarea.noteedit { margin-bottom: 0; }
 #hv-count { color: var(--muted); font-size: 12px; font-weight: 600; min-width: 92px; text-align: center; }
 .hv-seat.hv-focus b { color: var(--accent); }   /* the player you're reviewing, among seven seats */
 #view-handview.playing #hv-delete { margin-bottom: 96px; }
+
+/* ---- replayer felt (hand view) ---- */
+.rfelt { position: relative; height: 330px; margin: 10px 0 8px; }
+.rcentre { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%); text-align: center; }
+.rboard { display: flex; gap: 3px; justify-content: center; min-height: 26px; }
+.rpot { margin-top: 6px; font-size: 12px; font-weight: 700; color: #cfe6d8; }
+.rseat { position: absolute; transform: translate(-50%, -50%); text-align: center; }
+.rseat.out { opacity: .38; }
+.rcards { display: flex; gap: 2px; justify-content: center; margin-bottom: 2px; min-height: 20px; }
+.rcards.back i {   /* cards we never saw still have to look like two cards */
+  display: block; width: 13px; height: 19px; border-radius: 3px;
+  background: repeating-linear-gradient(45deg, #7d2530 0 3px, #5d1a23 3px 6px); border: 1px solid #3a1118;
+}
+.rpill { background: var(--panel2); border: 1px solid #3a4150; border-radius: 10px; padding: 3px 6px;
+  min-width: 46px; display: flex; flex-direction: column; align-items: center; line-height: 1.15; position: relative; }
+.rpill .tpos { font-size: 9px; color: var(--muted); }
+.rpill .tnm { font-size: 11px; font-weight: 600; max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rpill .tstack { font-size: 9px; font-weight: 700; color: #7cd992; }
+.rseat.hero .rpill { background: #1c2c47; border-color: var(--accent); }
+.rseat.up .rpill { border-color: #ffb84a; box-shadow: 0 0 0 2px rgba(255,184,74,.35); }
+.rsay { margin-top: 3px; font-size: 10px; font-weight: 700; color: #ffb84a; white-space: nowrap; }
+.rbet {
+  position: absolute; transform: translate(-50%, -50%); z-index: 2;
+  background: rgba(10,14,12,.8); border: 1px solid #3a4150; border-radius: 999px;
+  padding: 1px 7px; font-size: 10px; font-weight: 700; color: #ffd98a; white-space: nowrap;
+}
+.rend {
+  position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); z-index: 3;
+  background: rgba(10,14,12,.86); border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 12px; font-size: 12px; font-weight: 700; color: var(--good); white-space: nowrap;
+}
+.rctl { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.rchip {
+  background: var(--panel2); border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.rchip.on { border-color: var(--accent); color: var(--accent); }
+.rtrans { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.rtrans button {
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 6px 12px; font-size: 14px; cursor: pointer;
+}
+.rtrans button:disabled { opacity: .35; }
+.rtrans .rplay { background: var(--accent); border-color: var(--accent); color: #0a0d12; font-weight: 800; padding: 6px 16px; }
+.rcount { color: var(--muted); font-size: 11px; font-weight: 700; margin-left: 6px; min-width: 34px; }
+.rseat .tdealer { top: auto; bottom: -4px; left: -9px; }   /* clear of the hole cards above the pill */
