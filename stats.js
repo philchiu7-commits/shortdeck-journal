@@ -699,7 +699,6 @@ function renderSizing(oppId, hands) {
    standing bet gets its own rung. Action pattern only: reads every hand. */
 let sdSeqT = {};                                 // "sq|iso|B100" → {r:[n, of, ids, []], label}
 const SD_SEQ_RUNGS = ["Min", "B33", "B50", "B66", "B75", "B100", "B150", "Jam"];
-const SD_SEQ_COLS = [["Iso", "iso"], ["1 limper", "iso1"], ["2+ limpers", "iso2"], ["Open", "open"]];
 
 function sdOpenRatio(h, i) {
   const acts = h.actions || [], a = acts[i];
@@ -735,35 +734,65 @@ function sdSeqAuto(oppId, hands) {
     const limps = acts.slice(0, i).filter((x) => x.street === "pre" && x.act === "limp").length;
     if (!limps) { add("open", rung, h.id); continue; }
     add("iso", rung, h.id);
-    add(limps === 1 ? "iso1" : "iso2", rung, h.id);
   }
   return out;
 }
 
+let sdSeqCol = "iso";
+const SD_SEQ_C = { Min: "#8a93a3", B33: "#5b9fe6", B50: "#3fb3ad", B66: "#5cbf5c", B75: "#b3c24a", B100: "#e0a93e", B150: "#e46e3e", Jam: "#d8475c" };
+/* A hand chart per column: every iso (or open) whose hole cards are on record, the cell
+   painted in the size he chose — split when one hand class went in at two sizes. */
 function renderSeq(oppId, hands) {
   const host = $("od-seq");
   if (!host) return;
   const A = sdSeqAuto(oppId, hands);
   sdSeqT = {};
   stPopHide();
-  const tot = Object.fromEntries(SD_SEQ_COLS.map(([, k]) => [k, SD_SEQ_RUNGS.reduce((n, x) => n + (A[k]?.[x]?.length || 0), 0)]));
-  const used = SD_SEQ_RUNGS.filter((x) => SD_SEQ_COLS.some(([, k]) => A[k]?.[x]?.length));
-  if (!tot.iso && !tot.open) { host.innerHTML = `<div class="stnote">No isos or opens logged yet.</div>`; return; }
-  const cols = SD_SEQ_COLS.length;
-  const head = `<div class="strow sthead" style="--cols:${cols}"><div></div>${SD_SEQ_COLS.map(([l, k]) => `<div>${l}<br><span class="muted">${tot[k]}</span></div>`).join("")}</div>`;
-  const body = used.map((x) => `<div class="strow" style="--cols:${cols}"><div class="stlbl">${x}</div>${SD_SEQ_COLS.map(([l, k]) => {
-    const ids = A[k]?.[x] || [];
-    if (!ids.length) return `<div class="stc none">–</div>`;
-    const key = `sq|${k}|${x}`;
-    sdSeqT[key] = { r: [ids.length, tot[k], ids, []], label: `${l === "Open" ? "Open" : "Iso" + (k === "iso" ? "" : " vs " + l)} · ${x} · ${ids.length}/${tot[k]}` };
-    return `<div class="stc stk${tot[k] < 5 ? " thin" : ""}" data-stk="${key}"><b>${Math.round((100 * ids.length) / tot[k])}%</b><i>${ids.length}</i></div>`;
-  }).join("")}</div>`).join("");
-  host.innerHTML = `<div class="sttable">${head}${body}</div>
-    <div class="stnote">How often he picks each size, as a share of that column. <b>Iso</b> is his raise over one or more limpers, split by how many limped; <b>Open</b> is his raise first in, for comparison. Rungs are pot-relative — chips beyond the call ÷ the pot once he has called — so an iso that looks bigger in antes because more limped in still lands on the same rung. <b>Min</b> is a raise to exactly twice the standing bet. Only the first raise of the hand counts. Faded columns are under five hands.</div>`;
+  const tot = (k) => SD_SEQ_RUNGS.reduce((n, x) => n + (A[k]?.[x]?.length || 0), 0);
+  if (!tot("iso") && !tot("open")) { host.innerHTML = `<div class="stnote">No isos or opens logged yet.</div>`; return; }
+  if (!tot(sdSeqCol)) sdSeqCol = tot("iso") ? "iso" : "open";
+  const k = sdSeqCol, T = tot(k), lbl = k === "iso" ? "Iso" : "Open";
+  const byId = new Map(hands.map((h) => [h.id, h]));
+  const cell = {};
+  let known = 0;
+  for (const x of SD_SEQ_RUNGS) for (const id of A[k]?.[x] || []) {
+    const v = (byId.get(id)?.villains || []).find((y) => y.opponentId === oppId), hc = v && handClass(v.cards);
+    if (!hc) continue;
+    known++;
+    const c = cell[hc] ||= { n: 0, r: {}, ids: [] };
+    c.n++; c.r[x] = (c.r[x] || 0) + 1; c.ids.push(id);
+  }
+  const tabs = [["iso", "Iso"], ["open", "Open"]].map(([c, l]) =>
+    `<button class="chip mini${c === k ? " on" : ""}" data-sqcol="${c}"${tot(c) ? "" : " disabled"}>${l} · ${tot(c)}</button>`).join("");
+  const leg = SD_SEQ_RUNGS.filter((x) => A[k]?.[x]?.length).map((x) => {
+    const ids = A[k][x], key = `sq|${k}|${x}`;
+    sdSeqT[key] = { r: [ids.length, T, ids, []], label: `${lbl} · ${x} · ${ids.length}/${T}` };
+    return `<button class="sqleg stk" data-stk="${key}"><i style="background:${SD_SEQ_C[x]}"></i>${x} <b>${Math.round((100 * ids.length) / T)}%</b><em>${ids.length}</em></button>`;
+  }).join("");
+  const cells = [];
+  for (let i = 0; i < RANKS.length; i++) for (let j = 0; j < RANKS.length; j++) {
+    const hi = RANKS[i], lo = RANKS[j];
+    const cls = i === j ? hi + hi : (i < j ? hi + lo + "s" : lo + hi + "o");
+    const c = cell[cls];
+    if (!c) { cells.push(`<div class="rgcell">${cls}</div>`); continue; }
+    const rs = SD_SEQ_RUNGS.filter((x) => c.r[x]);
+    let at = 0;
+    const bg = rs.length === 1 ? SD_SEQ_C[rs[0]]
+      : `linear-gradient(90deg,${rs.map((x) => { const s = at; at += (100 * c.r[x]) / c.n; return `${SD_SEQ_C[x]} ${s}% ${at}%`; }).join(",")})`;
+    const key = `sq|${k}|${cls}`;
+    sdSeqT[key] = { r: [c.n, c.n, c.ids, []], label: `${lbl} with ${cls} · ${rs.map((x) => `${x}${c.r[x] > 1 ? " ×" + c.r[x] : ""}`).join(", ")}` };
+    cells.push(`<div class="rgcell on stk" data-stk="${key}" style="background:${bg}">${cls}${c.n > 1 ? `<span class="rgn">${c.n}</span>` : ""}</div>`);
+  }
+  host.innerHTML = `<div class="chiprow tight sttabs">${tabs}</div>
+    <div class="sqlegs">${leg}</div>
+    <div class="rggrid sqgrid">${cells.join("")}</div>
+    <div class="stnote">${known < T ? `${known} of ${T} ${k === "iso" ? "isos" : "opens"} had his cards logged — only those are on the chart; the shares above count all ${T}. ` : ""}<b>Iso</b> is his raise over limpers, <b>Open</b> his raise first in. Sizes are pot-relative — chips beyond the call ÷ the pot once he has called — and <b>Min</b> is exactly twice the standing bet. Only the first raise of the hand counts. Tap a cell or a size for the hands.</div>`;
 }
 
 function bindSeq() {
   $("od-seq").onclick = (e) => {
+    const t = e.target.closest("[data-sqcol]");
+    if (t && curOppId) { sdSeqCol = t.dataset.sqcol; renderSeq(curOppId, HANDS.filter((h) => (h.villainIds || []).includes(curOppId))); return; }
     const c = e.target.closest("[data-stk]");
     if (c) { stPopHide(); openStatSheet(c); }
   };
