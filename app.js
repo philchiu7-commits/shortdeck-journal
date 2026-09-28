@@ -2599,6 +2599,7 @@ function renderOppDetail(id) {
 
   renderStats(id, mine);
   renderSizing(id, mine);
+  renderSeq(id, mine);
   renderRanges(id, mine);
 }
 
@@ -5456,6 +5457,7 @@ function bindStatic() {
   };
   bindStats();
   bindSizing();
+  bindSeq();
   bindFolds();
 
   // hand detail

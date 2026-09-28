@@ -209,7 +209,12 @@ function statCell(r, k, c) {
 
 /* Tap a stat → the hands behind it, split into "did it" and "had the chance, didn't". */
 function statProof(el) {
-  const key = el.dataset.stk, r = sdStatT[key] || sdSzT[key];
+  const key = el.dataset.stk;
+  if (key.startsWith("sq|")) {                   // the sequence grid carries its own label
+    const s = sdSeqT[key];
+    return s && curOppId ? { r: s.r, sizing: !s.r[3].length, label: s.label } : null;
+  }
+  const r = sdStatT[key] || sdSzT[key];
   if (!r || !curOppId) return null;
   const [k, c, step] = key.split("|");
   if (k === "sz") {
@@ -647,6 +652,154 @@ function renderSizing(oppId, hands) {
     <div class="sttable">${grid(steps, "r", false)}</div>
     <div class="stnote">Only sizes he chose himself — a bet or raise of his own. A bet he called is the other player's sizing and isn't counted. From hands where his cards were logged, so bluffs he never showed aren't here — read the Bluff rows as a floor. Value = trips+ with his own cards, an overpair, or two pair with both his cards. On a flush board (3+ of a suit) or a four-to-a-straight board only trips+ is value, and on a paired board two pair isn't. Everything else, draws and top pair included, counts as a bluff.${
       skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>`;
+}
+
+/* ---------- sizing → what followed ----------
+   The Sizings grid says what he bet. This says what the bet turned into: the same
+   pot-relative rungs with his next move beside them. Preflop sits on that same scale
+   on purpose — an open is a raise over the button's live ante, so it prices like a
+   raise (chips beyond the call ÷ the pot once he has called), and that is what makes
+   a 14a iso over three limpers and a 12a over one both B100. A raise to exactly twice
+   the standing bet gets its own rung: the min-raise behaves nothing like the small
+   sizing it would otherwise sit inside. Nothing here needs his hole cards — it is an
+   action pattern, so it reads every hand, not only the ones he showed down. */
+let sdSeqT = {};                                 // "sq|flop|B50|xf" → {r:[n, of, hitIds, missIds], label}
+const SD_SEQ_RUNGS = ["Min", "B33", "B50", "B66", "B75", "B100", "B150", "Jam"];
+const SD_NEXT_ST = { flop: "turn", turn: "river" };
+const SD_RESPONSES = ["fold", "call", ...AGG_ACTS];
+const SD_SEQ_PRE_COLS = [["Opens", "n"], ["3bet", "3bet"], ["Folds", "f3bet"], ["Cbet", "cbet"], ["Won pre", "won"]];
+const SD_SEQ_POST_COLS = [["Bets", "n"], ["Barrel", "barrel"], ["Checks", "check"], ["→fold", "xf"], ["→call", "xc"], ["→raise", "xr"], ["Won", "won"]];
+
+function sdOpenRatio(h, i) {
+  const acts = h.actions || [], a = acts[i];
+  for (let j = 0; j < i; j++) {
+    const b = acts[j];                           // an earlier action with no size makes the pot a guess
+    if (b.street === "pre" && AGG_ACTS.includes(b.act) && b.act !== "jam" && !SD_SZ_KNOWN.test(String(b.size || "").trim())) return null;
+  }
+  const pe = estimatePot(h, acts.slice(0, i)), to = estimatePot(h, acts.slice(0, i + 1)).perAct;
+  const faced = pe.curBet;                       // the live ante, or the limp price
+  let own = 0;
+  for (let j = 0; j < i; j++) if (acts[j].street === "pre" && acts[j].actor === a.actor) own = to[j] || own;
+  const amt = to[i] || 0;
+  if (!(pe.now > 0) || !(faced > 0) || !(amt > faced)) return null;
+  return { r: (amt - faced) / (pe.now + faced - own), min: amt <= 2 * faced + 1e-9 };
+}
+
+function sdSeqAuto(oppId, hands) {
+  const pre = {}, post = { flop: {}, turn: {} };
+  const bump = (o, rung, key, hit, id) => {
+    const s = ((o[rung] ||= {})[key] ||= [0, 0, [], []]);
+    s[1]++;
+    if (hit) { s[0]++; s[2].push(id); } else s[3].push(id);
+  };
+  for (const h of hands) {
+    const acts = h.actions || [], V = h.villains || [];
+    for (let i = 0; i < acts.length; i++) {
+      const a = acts[i];
+      if (!AGG_ACTS.includes(a.act)) continue;
+      const m = /^v(\d+)$/.exec(String(a.actor || ""));
+      const v = m && V[Number(m[1])];
+      if (!v || v.opponentId !== oppId) continue;
+      // only the bet whose size he chose freely: his open, or his first bet on a street
+      if (acts.slice(0, i).some((b) => b.street === a.street && AGG_ACTS.includes(b.act))) continue;
+      const jam = a.act === "jam" || /^jam$/i.test(String(a.size || ""));
+      if (a.street === "pre") {
+        let rung = "Jam";
+        if (!jam) { const o = sdOpenRatio(h, i); if (!o) continue; rung = o.min ? "Min" : sdStepFor(o.r); }
+        sdSeqPre(h, i, a, rung, pre, bump);
+      } else if (SD_NEXT_ST[a.street]) {
+        let rung = "Jam";
+        if (!jam) { const r = sdBetRatio(h, i); if (typeof r !== "number") continue; rung = sdStepFor(r); }
+        sdSeqPost(h, i, a, rung, post[a.street], bump);
+      }
+    }
+  }
+  return { pre, post };
+}
+
+function sdSeqPre(h, i, a, rung, out, bump) {
+  const acts = h.actions || [], id = h.id, rest = acts.slice(i + 1);
+  const tb = rest.find((x) => x.street === "pre" && AGG_ACTS.includes(x.act));
+  const sawFlop = acts.some((x) => x.street === "flop");
+  bump(out, rung, "n", true, id);
+  bump(out, rung, "3bet", !!tb, id);
+  if (tb) {
+    const ti = rest.indexOf(tb);
+    const after = rest.filter((x, j) => j > ti && x.street === "pre" && x.actor === a.actor);
+    if (after.length && SD_RESPONSES.includes(after[0].act)) bump(out, rung, "f3bet", after[0].act === "fold", id);
+  }
+  if (sawFlop) {
+    const fi = acts.findIndex((x) => x.street === "flop" && AGG_ACTS.includes(x.act));
+    bump(out, rung, "cbet", fi >= 0 && acts[fi].actor === a.actor, id);
+  }
+  bump(out, rung, "won", !tb && !sawFlop, id);   // nobody raised and no flop came: it was his
+}
+
+function sdSeqPost(h, i, a, rung, out, bump) {
+  const acts = h.actions || [], id = h.id, nx = SD_NEXT_ST[a.street], rest = acts.slice(i + 1);
+  const same = rest.filter((x) => x.street === a.street);
+  const next = rest.filter((x) => x.street === nx);
+  const mine = next.filter((x) => x.actor === a.actor);
+  bump(out, rung, "n", true, id);
+  // taking it down means everyone folded to the bet — not that he folded to a raise,
+  // and not that the next street simply went unlogged.
+  bump(out, rung, "won", !next.length && !same.some((x) => x.act === "call" || AGG_ACTS.includes(x.act))
+    && !same.some((x) => x.actor === a.actor && x.act === "fold"), id);
+  if (!mine.length) return;                      // he never acted on the next street
+  const check = mine[0].act === "check";
+  bump(out, rung, "barrel", AGG_ACTS.includes(mine[0].act), id);
+  bump(out, rung, "check", check, id);
+  if (!check) return;
+  const after = mine.slice(1);
+  // only counts once someone actually bet at him; checking through is not a fold
+  if (!after.length || !SD_RESPONSES.includes(after[0].act)) return;
+  bump(out, rung, "xf", after[0].act === "fold", id);
+  bump(out, rung, "xc", after[0].act === "call", id);
+  bump(out, rung, "xr", AGG_ACTS.includes(after[0].act), id);
+}
+
+function renderSeq(oppId, hands) {
+  const host = $("od-seq");
+  if (!host) return;
+  const A = sdSeqAuto(oppId, hands);
+  sdSeqT = {};
+  stPopHide();
+  const grid = (rows, cols, tag, what) => {
+    const used = SD_SEQ_RUNGS.filter((x) => rows[x] && rows[x].n && rows[x].n[1]);
+    if (!used.length) return `<div class="stnote">No ${what} logged yet.</div>`;
+    const tot = used.reduce((s, x) => s + rows[x].n[1], 0);
+    const head = `<div class="strow sthead" style="--cols:${cols.length}"><div></div>${cols.map((c) => `<div>${c[0]}</div>`).join("")}</div>`;
+    return `<div class="sttable">${head}${used.map((x) => `<div class="strow" style="--cols:${cols.length}"><div class="stlbl">${x}</div>${
+      cols.map(([lbl, k]) => {
+        const s = rows[x][k];
+        if (!s || !s[1]) return `<div class="stc none">–</div>`;
+        const key = `sq|${tag}|${x}|${k}`;
+        sdSeqT[key] = { r: s, label: `${x} ${what} · ${lbl} · ${s[0]}/${s[1]}` };
+        if (k === "n") return `<div class="stc stk" data-stk="${key}"><b>${s[1]}</b><i>${Math.round((100 * s[1]) / tot)}%</i></div>`;
+        return `<div class="stc stk${s[1] < 5 ? " thin" : ""}" data-stk="${key}"><b>${Math.round((100 * s[0]) / s[1])}</b><i>${s[0]}/${s[1]}</i></div>`;
+      }).join("")}</div>`).join("")}</div>`;
+  };
+  host.innerHTML = `
+    <div class="szsub">His opens · size he chose, and what came of it</div>
+    ${grid(A.pre, SD_SEQ_PRE_COLS, "pre", "open")}
+    <div class="szsub">His flop bet → the turn</div>
+    ${grid(A.post.flop, SD_SEQ_POST_COLS, "flop", "flop bet")}
+    <div class="szsub">His turn bet → the river</div>
+    ${grid(A.post.turn, SD_SEQ_POST_COLS, "turn", "turn bet")}
+    <div class="stnote">Every rung is a share of the pot, so the same rung means the same shape on every street. An open is a raise over the live ante, priced as chips beyond the call ÷ the pot after that call — which is why a big iso over three limpers and a smaller one over a single limp both land on B100. <b>Min</b> is a raise to exactly twice the standing bet; it sits apart because it plays nothing like the rung it would otherwise fall in. Only sizes he picked himself — his open, or his first bet on a street; a raise he made over someone else's bet belongs to the Sizings grid, not here.<br>
+    Denominators differ by column, and each is the honest one: <b>3bet</b>, <b>Won pre</b> and <b>Won</b> are out of every bet on that rung; <b>Folds</b> is out of the 3bets he answered; <b>Cbet</b> is out of the flops he saw; <b>Barrel</b> and <b>Checks</b> are out of the times he got to act on the next street; <b>→fold/→call/→raise</b> are out of the times he checked <i>and someone bet at him</i> — checking through is not a fold. Faded numbers are under five hands. No hole cards needed, so this reads every hand, not just showdowns.</div>`;
+}
+
+function bindSeq() {
+  $("od-seq").onclick = (e) => {
+    const c = e.target.closest("[data-stk]");
+    if (c) { stPopHide(); openStatSheet(c); }
+  };
+  if (matchMedia("(hover: hover)").matches) {
+    const hh = $("od-seq");
+    hh.addEventListener("mouseover", (e) => { const c = e.target.closest("[data-stk]"); if (c) stPopShow(c); else stPopHide(); });
+    hh.addEventListener("mouseleave", stPopHide);
+  }
 }
 
 function bindSizing() {
