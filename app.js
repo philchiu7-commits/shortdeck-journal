@@ -1069,6 +1069,11 @@ function hideSheet() {
 const VIEWS = ["opponents", "opp", "hand", "table", "handview", "data"];
 const TAB_FOR = { opponents: "opponents", opp: "opponents", hand: "hand", table: "table", handview: "opponents", data: "data" };
 
+/* Laptop: a hand docks down the right of the page it came from, which stays
+   live beside it — reads can be marked while the hand is open. The phone keeps
+   the hand as its own screen; CSS hides the page underneath there. */
+let curView = null, curHash = "", hvUnder = null, hvUnderHash = null;
+const hvWide = () => matchMedia("(min-width: 1000px)").matches;
 function route() {
   const raw = (location.hash || "#opponents").slice(1);
   // Only split on the FIRST slash — base64 import payloads can contain "/".
@@ -1089,17 +1094,31 @@ function route() {
   }
   const v = VIEWS.includes(view) ? view : "opponents";
   if (v !== "handview" && v !== "opp") handPlay = null;
-  if (v !== "handview") { replayStop(); railOpen(false); splitDetach(); }
+  if (v !== "handview") { replayStop(); splitDetach(); }
   // Filters belong to a player, not to a screen: narrowing to four hands is the
   // prelude to reading them one by one, so opening one and coming back keeps them.
   if (v === "opp" ? arg !== handFiltersFor : v !== "handview") { resetHandFilters(); noCardsOpen = false; }
-  VIEWS.forEach((x) => $("view-" + x).classList.toggle("hidden", x !== v));
+  const from = curView, fromHash = curHash, wide = hvWide();
+  curView = v; curHash = "#" + raw;
+  if (v === "handview" && from !== "handview") {
+    hvUnder = from && from !== "hand" ? from : null; hvUnderHash = hvUnder ? fromHash : null;
+    if (!hvUnder) { hvUnder = "opponents"; hvUnderHash = "#opponents"; renderOpponents(); }   // opened from a link
+  }
+  const under = v === "handview" ? hvUnder : null;
+  VIEWS.forEach((x) => {
+    $("view-" + x).classList.toggle("hidden", x !== v && x !== under);
+    $("view-" + x).classList.toggle("under", x === under);
+  });
+  document.body.classList.toggle("hvopen", v === "handview");
   document.querySelectorAll("#tabbar button").forEach((b) =>
     b.classList.toggle("on", b.dataset.tab === TAB_FOR[v]));
   hideSheet();
   ({ opponents: renderOpponents, opp: () => renderOppDetail(arg), hand: renderHandEntry,
      table: renderTableTab, handview: () => renderHandView(arg), data: renderData })[v]();
-  window.scrollTo(0, 0);
+  // The page beside a docked hand keeps its scroll, on the way in and back out.
+  if (v === "handview" && wide) $("view-handview").scrollTop = 0;
+  else if (!(wide && from === "handview" && v === hvUnder)) window.scrollTo(0, 0);
+  if (v !== "handview") { hvUnder = null; hvUnderHash = null; }
   maybeNagBackup();                          // data lives only on this phone — prompt a backup if stale
 }
 
@@ -2925,6 +2944,78 @@ function replaySeats(h, focus) {
   return { ring, n, parts, focus: anchor.p, slot: (pos) => (((ring.indexOf(pos) - ai) % n) + n) % n };
 }
 
+/* Seats that only ever folded preflop, in a hand that saw a flop. They never
+   played the hand, so the strip and the history read as the hand between the
+   players who did. A preflop hand keeps every fold — there the folds are the story. */
+function replayQuiet(h) {
+  const A = h.actions || [];
+  if (!A.some((a) => a.street !== "pre")) return new Set();
+  const q = new Set(A.filter((a) => a.street === "pre" && a.act === "fold").map((a) => a.actor));
+  for (const a of A) if (a.act !== "fold") q.delete(a.actor);
+  return q;
+}
+/* The felt reads by colour before it reads by words: orange a bet, red a
+   raise, pink all in, green a call. */
+function replayKind(a, pe, i) {
+  if (["fold", "check", "call", "limp"].includes(a.act)) return a.act;
+  if (a.act === "jam" || a.size === "Jam" || pe.allIn[i]) return "jam";
+  return a.act === "bet" ? "bet" : "raise";
+}
+/* Where the pot goes once the hand is over — side pots layered off what each
+   seat put in, dead antes to the main pot. A bet nobody matched goes back to
+   whoever made it, so `uncalled` is not part of anyone's win. */
+function replayPayout(h, pe) {
+  const win = handWinner(h);
+  if (!win) return null;
+  const A = h.actions || [], inv = pe.invested;
+  const folded = new Set(A.filter((a) => a.act === "fold").map((a) => a.actor));
+  const parts = (h.villains || []).map((_, i) => "v" + i);
+  if (h.hero !== false) parts.unshift("hero");
+  const live = parts.filter((p) => !folded.has(p));
+  const board = (h.board || []).filter(Boolean);
+  const cardsOf = (p) => p === "hero" ? h.heroCards : h.villains?.[Number(p.slice(1))]?.cards;
+  const score = {};
+  if (win.how === "showdown") live.forEach((p) => { score[p] = best7(board.concat(cardsOf(p))); });
+  const pay = {}, levels = [...new Set(live.map((p) => inv[p] || 0))].filter((x) => x > 0).sort((a, b) => a - b);
+  let prev = 0, paid = 0, main = null;
+  for (const L of levels) {
+    let layer = 0;
+    for (const p in inv) layer += Math.max(0, Math.min(inv[p], L) - prev);
+    const elig = live.filter((p) => (inv[p] || 0) >= L);
+    let ws = win.winners.filter((p) => elig.includes(p));
+    if (win.how === "showdown") {
+      let best = null; ws = [];
+      for (const p of elig) {
+        const d = best ? cmpScore(score[p], best) : 1;
+        if (d > 0) { best = score[p]; ws = [p]; } else if (d === 0) ws.push(p);
+      }
+    }
+    if (!ws.length) ws = elig;
+    if (!main) main = ws;
+    ws.forEach((p) => { pay[p] = (pay[p] || 0) + layer / ws.length; });
+    paid += layer; prev = L;
+  }
+  const rest = pe.now - paid;
+  if (rest > 0 && main) main.forEach((p) => { pay[p] = (pay[p] || 0) + rest / main.length; });
+  const top = Object.entries(inv).sort((a, b) => b[1] - a[1]);
+  const uncalled = top.length > 1 && top[0][1] > top[1][1] && !folded.has(top[0][0]) ? { p: top[0][0], n: top[0][1] - top[1][1] } : null;
+  const won = {};
+  for (const p in pay) won[p] = pay[p] - (uncalled && uncalled.p === p ? uncalled.n : 0);
+  return { win, pay, won, uncalled, score };
+}
+const SD_HAND_NAMES = ["High card", "Pair", "Two pair", "Trips", "Straight", "Full house", "Flush", "Quads", "Straight flush"];
+function best5(cs) {
+  let best = null;
+  const n = cs.length;
+  for (let a = 0; a < n - 4; a++) for (let b = a + 1; b < n - 3; b++) for (let c = b + 1; c < n - 2; c++)
+    for (let d = c + 1; d < n - 1; d++) for (let e = d + 1; e < n; e++) {
+      const five = [cs[a], cs[b], cs[c], cs[d], cs[e]], sc = score5(five);
+      if (!best || cmpScore(sc, best.score) > 0) best = { score: sc, cards: five };
+    }
+  if (best) best.cards.sort((x, y) => RVAL[y[0]] - RVAL[x[0]]);
+  return best;
+}
+
 function replayHTML(h, k) {
   const acts = h.actions || [];
   k = Math.max(0, Math.min(acts.length, k));
@@ -2937,6 +3028,12 @@ function replayHTML(h, k) {
   const S = replaySeats(h, hvOppId(h)), slots = slotsFor(S.n);
   if (!S.parts.length) return "";                  // nobody was given a seat — nothing to replay
   const inFront = Object.values(pe.contrib).reduce((a, x) => a + x, 0);
+  const pay = done ? replayPayout(h, pe) : null;
+  const peAll = done ? pe : estimatePot(h, acts);
+  // Each seat's last word this street stays up until the street is swept (the
+  // laptop felt has room for it; the phone shows only the live one).
+  const said = {};
+  for (let j = k - 1; j >= 0 && acts[j].street === street; j--) if (!(acts[j].actor in said)) said[acts[j].actor] = j;
 
   // Board: what this street has dealt, all of it once the hand is over.
   const board = (h.board || []).slice(0, done ? 5 : upTo[street]).filter(Boolean);
@@ -2958,12 +3055,13 @@ function replayHTML(h, k) {
     // has to read as a player holding two cards.
     const cards = `<div class="rcards${shown ? "" : " back"}">${shown ? tilesHTML(x.cards) : "<i></i><i></i>"}</div>`;
     // What he has behind right now, not what he sat down with.
-    const left = Math.max(0, x.chips - (pe.invested[x.p] || 0));
+    const left = Math.max(0, x.chips - (pe.invested[x.p] || 0) + (pay?.pay[x.p] || 0));
     const stk = x.chips
       ? `<span class="tstack${left ? "" : " allin"}">${left ? stackStr(left) + (ante > 1 ? ` · ${Math.round(left / ante)}a` : "") : "all in"}</span>`
       : "";
     const dB = x.pos === "BN" ? `<span class="tdealer">D</span>` : "";
-    const say = up ? `<div class="rsay">${esc(replaySay(h, k - 1))}</div>` : "";
+    const sj = said[x.p];
+    const say = sj != null && !(done && !up) ? `<div class="rsay k-${replayKind(acts[sj], peAll, sj)}${up ? "" : " keep"}">${esc(replaySay(h, sj))}</div>` : "";
     felt += `<div class="rseat${x.p === "hero" ? " hero" : ""}${x.p === S.focus && x.p !== "hero" ? " focus" : ""}${out ? " out" : ""}${up ? " up" : ""}" style="left:${sx}%;top:${sy}%">
       ${cards}<div class="rpill"><span class="tpos">${esc(x.pos)}</span><span class="tnm">${esc(x.name)}</span>${stk}${dB}</div>${say}</div>`;
     const bet = pe.contrib[x.p] || 0;
@@ -2973,13 +3071,27 @@ function replayHTML(h, k) {
     }
   }
   if (done) {
-    const win = handWinner(h);
+    const win = pay?.win;
+    const amt = pay ? Object.values(pay.won).reduce((a, x) => a + x, 0) : 0;
     const txt = win
       ? (win.winners.length > 1 ? "Chop — " : "") + win.winners.map((w) => actorLabel(h, w)).join(" & ") +
-        (win.winners.length > 1 ? "" : " wins" + (win.how === "showdown" ? " at showdown" : ""))
+        (win.winners.length > 1 ? "" : " wins") + (amt ? " " + potStr(amt, raw) : "") +
+        (win.winners.length === 1 && win.how === "showdown" ? " at showdown" : "")
       : "";
     if (txt) felt += `<div class="rend">${esc(txt)}</div>`;
   }
+  // What the record can't tell, said under the felt rather than guessed at.
+  const warns = [];
+  const last = acts[acts.length - 1];
+  if (last && isAgg(last.act)) {
+    const out = new Set(acts.filter((a) => a.act === "fold").map((a) => a.actor));
+    if (new Set(acts.map((a) => a.actor).filter((p) => p !== last.actor && !out.has(p))).size)
+      warns.push(["ends on an unanswered bet", "The last bet has no answer on record — the fold or call was never logged"]);
+  }
+  if (!S.parts.some((x) => x.chips)) warns.push(["no stacks", "No starting stacks on record for this hand, so none can be shown"]);
+  const unseated = (h.villains || []).filter((v) => !v.pos).length;
+  if (unseated) warns.push([`${unseated} not seated`, "No position on record, so there is no honest seat for them"]);
+  const foot = warns.length ? `<div class="rfoot">${warns.map(([t, why]) => `<span class="rwarn" title="${esc(why)}">${esc(t)}</span>`).join("")}</div>` : "";
 
   // Controls: jump to a street, step an action at a time, or let it run.
   const first = {};
@@ -2991,7 +3103,9 @@ function replayHTML(h, k) {
   const posOf = {};
   S.parts.forEach((x) => { posOf[x.p] = x.pos; });
   let seen = null;
+  const quiet = replayQuiet(h);
   const strip = acts.map((a, i) => {
+    if (a.street === "pre" && quiet.has(a.actor)) return "";
     const sep = a.street === seen ? "" : `<span class="rssep">${(a.street === "pre" ? "pre" : a.street).toUpperCase()}</span>`;
     seen = a.street;
     const agg = ["bet", "raise", "3bet", "4bet", "5bet", "jam"].includes(a.act);
@@ -3012,13 +3126,72 @@ function replayHTML(h, k) {
         <span class="rcount">${k}/${acts.length}</span>
       </div>
       ${strip ? `<div class="rstrip">${strip}</div>` : ""}</div>`;
-  return `<div class="rfelt">${felt}</div>${ctl}`;
+  return `<div class="rfelt">${felt}</div>${foot}${ctl}`;
+}
+
+/* The whole hand as a hand-history panel: one column per street headed by the
+   pot that came into it, a card per action with the seat's position badge, the
+   antes up front and the showdown at the end. Tapping a card steps the felt. */
+function replayHistoryHTML(h, k) {
+  const acts = h.actions || [];
+  if (!acts.length) return `<div class="rplog-empty">No actions on record.</div>`;
+  const raw = isRawSize(h), ante = Number(h.blinds?.ante) || 0;
+  const pe = estimatePot(h, acts), S = replaySeats(h, hvOppId(h)), quiet = replayQuiet(h);
+  const seat = {};
+  S.parts.forEach((x) => { seat[x.p] = x; });
+  const posOf = (p) => seat[p]?.pos || "";
+  const who = (p) => `<span class="rphh-who"><span class="rphh-pos${posOf(p) === "BN" ? " p-d" : ""}">${esc(posOf(p) || "?")}</span>` +
+    `<span class="rphh-nm">${esc(seat[p]?.name || actorLabel(h, p))}</span></span>`;
+  const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  const seats = Number(h.seats) || S.parts.length;
+  const antes = ante ? `<button class="rphh-blinds${k === 0 ? " on" : ""}" data-rjump="0"><span>Ante ${esc(kAmt(ante, raw))} ×${seats}</span>` +
+    (S.parts.some((x) => x.pos === "BN") ? `<span><i class="rphh-pos p-d">BN</i>+${esc(kAmt(ante, raw))} live</span>` : "") + `</button>` : "";
+  const cols = [];
+  for (const st of STREETS) {
+    const idx = acts.map((a, i) => a.street === st ? i : -1).filter((i) => i >= 0);
+    if (!idx.length) continue;
+    const cards = idx.filter((i) => !(st === "pre" && quiet.has(acts[i].actor))).map((i) => {
+      const a = acts[i], kind = replayKind(a, pe, i), say = replaySay(h, i);
+      const amt = pe.perAct[i];
+      const txt = esc(cap(say)) + (amt && (a.street !== "pre" || !/\d/.test(say)) ? ` <span class="rphh-amt">${esc(potStr(amt, raw))}</span>` : "") +
+        (pe.allIn[i] ? `<i class="rphh-allin">All-in</i>` : "");
+      return `<button class="rphh-card k-${kind}${i === k - 1 ? " on" : ""}" data-rjump="${i + 1}">${who(a.actor)}<span class="rphh-act">${txt}</span></button>`;
+    }).join("");
+    cols.push(`<div class="rphh-col"><button class="rphh-hd" data-rjump="${idx[0] + 1}"><span>${st === "pre" ? "Preflop" : cap(st)}</span>` +
+      `<b>${esc(potStr(pe.atStart[st], raw))}</b></button>${cards}</div>`);
+  }
+  const pay = replayPayout(h, pe), n = acts.length;
+  const out = new Set(acts.filter((a) => a.act === "fold").map((a) => a.actor));
+  const live = S.parts.filter((x) => acts.some((a) => a.actor === x.p) && !out.has(x.p));
+  if (pay || live.some((x) => (x.cards || []).some(Boolean))) {
+    let cards = "";
+    for (const x of live) {
+      const won = !!pay && pay.win.winners.includes(x.p), cs = (x.cards || []).filter(Boolean);
+      cards += `<button class="rphh-card k-sd${won ? " won" : ""}${k === n ? " on" : ""}" data-rjump="${n}">${who(x.p)}` +
+        `<span class="rphh-act rphh-sd">${cs.length ? tilesHTML(cs) : "<em>not shown</em>"}${won && pay.won[x.p] ? `<b>+${esc(potStr(pay.won[x.p], raw))}</b>` : ""}</span></button>`;
+    }
+    if (pay) {
+      const w = pay.win, names = w.winners.map((p) => seat[p]?.name || actorLabel(h, p)).join(" & ");
+      const amt = Object.values(pay.won).reduce((a, x) => a + x, 0);
+      const board = (h.board || []).filter(Boolean), c0 = seat[w.winners[0]]?.cards || [];
+      const five = w.how === "showdown" ? best5(board.concat(c0.filter(Boolean))) : null;
+      cards += `<div class="rphh-win"><div>${esc(names)} ${w.winners.length > 1 ? "chop" : "wins"}${amt ? " " + esc(potStr(amt, raw)) : ""}` +
+        `${w.how === "folds" ? " <small>all fold</small>" : ""}</div>` +
+        (pay.uncalled ? `<div class="rphh-ret">${esc(seat[pay.uncalled.p]?.name || actorLabel(h, pay.uncalled.p))} gets ${esc(potStr(pay.uncalled.n, raw))} back, uncalled</div>` : "") +
+        (five ? `<div class="rphh-five">${tilesHTML(five.cards)}<small>${SD_HAND_NAMES[five.score[0]]}</small></div>` : "") + `</div>`;
+    }
+    cols.push(`<div class="rphh-col"><button class="rphh-hd" data-rjump="${n}"><span>${pay ? (pay.win.how === "folds" ? "Result" : "Showdown") : "End"}</span>` +
+      `<b>${esc(potStr(pe.now - (pay?.uncalled?.n || 0), raw))}</b></button>${cards}</div>`);
+  }
+  return `<div class="rphh-title">Hand history${ante ? " · " + esc(kAmt(ante, raw)) + " ante" : ""} · ${seats}-handed</div>${antes}` +
+    `<div class="rphh-cols" style="--n:${cols.length}">${cols.join("")}</div>`;
 }
 
 function renderReplay() {
   const h = HANDS.find((x) => x.id === curHandId);
   if (!h) return;
   $("hv-felt").innerHTML = replayHTML(h, replayStep);
+  $("hv-log").innerHTML = replayHistoryHTML(h, replayStep);
   // Scroll the strip itself rather than scrollIntoView, which would drag the page.
   const strip = $("hv-felt").querySelector(".rstrip"), on = strip && strip.querySelector(".ract.on");
   if (on) strip.scrollLeft = on.offsetLeft - strip.clientWidth / 2 + on.offsetWidth / 2;
@@ -3082,7 +3255,7 @@ function renderHandView(id) {
   }
   $("hv-text").innerHTML = handHTML(h, i >= 0 ? handPlay.oppId : null);
   renderReplay();
-  renderRail();
+  renderHandPager(id);
   splitSync();
   const nav = $("hv-nav");
   nav.classList.toggle("hidden", i < 0);
@@ -3092,36 +3265,36 @@ function renderHandView(id) {
   nav.querySelector("[data-hvstep='1']").disabled = i === list.length - 1;
   $("hv-count").textContent = `${handPlay.label || oppById(handPlay.oppId)?.name || "Hand"} · ${i + 1}/${list.length}`;
 }
-/* The reel as a scrollable list — the way to skip to a hand ten back without
-   stepping through the ones between. */
-function renderRail() {
-  const list = handPlayList(), focus = handPlay ? handPlay.oppId : null;
-  $("hv-list").classList.toggle("hidden", list.length < 2);
-  if (list.length < 2) { railOpen(false); return; }
-  $("hv-rail-title").textContent = `${handPlay?.label || oppById(focus)?.name || "Hands"} · ${list.length}`;
-  $("hv-rail-list").innerHTML = list.map((id, i) => {
-    const h = HANDS.find((x) => x.id === id);
-    if (!h) return "";
-    const vi = focus ? (h.villains || []).findIndex((v) => v.opponentId === focus) : -1;
-    const who = vi >= 0 ? h.villains[vi] : { pos: h.heroPos, cards: h.heroCards };
-    const cards = (who.cards || []).some(Boolean) ? tilesHTML(who.cards) : `<span class="rl-none">· ·</span>`;
-    const win = handWinner(h);
-    const seat = vi >= 0 ? "v" + vi : (h.hero === false ? null : "hero");
-    const folded = seat && (h.actions || []).some((a) => a.actor === seat && a.act === "fold");
-    const res = folded ? "lost" : win && seat ? (win.winners.includes(seat) ? (win.winners.length > 1 ? "chop" : "won") : "lost") : null;
-    return `<button class="rlrow${id === curHandId ? " on" : ""}${res ? " " + res : ""}" data-railhand="${esc(id)}">
-        <span class="rl-n">${i + 1}</span>
-        <span class="rl-c">${cards}</span>
-        <span class="rl-p">${esc(who.pos || "")}</span>
-      </button>`;
-  }).join("");
+/* The reel is always in view: a rail down the left of the felt listing every
+   hand in it, scrolled to the one open. Green when the player being read won
+   it, red when he lost — a fold is a loss whether or not the rest can be scored. */
+function hvResult(h, focus) {
+  const vi = focus ? (h.villains || []).findIndex((v) => v.opponentId === focus) : -1;
+  const seat = vi >= 0 ? "v" + vi : (h.hero === false ? null : "hero");
+  if (!seat) return { who: null, res: null };
+  const who = vi >= 0 ? h.villains[vi] : { pos: h.heroPos, cards: h.heroCards };
+  if ((h.actions || []).some((a) => a.actor === seat && a.act === "fold")) return { who, res: "lost" };
+  const win = handWinner(h);
+  return { who, res: win ? (win.winners.includes(seat) ? (win.winners.length > 1 ? "chop" : "won") : "lost") : null };
 }
-function railOpen(v) {
-  $("hv-rail").classList.toggle("hidden", !v);
-  $("hv-rail-backdrop").classList.toggle("hidden", !v);
-  if (!v) return;
-  const on = $("hv-rail-list").querySelector(".rlrow.on");
-  if (on) $("hv-rail-list").scrollTop = on.offsetTop - $("hv-rail-list").clientHeight / 2;
+function renderHandPager(id) {
+  const box = $("hv-pager"), list = handPlayList(), i = list.indexOf(id);
+  box.classList.toggle("hidden", i < 0);
+  box.parentElement.classList.toggle("rail", i >= 0);
+  if (i < 0) { box.innerHTML = ""; return; }
+  const focus = handPlay ? handPlay.oppId : null;
+  box.innerHTML = `<div class="hvpos">${i + 1}/${list.length}</div><div class="hvlist">${list.map((x, k) => {
+    const h = HANDS.find((y) => y.id === x);
+    if (!h) return "";
+    const { who, res } = hvResult(h, focus);
+    const cards = (who?.cards || []).filter(Boolean);
+    return `<button class="hvrow${x === id ? " on" : ""}${res ? " " + res : ""}" data-hvgo="${esc(x)}">` +
+      `<span class="hvn">${k + 1}</span>` +
+      `<span class="hvc">${cards.length ? tilesHTML(cards) : `<span class="hvnc">··</span>`}</span>` +
+      `<span class="hvp">${esc(who?.pos || "")}</span></button>`;
+  }).join("")}</div>`;
+  const lst = box.querySelector(".hvlist"), cur = lst.querySelector(".hvrow.on");
+  if (cur) lst.scrollTop = Math.max(0, cur.offsetTop - lst.clientHeight / 2 + cur.offsetHeight / 2);
 }
 /* ---- Reads split: mark a read without leaving the hand ----
    The pane borrows the opponent page's own #od-tags grid instead of cloning it,
@@ -3147,9 +3320,11 @@ function splitDetach() {
 function splitSync(oppId) {
   const h = HANDS.find((x) => x.id === curHandId), vs = hvVillains(h);
   if (!splitSlot) { const t = $("od-tags"); splitSlot = { parent: t.parentNode, next: t.nextSibling }; }
-  $("hv-reads").classList.toggle("hidden", !vs.length);
-  $("hv-reads").classList.toggle("on", splitWant && !!vs.length);
-  const on = splitWant && !!vs.length;
+  // Wide, the reads are live on the page beside the hand — no pane needed.
+  const can = !!vs.length && !hvWide();
+  $("hv-reads").classList.toggle("hidden", !can);
+  $("hv-reads").classList.toggle("on", splitWant && can);
+  const on = splitWant && can;
   if (!on) { splitDetach(); return; }
   const id = oppId || hvOppId(h);
   if (id && id !== curOppId) renderOppDetail(id);
@@ -3169,6 +3344,7 @@ function splitSync(oppId) {
    only lands on the next tick. replaceState + route() is immediate. */
 function navUp(hash) { history.replaceState(null, "", hash); route(); }
 function hvBack() {
+  if (hvWide() && hvUnderHash) return navUp(hvUnderHash);
   const h = HANDS.find((x) => x.id === curHandId);
   const id = (handPlay && handPlay.oppId) || hvOppId(h) || curOppId;
   // Going back to the list he came from, so the filters he left are still his —
@@ -5508,14 +5684,19 @@ function bindStatic() {
     if (b) { splitSync(b.dataset.splitopp); renderReplay(); }
   };
   bindSplitGrab();
-  $("hv-list").onclick = () => railOpen($("hv-rail").classList.contains("hidden"));
-  $("hv-rail-close").onclick = () => railOpen(false);
-  $("hv-rail-backdrop").onclick = () => railOpen(false);
-  $("hv-rail-list").onclick = (e) => {
-    const b = e.target.closest("[data-railhand]");
-    if (!b) return;
-    railOpen(false);
-    if (b.dataset.railhand !== curHandId) location.hash = "#handview/" + b.dataset.railhand;
+  $("hv-pager").onclick = (e) => {
+    const b = e.target.closest("[data-hvgo]");
+    if (b && b.dataset.hvgo !== curHandId) location.hash = "#handview/" + b.dataset.hvgo;
+  };
+  $("hv-log").onclick = (e) => {
+    const b = e.target.closest("[data-rjump]");
+    if (b) { replayStop(); replayGo(Number(b.dataset.rjump)); }
+  };
+  /* The written hand is still the fastest read of a line you already know,
+     so it stays one tap under the history rather than going away. */
+  $("hv-textbtn").onclick = () => {
+    const on = $("hv-text").classList.toggle("hidden");
+    $("hv-textbtn").textContent = on ? "Show the written hand" : "Hide the written hand";
   };
   // Swipe the hand itself (left = next), and arrow keys on a desktop.
   let swX = 0, swY = 0;
@@ -5527,7 +5708,10 @@ function bindStatic() {
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2) handStep(dx < 0 ? 1 : -1);
   }, { passive: true });
   document.addEventListener("keydown", (e) => {
-    if ($("hv-nav").classList.contains("hidden") || $("view-handview").classList.contains("hidden")) return;
+    if ($("view-handview").classList.contains("hidden")) return;
+    if (e.key === "Escape" && hvWide() && $("sheet").classList.contains("hidden")) return hvBack();
+    if ($("hv-nav").classList.contains("hidden")) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if (e.key === "ArrowLeft") handStep(-1);
     else if (e.key === "ArrowRight") handStep(1);
   });

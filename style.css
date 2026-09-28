@@ -1106,25 +1106,105 @@ textarea.noteedit { margin-bottom: 0; }
 .ract.out { opacity: .45; }
 .ract.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(90,150,255,.25); }
 
-/* ---- hand rail: the reel as a list, over the felt ---- */
-.railbd { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.45); }
-.hvrail { position: fixed; left: 0; top: 0; bottom: 0; width: 244px; max-width: 78vw; z-index: 40;
-  background: var(--panel); border-right: 1px solid var(--line); box-shadow: 4px 0 24px rgba(0,0,0,.5);
-  display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
-.hvrail-head { display: flex; align-items: center; justify-content: space-between; gap: 6px;
-  padding: 10px 6px 8px 12px; border-bottom: 1px solid var(--line);
-  font-size: 13px; font-weight: 700; color: var(--text); }
-#hv-rail-list { flex: 1; overflow-y: auto; padding: 4px 6px calc(12px + env(safe-area-inset-bottom)); }
-.rlrow { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
-  background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.05);
-  padding: 7px 6px; cursor: pointer; color: var(--text);
-  border-left: 4px solid transparent; }                  /* the focus player's result */
-.rlrow.won { border-left-color: var(--good); } .rlrow.lost { border-left-color: var(--bad); }
-.rlrow.on { background: #1c2c47; border-radius: 0 8px 8px 0; border-bottom-color: transparent; }
-.rl-n { flex: 0 0 22px; font-size: 11px; font-weight: 700; color: var(--muted); }
-.rl-c { display: flex; gap: 2px; flex: 0 0 auto; }
-.rl-none { color: var(--muted); font-size: 12px; letter-spacing: 2px; }
-.rl-p { flex: 1; text-align: right; font-size: 11px; font-weight: 700; color: var(--accent); }
+/* ---- the reel as a rail down the left of the felt, always in view ----
+   Green when the player being read won the hand, red when he lost. */
+.hvside { position: relative; }
+.hvside.rail #hv-felt { margin-left: 70px; }
+.hvpager { position: absolute; left: 0; top: 10px; bottom: 10px; width: 64px;
+  display: flex; flex-direction: column; padding: 3px 3px 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.hvpager .hvpos { font-size: 10.5px; color: var(--muted); text-align: center; padding: 1px 0 3px;
+  font-variant-numeric: tabular-nums; }
+.hvlist { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow-y: auto;
+  scroll-snap-type: y proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.hvlist::-webkit-scrollbar { display: none; }
+.hvrow { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 3px 2px; scroll-snap-align: center; cursor: pointer;
+  background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 8px;
+  font-size: 10.5px; color: var(--text); }
+.hvrow.won { background: rgba(63,185,80,.14); border-color: rgba(63,185,80,.55); }
+.hvrow.lost { background: rgba(248,81,73,.14); border-color: rgba(248,81,73,.55); }
+.hvrow.chop { background: rgba(230,180,34,.12); border-color: rgba(230,180,34,.5); }
+.hvrow.on { outline: 2px solid var(--accent); outline-offset: -1px; }
+.hvrow.on:not(.won):not(.lost):not(.chop) { background: #1d3050; }
+.hvrow .hvn { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 10px; }
+.hvrow .hvc { display: flex; gap: 2px; }
+.hvrow .hvc .ctile { font-size: 11px; padding: 1px 2px; box-shadow: none; }
+.hvrow .hvc .ctile .suit { font-size: 9px; }
+.hvrow .hvnc { color: var(--muted); letter-spacing: 2px; }
+.hvrow .hvp { color: var(--accent2); font-weight: 800; }
+/* the rail takes width from the transport, so its buttons give a little back */
+.hvside.rail .rtrans { gap: 3px; }
+.hvside.rail .rtrans button { padding: 6px 9px; }
+.hvside.rail .rtrans .rplay { padding: 6px 12px; }
+.hvside.rail .rcount { margin-left: 2px; }
+
+/* the seat's last word this street: live one on the phone, all of them wide */
+.rsay.keep { display: none; }
+.rsay.k-bet { color: #f0a020; } .rsay.k-raise { color: #ff6a52; } .rsay.k-jam { color: #ff5d9e; }
+.rsay.k-call, .rsay.k-limp { color: #4fd18a; } .rsay.k-check { color: #c9d1dc; } .rsay.k-fold { color: #9aa3b2; }
+.rfoot { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin: -2px 0 8px; }
+.rwarn { font-size: 10.5px; font-weight: 700; color: #e0a34a; border: 1px solid rgba(224,163,74,.45);
+  border-radius: 999px; padding: 1px 8px; }
+
+.rptextbtn { display: block; margin: 0 0 8px; }
+/* ===== The hand history =====
+   The felt says where the money is, this says how it got there. One column per
+   street, the pot that came into it in the header, a card per action; antes on
+   one line above, the showdown at the end. Tapping a card steps the felt. */
+.rphh { margin: 0 0 10px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 6px 0 4px; }
+.rphh:empty { display: none; }
+.rphh-title { font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--muted); padding: 0 10px 5px; }
+.rphh-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(122px, 100%), 1fr));
+  gap: 8px; padding: 0 8px 6px; }
+.rphh-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rphh-blinds { display: flex; flex-wrap: wrap; gap: 4px 12px; width: calc(100% - 16px); margin: 0 8px 8px;
+  background: #16233a; border: 1px solid #243449; border-left: 3px solid #4a7de0; border-radius: 9px;
+  padding: 5px 8px; color: var(--text); font: inherit; font-size: 11.5px; font-weight: 700;
+  text-align: left; cursor: pointer; }
+.rphh-blinds.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.rphh-blinds span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.rphh-blinds i { font-style: normal; }
+.rphh-hd { display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+  background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; cursor: pointer;
+  padding: 2px 2px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); text-align: left; }
+.rphh-hd b { color: var(--accent2); letter-spacing: 0; font-variant-numeric: tabular-nums; text-transform: none; }
+.rphh-card { display: block; width: 100%; text-align: left; background: #16233a; cursor: pointer;
+  border: 1px solid #243449; border-left: 3px solid var(--kc, #3a4a63); border-radius: 9px;
+  padding: 5px 7px 6px; color: var(--text); font: inherit; }
+.rphh-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.rphh-who { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; color: var(--muted); }
+.rphh-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rphh-pos { flex: none; background: #3a4a63; color: #fff; font-weight: 800; font-size: 9.5px;
+  padding: 1px 5px; border-radius: 6px; letter-spacing: .02em; }
+.rphh-pos.p-d { background: #e6b422; color: #1a1200; }
+.rphh-act { display: block; margin-top: 4px; background: #f5f7fb; color: #121826; border-radius: 6px;
+  padding: 3px 6px; font-size: 12px; font-weight: 700; line-height: 1.45; font-variant-numeric: tabular-nums; }
+.rphh-amt { font-weight: 600; color: #4b5568; }
+.rphh-allin { display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 4px;
+  background: #d61f69; color: #fff; font-size: 9.5px; font-style: normal; vertical-align: 1px; }
+.rphh-card.k-raise { --kc: #e8452c; }
+.rphh-card.k-bet { --kc: #f0a020; }
+.rphh-card.k-jam { --kc: #d61f69; }
+.rphh-card.k-call, .rphh-card.k-limp { --kc: #2fb86a; }
+.rphh-card.k-check { --kc: #8a94a6; }
+.rphh-card.k-fold { --kc: #6b7280; opacity: .72; }
+.rphh-card.k-fold .rphh-act { background: #d7dbe3; color: #3c4351; font-weight: 600; }
+.rphh-card.k-sd { --kc: #cfe3ff; }
+.rphh-card.k-sd.won { border-color: #e6b422; }
+.rphh-sd { display: flex; align-items: center; gap: 3px; }
+.rphh-sd b { margin-left: auto; font-size: 11px; color: #1a7a3f; }
+.rphh-sd em { font-weight: 500; color: #6b7280; }
+.rphh-sd .ctile, .rphh-five .ctile { font-size: 11px; padding: 1px 3px; }
+.rphh-win { padding: 4px 2px 0; font-size: 12px; font-weight: 800; color: #e6b422; }
+.rphh-win small { font-weight: 600; color: var(--muted); }
+.rphh-ret { font-size: 10.5px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+.rphh-five { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin-top: 4px; }
+.rphh-five small { margin-left: 3px; font-size: 10.5px; color: var(--text); font-weight: 600; }
+.rplog-empty { font-size: 11.5px; color: var(--muted); padding: 6px 10px; }
 
 /* Felt cards ride smaller than in the hand text — seven seats and a board have
    to share one screen width. */
@@ -1181,3 +1261,53 @@ textarea.noteedit { margin-bottom: 0; }
 #view-handview.reading { padding-bottom: calc(var(--hvsplit-h, 46vh) + 20px); }
 #view-handview.reading .hvnav { bottom: calc(var(--hvsplit-h, 46vh) + 76px + env(safe-area-inset-bottom)); }
 #hv-reads.on { color: var(--accent); }
+
+/* ===== Laptop =====
+   The tab bar becomes a sidebar, and a hand docks down the right of the page it
+   came from — no backdrop, so the reads on the left stay live while the hand is
+   open. The phone keeps the hand as its own screen: the page it came from stays
+   in the DOM but is never shown there. */
+@media (max-width: 999px) { main > section.under { display: none; } }
+@media (min-width: 1000px) {
+  body { padding-left: 92px; --hvw: clamp(560px, 50vw, 880px); }
+  #tabbar { top: 0; right: auto; width: 92px; flex-direction: column; gap: 8px;
+    border-top: 0; border-right: 1px solid var(--line); padding: 20px 6px; }
+  #tabbar button { flex: none; padding: 10px 0; font-size: 12px; }
+  main { padding-bottom: 48px; }
+  body.hvopen main { max-width: none; margin-right: var(--hvw); margin-left: 0; }
+  body.hvopen main > section.under { max-width: 620px; margin: 0 auto; }
+  #toast { left: calc(50% + 46px); }
+  main > #view-handview { position: fixed; top: 0; right: 0; bottom: 0; z-index: 15;
+    width: var(--hvw); overflow: auto; background: var(--bg);
+    border-left: 1px solid var(--line); padding: 4px 20px 24px; box-shadow: -18px 0 50px rgba(0,0,0,.45); }
+  #view-handview:not(.hidden) { display: grid; grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto auto 1fr; align-items: start; }
+  #view-handview > .vhead { grid-column: 1 / -1; grid-row: 1; }
+  .hvside { display: contents; }
+  #hv-pager { position: sticky; top: 12px; grid-column: 1; grid-row: 2 / -1; width: 80px;
+    height: calc(100vh - 90px); margin-right: 14px; }
+  .hvside.rail #hv-felt { margin-left: 0; }
+  #hv-felt { grid-column: 2; grid-row: 2; }
+  #hv-log { grid-column: 2; grid-row: 3; }
+  #hv-textbtn { grid-column: 2; grid-row: 4; justify-self: start; }
+  #hv-text { grid-column: 2; grid-row: 5; }
+  #hv-delete { grid-column: 2; grid-row: 6; justify-self: start; }
+  #view-handview.playing #hv-delete { margin-bottom: 0; }
+  #hv-split, #hv-nav, #hv-reads { display: none !important; }
+  .rphh-cols { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+  /* a felt the width of the panel, the seats and cards grown to match */
+  .rfelt { max-width: none; height: min(470px, calc(100vh - 330px)); min-height: 360px; }
+  .rfelt .ctile { font-size: 15px; padding: 2px 5px; }
+  .rfelt .ctile .suit { font-size: 12px; }
+  .rboard .ctile { font-size: 19px; padding: 3px 7px; }
+  .rboard .ctile .suit { font-size: 15px; }
+  .rpot { font-size: 14px; }
+  .rpill { max-width: 120px; padding: 4px 8px; }
+  .rpill .tpos { font-size: 10px; }
+  .rpill .tnm { font-size: 12.5px; max-width: 96px; }
+  .rpill .tstack { font-size: 10.5px; }
+  .rbet { font-size: 11.5px; }
+  .rsay.keep { display: block; opacity: .8; }
+  .rsay { font-size: 11.5px; }
+  .hvrow .hvc .ctile { font-size: 12.5px; }
+}

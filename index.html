@@ -197,17 +197,15 @@
     <button id="hv-back" class="backbtn" aria-label="Back">‹</button>
     <h1>Hand</h1>
     <button id="hv-reads" class="iconbtn hidden" title="Mark reads" aria-label="Mark reads">✍</button>
-    <button id="hv-list" class="iconbtn hidden" title="All hands" aria-label="Hand list">☰</button>
     <button id="hv-edit" class="iconbtn" title="Edit" aria-label="Edit hand">✎</button>
   </header>
-  <div id="hv-rail-backdrop" class="railbd hidden"></div>
-  <aside id="hv-rail" class="hvrail hidden">
-    <div class="hvrail-head"><span id="hv-rail-title"></span>
-      <button id="hv-rail-close" class="iconbtn" aria-label="Close list">✕</button></div>
-    <div id="hv-rail-list"></div>
-  </aside>
-  <div id="hv-felt"></div>
-  <div id="hv-text" class="handview"></div>
+  <div class="hvside">
+    <div id="hv-pager" class="hvpager hidden"></div>
+    <div id="hv-felt"></div>
+  </div>
+  <div id="hv-log" class="rphh"></div>
+  <button id="hv-textbtn" class="linkbtn rptextbtn">Show the written hand</button>
+  <div id="hv-text" class="handview hidden"></div>
   <div id="hv-split" class="hvsplit hidden">
     <div id="hv-split-grab" class="hvgrab" aria-label="Drag to resize"></div>
     <div class="hvsplit-head">
