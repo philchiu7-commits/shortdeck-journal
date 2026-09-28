@@ -45,8 +45,10 @@ function sdHandEvents(h, idx, put) {
     if (f.aggBefore === 0) {
       if (f.act !== "check" && posOf(me) !== "BN") put("limp", pc, f.act === "limp");   // the button's double ante is already in: he checks, he can't limp
       put("minOpen", pc, isAgg(f.act) && f.min);                 // min opens and min isos together — neither counts in Open or Iso
-      if (f.limpsBefore > 0) put("iso", pc, isAgg(f.act) && !f.min);
-      else put("open", pc, isAgg(f.act) && !f.min);
+      if (f.limpsBefore > 0) {
+        put("iso", pc, isAgg(f.act) && !f.min);
+        if (posOf(me) !== "BN") put("isoFold", pc, f.act === "fold");   // the button can't fold behind limps — his double ante is already in
+      } else put("open", pc, isAgg(f.act) && !f.min);
     } else {
       if (f.aggBefore === 1) { put("cc", pc, f.act === "call"); put("3bet", pc, isAgg(f.act) && !f.min); put("min3bet", pc, isAgg(f.act) && f.min); }
     }
@@ -168,7 +170,7 @@ let sdMinHide = localStorage.getItem("sd-minhide") === "1";   // MinO/Iso and Mi
 const SD_HUD_PRE = [["VPIP", "vpip"], ["Limp", "limp"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"]];
 const SD_HUD_POST = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
-const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
+const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Iso fold", "isoFold"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet river", "cbetR"], ["Fold to cbet", "fcb"], ["Fold to turn cbet", "fcbT"], ["Fold to river cbet", "fcbR"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
@@ -178,6 +180,7 @@ const SD_DEFS = [
   ["MinO/Iso", "A raise of at most 2× the ante when no one had raised yet — first in, or over limpers. Out of every hand where he acted with no raise in front of him. These never count in Open or Iso."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet. A min raise doesn't count — it goes to MinO/Iso."],
+  ["Iso fold", "Folded behind limpers instead of isolating — same spots as Iso, so the two read against the same base. Over-limping and calling are the rest. Not counted on the button: his double ante is already in, so he checks rather than folds."],
   ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged). A min re-raise (at most double the raise he faced) doesn't count as an LRR."],
   ["Fold 3bet", "After he raised first and got 3bet: folded."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
@@ -635,11 +638,11 @@ function renderSizing(oppId, hands) {
       const on = steps.includes(x);
       return `<button class="chip mini szcol${on ? " on" : ""}" data-szcol="${x}" title="${on ? "Hide" : "Show"} ${x}">${x}</button>`;
     }).join("")}${hidden.length ? `<span class="muted szcolhint">${hidden.length} hidden</span>` : ""}</div>
-    <div class="szsub">Bets · % of pot${A.n ? ` · ${A.n} bet${A.n === 1 ? "" : "s"}` : ""}</div>
+    <div class="szsub">His bets · % of pot${A.n ? ` · ${A.n} bet${A.n === 1 ? "" : "s"}` : ""}</div>
     <div class="sttable">${grid(steps, "", true)}</div>
-    <div class="szsub">Raises · % of pot after calling${A.nR ? ` · ${A.nR} raise${A.nR === 1 ? "" : "s"}` : ""}</div>
+    <div class="szsub">His raises · % of pot after calling${A.nR ? ` · ${A.nR} raise${A.nR === 1 ? "" : "s"}` : ""}</div>
     <div class="sttable">${grid(steps, "r", false)}</div>
-    <div class="stnote">From hands where his cards were logged, so bluffs he never showed aren't here — read the Bluff rows as a floor. Value = trips+ with his own cards, an overpair, or two pair with both his cards. On a flush board (3+ of a suit) or a four-to-a-straight board only trips+ is value, and on a paired board two pair isn't. Everything else, draws and top pair included, counts as a bluff.${
+    <div class="stnote">Only sizes he chose himself — a bet or raise of his own. A bet he called is the other player's sizing and isn't counted. From hands where his cards were logged, so bluffs he never showed aren't here — read the Bluff rows as a floor. Value = trips+ with his own cards, an overpair, or two pair with both his cards. On a flush board (3+ of a suit) or a four-to-a-straight board only trips+ is value, and on a paired board two pair isn't. Everything else, draws and top pair included, counts as a bluff.${
       skips.length ? `<br>Left out — ${esc(skips.join("; "))}.` : ""}</div>`;
 }
 
