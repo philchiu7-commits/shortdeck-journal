@@ -1981,12 +1981,14 @@ function bindOppDrag() {
       const sec = row.closest(".groupsec");
       row.classList.add("dragging");
       const move = (ev) => {
-        const y = ev.clientY;
+        const x = ev.clientX, y = ev.clientY;
         const rows = [...sec.querySelectorAll(".opprow:not(.dragging)")];
         let after = null;
         for (const r of rows) {
           const box = r.getBoundingClientRect();
-          if (y > box.top + box.height / 2) after = r;
+          // a laptop lays the rows out in columns, so reading order is left to right, then down
+          const grid = box.width < sec.clientWidth * 0.9;
+          if (grid ? y > box.bottom || (y > box.top && x > box.left + box.width / 2) : y > box.top + box.height / 2) after = r;
         }
         if (after) after.after(row);
         else sec.prepend(row);

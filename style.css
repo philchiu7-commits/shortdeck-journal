@@ -1273,12 +1273,25 @@ textarea.noteedit { margin-bottom: 0; }
   #tabbar { top: 0; right: auto; width: 92px; flex-direction: column; gap: 8px;
     border-top: 0; border-right: 1px solid var(--line); padding: 20px 6px; }
   #tabbar button { flex: none; padding: 10px 0; font-size: 12px; }
-  main { padding-bottom: 48px; }
+  /* The page uses the laptop's width: lists and the opponent page spread out,
+     forms stay a readable column in the middle. */
+  main { max-width: 1480px; padding: 12px 28px 48px; }
+  main > section { max-width: 760px; margin: 0 auto; }
+  main > #view-handview, main > #view-opponents { max-width: none; }
+  main > #view-opp { max-width: 1240px; }
+  .vhead.sticky { margin: 0 -28px 4px; padding-left: 28px; padding-right: 28px; }
+  .savebar { left: 92px; bottom: 0; max-width: 760px; }
+  #sheet { left: 92px; bottom: auto; top: 10vh; width: 560px; max-height: 80vh;
+    border: 1px solid var(--line); border-radius: 18px; padding-bottom: 16px; }
+  .odcols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; align-items: start; }
+  /* with a hand docked the page is half as wide: one column reads better than two squeezed */
+  body.hvopen .odcols { grid-template-columns: minmax(0, 1fr); }
+  #opp-list .groupsec { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
   body.hvopen main { max-width: none; margin-right: var(--hvw); margin-left: 0; }
-  body.hvopen main > section.under { max-width: 620px; margin: 0 auto; }
-  #toast { left: calc(50% + 46px); }
+  body.hvopen main > section.under { max-width: 1240px; margin: 0 auto; }
+  #toast { bottom: 32px; left: calc(50% + 46px); }
   main > #view-handview { position: fixed; top: 0; right: 0; bottom: 0; z-index: 15;
-    width: var(--hvw); overflow: auto; background: var(--bg);
+    width: var(--hvw); max-width: none; overflow: auto; background: var(--bg);
     border-left: 1px solid var(--line); padding: 4px 20px 24px; box-shadow: -18px 0 50px rgba(0,0,0,.45); }
   #view-handview:not(.hidden) { display: grid; grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto auto auto auto auto auto 1fr; align-items: start; }
