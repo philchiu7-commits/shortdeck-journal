@@ -1024,27 +1024,42 @@ function actPhrase(a, raw = false) {
    chips the B33/B50/B66 buttons put in. Derived from the resolved amount, so a
    hand typed in chips still reads as a pot fraction. Preflop stays in antes and
    multiples — that's how short-deck opens are read. */
-function sizeTag(h, i) {
+/* How big each bet and raise was, read the way the Sizing grid reads it: a bet
+   against the pot it went into, a raise as what he put in on top of the call
+   against the pot with that call already in (a pot-size raise is B100). The
+   share snaps to the grid's rung — B33/B50/B66/B75/B100/B150 — so the replayer
+   and the grid never disagree about the same bet; past B150 it is the fraction
+   itself, to the nearest 10%. A jam carries its rung too: "JAM B75" says what
+   the shove cost, "JAM" alone that the pot couldn't be rebuilt. → {tag, allInCall} */
+function sizeRead(h, i) {
   const acts = h.actions || [], a = acts[i];
-  if (!a) return "";
-  if (a.act === "fold" || a.act === "check" || a.act === "call" || a.act === "limp") return a.act;
+  if (!a) return { tag: "" };
+  if (a.act === "fold" || a.act === "check" || a.act === "call" || a.act === "limp") return { tag: a.act };
   const raw = isRawSize(h), lbl = a.size ? sizeLabel(a.size, raw) : "";
-  if (a.size === "Jam" || a.act === "jam") return "JAM";
-  if (a.street === "pre") return lbl || a.act;
+  const jam = a.size === "Jam" || a.act === "jam";
   const pe = estimatePot(h, acts.slice(0, i + 1)), lvl = pe.perAct[i], b = pe.pre[i];
-  if (!lvl || !b || !b.pot) return lbl || a.act;
-  // A bet the stack couldn't cover is a jam, whatever percentage was typed.
-  if (pe.allIn[i]) return "JAM";
-  const pct = Math.round(((lvl - b.curBet) / b.pot) * 100);
-  return pct > 0 ? "B" + pct : (lbl || a.act);
+  // All in for no more than the bet in front of him is a call, the way the
+  // table reads it: no size of his own, so no rung either.
+  if ((jam || pe.allIn[i]) && b && b.curBet > 0 && lvl > 0 && lvl <= b.curBet) return { tag: "call", allInCall: true };
+  if (a.street === "pre") return { tag: jam ? "JAM" : lbl || a.act };
+  let own = 0;
+  for (let j = 0; j < i; j++) if (acts[j].street === a.street && acts[j].actor === a.actor) own = pe.perAct[j] || own;
+  const pot = b ? b.pot + b.curBet - own : 0;           // pot once his call is in (the bare pot when there's no bet to call)
+  const r = lvl && pot > 0 ? (lvl - b.curBet) / pot : 0;
+  const rung = r > 0 ? (r > 1.6 ? "B" + Math.round(r * 10) * 10 : sdStepFor(r)) : "";
+  // A bet the stack couldn't cover is a jam, whatever size was typed.
+  if (jam || pe.allIn[i]) return { tag: rung ? "JAM " + rung : "JAM" };
+  return { tag: rung || lbl || a.act };
 }
+const sizeTag = (h, i) => sizeRead(h, i).tag;
 /* What the seat says on the felt: postflop in pot-%, preflop in the usual prose. */
 function replaySay(h, i) {
   const a = (h.actions || [])[i];
   if (!a) return "";
   if (a.street === "pre" || ["fold", "check", "call", "limp"].includes(a.act)) return actPhrase(a, isRawSize(h));
-  const t = sizeTag(h, i);
-  return t === "JAM" ? "jams" : actVerb(a) + " " + t;
+  const { tag: t, allInCall } = sizeRead(h, i);
+  if (allInCall) return "calls all-in";
+  return t.startsWith("JAM") ? "jams" + t.slice(3) : actVerb(a) + " " + t;
 }
 
 /* ---------- bottom sheet ---------- */
@@ -2975,7 +2990,10 @@ function replayQuiet(h) {
    raise, pink all in, green a call. */
 function replayKind(a, pe, i) {
   if (["fold", "check", "call", "limp"].includes(a.act)) return a.act;
-  if (a.act === "jam" || a.size === "Jam" || pe.allIn[i]) return "jam";
+  if (a.act === "jam" || a.size === "Jam" || pe.allIn[i]) {
+    const b = pe.pre[i], v = pe.perAct[i];
+    return b && b.curBet > 0 && v > 0 && v <= b.curBet ? "call" : "jam";   // all in for no more than the bet: a call
+  }
   return a.act === "bet" ? "bet" : "raise";
 }
 /* Where the pot goes once the hand is over — side pots layered off what each
