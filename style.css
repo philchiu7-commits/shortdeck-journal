@@ -1135,3 +1135,19 @@ textarea.noteedit { margin-bottom: 0; }
 /* Seats size to their own text — an absolutely positioned box otherwise gets
    squeezed by whatever room is left to the felt's right edge. */
 .rseat { width: max-content; }
+
+/* Typed hand search (v81) */
+.hfind { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.hfind input { flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+.hfind input:focus { outline: none; border-color: var(--accent); }
+.hfind .linkbtn { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); padding: 0; }
+.hfind-read { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0 2px 8px; }
+.hfind-read:empty { display: none; }
+.hfind-read b { color: var(--text); font-weight: 600; background: color-mix(in oklab, var(--accent) 18%, transparent);
+  padding: 0 5px; border-radius: 5px; }
+.hfind-read i { font-style: normal; color: var(--muted); }
+.hq-warn { color: #e0a34a; }
+.hfind-words { font-size: 12px; color: var(--muted); line-height: 1.6; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
+.hfind-words b { color: var(--text); margin-right: 4px; }

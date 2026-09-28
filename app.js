@@ -1079,9 +1079,12 @@ function route() {
 /* ================= Hands-panel filters (per opponent detail) =================
    Multi-select within a dimension (OR), AND across dimensions. Cleared on
    navigation away by resetHandFilters(). */
-let handFilters = { pos: new Set(), pot: new Set(), squid: new Set(), role: new Set(), sd: false };
-const resetHandFilters = () => { handFilters = { pos: new Set(), pot: new Set(), squid: new Set(), role: new Set(), sd: false }; };
-const handFiltersActive = () => handFilters.pos.size || handFilters.pot.size || handFilters.squid.size || handFilters.role.size || handFilters.sd;
+let handFilters = { pos: new Set(), pot: new Set(), squid: new Set(), role: new Set(), sd: false, q: null };
+const resetHandFilters = () => {
+  handFilters = { pos: new Set(), pot: new Set(), squid: new Set(), role: new Set(), sd: false, q: null };
+  if ($("od-hfind")) { $("od-hfind").value = ""; $("od-hfind-read").innerHTML = ""; }
+};
+const handFiltersActive = () => handFilters.pos.size || handFilters.pot.size || handFilters.squid.size || handFilters.role.size || handFilters.sd || !!handFilters.q?.groups.length;
 /* Hands where we never saw this player's cards sit in a collapsed group
    (stats-only). One open/closed flag, reset when you switch opponents. */
 let noCardsOpen = false;
@@ -1129,6 +1132,7 @@ function villainRole(h, oppId) {
 }
 function handMatchesFilters(h, oppId) {
   const f = handFilters;
+  if (f.q?.groups.length && !hqMatch(h, oppId, f.q)) return false;
   if (f.sd && !h.showdown) return false;
   if (f.pot.size && !f.pot.has(potBucket(h))) return false;
   if (f.squid.size && !f.squid.has(squidBucket(h))) return false;
@@ -4942,6 +4946,19 @@ function bindStatic() {
     if (curOppId) renderOppDetail(curOppId);
   };
   bindRangeGrid();
+  /* Debounced: re-rendering the whole detail on every keystroke is wasted work.
+     The box itself is static markup, so focus survives the re-render. */
+  let hqT = 0;
+  $("od-hfind").oninput = () => {
+    clearTimeout(hqT);
+    hqT = setTimeout(() => {
+      const q = hqParse($("od-hfind").value);
+      handFilters.q = q.text ? q : null;
+      $("od-hfind-read").innerHTML = hqReadHTML(q);
+      if (curOppId) renderOppDetail(curOppId);
+    }, 220);
+  };
+  $("od-hfind-help").onclick = () => $("od-hfind-words").classList.toggle("hidden");
   $("od-hf-clear").onclick = () => { resetHandFilters(); if (curOppId) renderOppDetail(curOppId); };
   $("od-exploit-tmpl").onclick = openTemplateSheet;
   $("od-e-save").onclick = async () => {
