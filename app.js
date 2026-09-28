@@ -12,6 +12,7 @@ let curOppId = null, curHandId = null;
    panel listed them (so the active filters carry into the review). */
 let handPlay = null, handPlayIds = [];
 let handFiltersFor = null;              // the opponent the hands-panel filters were set for
+let proofReel = null;                   // the hand list the open drill-down sheet is showing
 let editNoteId = null, editExploitId = null;
 let storageDurable = false;
 let showSuggestedExploits = {};   // per-opponent toggle for suggested exploits (oppId -> bool)
@@ -744,6 +745,9 @@ function openReadProof(label, sub, ids, other, oppId) {
     ? `<div class="rdhead"><b>${esc(t)}</b><span class="rdn">${l.length}</span></div>` + l.map((h) => handRowHTML(h, oppId)).join("")
     : "";
   sheetGroup = "__rgcell__";
+  // Tapping one of these hands browses the whole selection, in the order it is
+  // listed — a cell like "HU IP Cbet" is a set of hands to read, not just one.
+  proofReel = { oppId: oppId || curOppId, label, ids: hit.concat(miss).map((h) => h.id) };
   showSheet(
     `<div class="sheethead"><span class="t">${esc(label)}</span><button data-sheetclose>Close</button></div>
      <div class="rdsub">${esc(sub)}</div>
@@ -2880,16 +2884,19 @@ const REPLAY_MS = 1100;
 
 /* Who sat where. Ring grows until every logged position fits, then rotates so
    Hero (or the first villain in a hand Hero sat out) is at the bottom. */
-function replaySeats(h) {
+function replaySeats(h, focus) {
   const parts = [];
   if (h.hero !== false && h.heroPos) parts.push({ p: "hero", pos: h.heroPos, name: "You", cards: h.heroCards, chips: h.effStack });
   (h.villains || []).forEach((v, i) => {
-    if (v.pos) parts.push({ p: "v" + i, pos: v.pos, name: oppById(v.opponentId)?.name || `V${i + 1}`, cards: v.cards, chips: v.chips });
+    if (v.pos) parts.push({ p: "v" + i, pos: v.pos, opp: v.opponentId, name: oppById(v.opponentId)?.name || `V${i + 1}`, cards: v.cards, chips: v.chips });
   });
   let n = Math.max(4, Math.min(9, Number(h.seats) || parts.length));
   while (n < 9 && parts.some((x) => !ringFor(n).includes(x.pos))) n++;
-  const ring = ringFor(n), ai = Math.max(0, ring.indexOf((parts[0] || {}).pos));
-  return { ring, n, parts, slot: (pos) => (((ring.indexOf(pos) - ai) % n) + n) % n };
+  // Slot 0 is bottom centre. The player being reviewed sits there so his seat
+  // is in the same place in every hand of the reel — hero anchors it otherwise.
+  const anchor = (focus && parts.find((x) => x.opp === focus)) || parts[0] || {};
+  const ring = ringFor(n), ai = Math.max(0, ring.indexOf(anchor.pos));
+  return { ring, n, parts, focus: anchor.p, slot: (pos) => (((ring.indexOf(pos) - ai) % n) + n) % n };
 }
 
 function replayHTML(h, k) {
@@ -2901,7 +2908,7 @@ function replayHTML(h, k) {
   const done = k === acts.length;
   const folded = new Set(acts.slice(0, k).filter((a) => a.act === "fold").map((a) => a.actor));
   const upTo = { pre: 0, flop: 3, turn: 4, river: 5 };
-  const S = replaySeats(h), slots = slotsFor(S.n);
+  const S = replaySeats(h, hvOppId(h)), slots = slotsFor(S.n);
   if (!S.parts.length) return "";                  // nobody was given a seat — nothing to replay
   const inFront = Object.values(pe.contrib).reduce((a, x) => a + x, 0);
 
@@ -2927,7 +2934,7 @@ function replayHTML(h, k) {
     const stk = x.chips ? `<span class="tstack">${stackStr(x.chips)}${ante > 1 ? ` · ${Math.round(x.chips / ante)}a` : ""}</span>` : "";
     const dB = x.pos === "BN" ? `<span class="tdealer">D</span>` : "";
     const say = up ? `<div class="rsay">${esc(replaySay(h, k - 1))}</div>` : "";
-    felt += `<div class="rseat${x.p === "hero" ? " hero" : ""}${out ? " out" : ""}${up ? " up" : ""}" style="left:${sx}%;top:${sy}%">
+    felt += `<div class="rseat${x.p === "hero" ? " hero" : ""}${x.p === S.focus && x.p !== "hero" ? " focus" : ""}${out ? " out" : ""}${up ? " up" : ""}" style="left:${sx}%;top:${sy}%">
       ${cards}<div class="rpill"><span class="tpos">${esc(x.pos)}</span><span class="tnm">${esc(x.name)}</span>${stk}${dB}</div>${say}</div>`;
     const bet = pe.contrib[x.p] || 0;
     if (bet && !out) {   // chips pushed a third of the way toward the middle, like a real table
@@ -3053,7 +3060,7 @@ function renderHandView(id) {
   if (i < 0) return;
   nav.querySelector("[data-hvstep='-1']").disabled = i === 0;
   nav.querySelector("[data-hvstep='1']").disabled = i === list.length - 1;
-  $("hv-count").textContent = `${oppById(handPlay.oppId)?.name || "Hand"} · ${i + 1}/${list.length}`;
+  $("hv-count").textContent = `${handPlay.label || oppById(handPlay.oppId)?.name || "Hand"} · ${i + 1}/${list.length}`;
 }
 /* The reel as a scrollable list — the way to skip to a hand ten back without
    stepping through the ones between. */
@@ -3061,7 +3068,7 @@ function renderRail() {
   const list = handPlayList(), focus = handPlay ? handPlay.oppId : null;
   $("hv-list").classList.toggle("hidden", list.length < 2);
   if (list.length < 2) { railOpen(false); return; }
-  $("hv-rail-title").textContent = `${oppById(focus)?.name || "Hands"} · ${list.length}`;
+  $("hv-rail-title").textContent = `${handPlay?.label || oppById(focus)?.name || "Hands"} · ${list.length}`;
   $("hv-rail-list").innerHTML = list.map((id, i) => {
     const h = HANDS.find((x) => x.id === id);
     if (!h) return "";
@@ -4710,7 +4717,11 @@ function sheetClick(e) {
   }
   if (sheetGroup === "__rgcell__") {
     const r = e.target.closest("[data-hand]");
-    if (r) { hideSheet(); location.hash = "#handview/" + r.dataset.hand; return; }
+    if (r) {
+      if (proofReel && proofReel.ids.includes(r.dataset.hand))
+        handPlay = { oppId: proofReel.oppId, ids: proofReel.ids.slice(), label: proofReel.label };
+      hideSheet(); location.hash = "#handview/" + r.dataset.hand; return;
+    }
   }
   if (sheetGroup === "__notereview__") {
     const nb = e.target.closest("[data-nrconvert]");
@@ -5426,7 +5437,9 @@ function bindStatic() {
   $("hv-split-close").onclick = () => { splitWant = false; splitSync(); };
   $("hv-split-vill").onclick = (e) => {
     const b = e.target.closest("[data-splitopp]");
-    if (b) splitSync(b.dataset.splitopp);
+    // The felt is anchored on whoever is being read, so switching player moves him
+    // down to the bottom seat too. The step is untouched.
+    if (b) { splitSync(b.dataset.splitopp); renderReplay(); }
   };
   bindSplitGrab();
   $("hv-list").onclick = () => railOpen($("hv-rail").classList.contains("hidden"));
