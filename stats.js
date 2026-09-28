@@ -98,19 +98,20 @@ function sdHandEvents(h, idx, put) {
       }
     }
     if (pfa && pfa !== me) {
+      const raisedBetween = (S, b, r) => S.some((x) => x.i > b.i && x.i < r.i && isAgg(x.act));   // someone raised the cbet before he answered: he faced a raise, not the cbet
       const A = F.find((x) => isAgg(x.act));
       if (A && A.actor === pfa) {                                    // the first flop bet was the raiser's: a cbet
         const r = F.find((x) => x.actor === me && x.i > A.i);
-        if (r) put("fcb", cols, r.act === "fold");
-        if (r && r.act === "call") {                                 // called the flop cbet: his answer to the raiser's turn barrel
+        if (r && !raisedBetween(F, A, r)) put("fcb", cols, r.act === "fold");
+        if (r && r.act === "call" && !raisedBetween(F, A, r)) {                                 // called the flop cbet: his answer to the raiser's turn barrel
           const T = seq.turn, B = T.find((x) => isAgg(x.act));
           const r2 = B && B.actor === pfa && T.find((x) => x.actor === me && x.i > B.i);
-          if (r2) {
+          if (r2 && !raisedBetween(T, B, r2)) {
             put("fcbT", colsAt(2), r2.act === "fold");
             if (r2.act === "call") {                                 // and called the turn barrel: his answer to the river one
               const V = seq.river, B2 = V.find((x) => isAgg(x.act));
               const r3 = B2 && B2.actor === pfa && V.find((x) => x.actor === me && x.i > B2.i);
-              if (r3) put("fcbR", colsAt(3), r3.act === "fold");
+              if (r3 && !raisedBetween(V, B2, r3)) put("fcbR", colsAt(3), r3.act === "fold");
             }
           }
         }
@@ -126,8 +127,8 @@ function sdHandEvents(h, idx, put) {
     if (x) put(key, colsAt(si), isAgg(x.act));
   }
   for (const st of ["flop", "turn", "river"])
-    for (const x of mine(st)) if (isAgg(x.act) || x.act === "call") put("afq", ["all"], isAgg(x.act));
-  for (const x of mine("river")) if (isAgg(x.act) || x.act === "call") put("afR", ["all"], isAgg(x.act));
+    for (const x of mine(st)) if (x.act !== "check") put("afq", ["all"], isAgg(x.act));
+  for (const x of mine("river")) if (x.act !== "check") put("afR", ["all"], isAgg(x.act));
 
   // ---- showdown: only hands that ran their course ----
   const liveEnd = parts.filter((p) => !(p in foldSt));
@@ -170,7 +171,7 @@ let sdMinHide = localStorage.getItem("sd-minhide") === "1";   // MinO/Iso and Mi
    showdown, which is where the postflop block ends. */
 /* Two questions, one row each: how he enters a pot, then how the raising war goes. */
 const SD_HUD_PRE = [["VPIP", "vpip"], ["Limp", "limp"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"]];
-const SD_HUD_POST = [["Cbet HU", "cbetF", "hu"], ["Cbet MW", "cbetF", "mw"], ["Cbet turn", "cbetT"], ["Fold cbet HU", "fcb", "hu"], ["Fold cbet MW", "fcb", "mw"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
+const SD_HUD_POST = [["Cbet HU", "cbetF", "hu"], ["Cbet MW", "cbetF", "mw"], ["Cbet turn", "cbetT"], ["Fold cbet HU", "fcb", "hu"], ["Fold cbet MW", "fcb", "mw"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Agg %", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Iso fold", "isoFold"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet river", "cbetR"], ["Fold to cbet", "fcb"], ["Fold to turn cbet", "fcbT"], ["Fold to river cbet", "fcbR"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
@@ -187,20 +188,20 @@ const SD_DEFS = [
   ["Fold 3bet", "After he raised first and got 3bet: folded. Min-opens and min isos are left out — he defends those far more."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
   ["Cbet turn / river", "Kept barrelling after his own cbet, out of the streets where nobody had bet before him and his last bet wasn't raised. Cbet river counts only hands he cbet the flop and the turn."],
-  ["Fold to cbet", "His first answer to a flop bet from the preflop raiser: folded. Calls and raises are the rest."],
-  ["Fold to turn / river cbet", "He called the raiser's cbet, the raiser barrelled again: folded, out of those barrels he faced. The river one counts only hands he called the flop and the turn."],
+  ["Fold to cbet", "His first answer to a flop bet from the preflop raiser: folded. Calls and raises are the rest. Left out when someone raised the cbet before he acted — then he was facing a raise, not the cbet."],
+  ["Fold to turn / river cbet", "He called the raiser's cbet, the raiser barrelled again: folded, out of those barrels he faced. The river one counts only hands he called the flop and the turn. Left out when someone raised the barrel before he acted."],
   ["Raise flop / turn / river", "His first action facing someone else's single bet on that street — anyone's bet, not just a cbet: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
   ["Check-raise", "Checked the flop, faced a bet, raised."],
   ["Donk lead", "Bet the flop into the preflop raiser before they acted."],
   ["HU / MW", "Heads-up against one other player who saw that street, or three-plus. The Cbet and Fold cbet chips are split this way because a cbet into one player and a cbet into three are different bets; the same stat's All number is the Postflop table's first column."],
   ["HU IP / HU OOP / MW", "Heads-up in or out of position against the one other player who saw that street, or three-plus players. Only players you logged in the hand are counted."],
-  ["AFq", "Postflop bets and raises out of bets, raises and calls."],
+  ["Agg % / River agg %", "Postflop (or river-only) bets and raises out of every bet, raise, call and fold he made there. Checks are left out. Folds count, so a player who folds a lot shows as passive."],
   ["WTSD / W$SD", "Went to showdown out of flops seen / won it (needs both hands and the board logged). Hands still unfinished are skipped."],
 ];
 
 let sdStatT = {};                                // the tallies behind the stats now on screen
 let sdSzT = {};                                  // same for the sizing grid: "sz|flop-v|B50" → [n, n, handIds, []]
-const SD_EXTRA_ROWS = [["Fold to flop raise", "fxr"], ["River AF", "afR"]];
+const SD_EXTRA_ROWS = [["Fold to flop raise", "fxr"], ["River agg %", "afR"]];
 const SD_COL_LBL = { all: "", hu: "heads-up", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
 
 function statCell(r, k, c) {
