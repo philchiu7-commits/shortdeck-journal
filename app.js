@@ -730,8 +730,12 @@ function exploitSignals(facts) {
    cards are known (shown / mucked face up), then the rest — newest first in each. */
 function showdownFirst(oppId) {
   const rank = (h) => {
-    if (handWinner(h)?.how === "showdown") return 2;
-    const v = (h.villains || []).find((x) => x.opponentId === oppId);
+    const vs = h.villains || [], i = oppId ? vs.findIndex((x) => x.opponentId === oppId) : -1;
+    const v = i < 0 ? null : vs[i];
+    // The stored flag is stamped on save and survives imports handWinner can't
+    // resolve; a showdown he folded out of is not a look at his cards.
+    const sd = h.showdown ?? (handWinner(h)?.how === "showdown");
+    if (sd && (i < 0 || !(h.actions || []).some((a) => a.actor === "v" + i && a.act === "fold"))) return 2;
     return v && (v.cards || []).filter(Boolean).length === 2 ? 1 : 0;
   };
   return (a, b) => rank(b) - rank(a) || b.ts - a.ts;
@@ -1013,7 +1017,7 @@ function sizeTag(h, i) {
   const pe = estimatePot(h, acts.slice(0, i + 1)), lvl = pe.perAct[i], b = pe.pre[i];
   if (!lvl || !b || !b.pot) return lbl || a.act;
   // A bet the stack couldn't cover is a jam, whatever percentage was typed.
-  if (Number(h.effStack) && lvl >= Number(h.effStack)) return "JAM";
+  if (pe.allIn[i]) return "JAM";
   const pct = Math.round(((lvl - b.curBet) / b.pot) * 100);
   return pct > 0 ? "B" + pct : (lbl || a.act);
 }
@@ -2566,7 +2570,9 @@ function renderOppDetail(id) {
       }).join("") : "")
     : "";
 
-  const allHands = mine.slice().sort((a, b) => b.ts - a.ts);
+  // Showdowns lead — a hand where his cards turned over is worth more than a
+  // newer one that ended on a fold. Then cards-known, then the rest.
+  const allHands = mine.slice().sort(showdownFirst(id));
   renderHandFilters(id, allHands);
   const hands = handFiltersActive() ? allHands.filter((h) => handMatchesFilters(h, id)) : allHands;
   // Hands where we saw the cards lead; no-cards hands (stats-only) go in a
@@ -2757,7 +2763,7 @@ function blindsStr(h, raw) {
 /* Compact chip-stack label for raw imported counts: 424224 → "424K". */
 const stackStr = (n) =>
   n >= 1e6 ? (Math.round(n / 1e5) / 10) + "M" :
-  n >= 1000 ? Math.round(n / 1000) + "K" : String(n);
+  n >= 1000 ? Math.round(n / 1000) + "K" : String(Math.round(n * 10) / 10);   // computed stacks land on fractions; one decimal is enough
 function handText(h) {
   const raw = isRawSize(h);
   const L = [];
@@ -2931,7 +2937,11 @@ function replayHTML(h, k) {
     // Hole cards face up when they were seen, backs otherwise — the seat still
     // has to read as a player holding two cards.
     const cards = `<div class="rcards${shown ? "" : " back"}">${shown ? tilesHTML(x.cards) : "<i></i><i></i>"}</div>`;
-    const stk = x.chips ? `<span class="tstack">${stackStr(x.chips)}${ante > 1 ? ` · ${Math.round(x.chips / ante)}a` : ""}</span>` : "";
+    // What he has behind right now, not what he sat down with.
+    const left = Math.max(0, x.chips - (pe.invested[x.p] || 0));
+    const stk = x.chips
+      ? `<span class="tstack${left ? "" : " allin"}">${left ? stackStr(left) + (ante > 1 ? ` · ${Math.round(left / ante)}a` : "") : "all in"}</span>`
+      : "";
     const dB = x.pos === "BN" ? `<span class="tdealer">D</span>` : "";
     const say = up ? `<div class="rsay">${esc(replaySay(h, k - 1))}</div>` : "";
     felt += `<div class="rseat${x.p === "hero" ? " hero" : ""}${x.p === S.focus && x.p !== "hero" ? " focus" : ""}${out ? " out" : ""}${up ? " up" : ""}" style="left:${sx}%;top:${sy}%">
@@ -4025,6 +4035,13 @@ function estimatePot(src, actions) {
   const players = ["hero", ...(src.villains || []).map((_, i) => "v" + i)];
   const posOf = (p) => p === "hero" ? (src.hero === false ? null : src.heroPos) : src.villains?.[Number(p.slice(1))]?.pos;
   const seats = num(src.seats) || Math.max(players.filter(posOf).length, 2);
+  // What each player brought. His own recorded stack when there is one, the
+  // effective stack otherwise — nobody can put in more than this all hand.
+  const stackOf = (p) => (p === "hero" ? eff : num(src.villains?.[Number(p.slice(1))]?.chips) || eff);
+  // Chips already behind on earlier streets. The ante is posted, so it counts
+  // from the start; the button's second ante is live and rides in contrib.
+  const spent = {};
+  players.forEach((p) => { if (posOf(p)) spent[p] = ante; });
   let dead = ante * seats;
   const btn = players.find((p) => posOf(p) === "BN");
   if (btn) contrib[btn] = ante; else dead += ante;
@@ -4032,13 +4049,29 @@ function estimatePot(src, actions) {
   const potNow = () => pot + Object.values(contrib).reduce((a, x) => a + x, 0);
   const atStart = { pre: potNow() };             // pot as each street begins
   const perAct = [];                             // resolved "to" amount per action
+  const allIn = [];                              // did that action put the actor in for everything
   const pre = [];                                // pot + level facing each action, for pot-% labels
+  // The most this player can still have in front this street. A jam on the
+  // river is the stack he has left, not the stack he sat down with. No stack on
+  // record means no ceiling — better an estimate than a bet clamped to zero.
+  const room = (p) => stackOf(p) > 0 ? Math.max(0, stackOf(p) - (spent[p] || 0)) : Infinity;
   for (const a of actions || []) {
-    if (a.street !== street) { pot = potNow(); contrib = {}; street = a.street; curBet = 0; atStart[street] = pot; }
+    if (a.street !== street) {
+      for (const p in contrib) spent[p] = (spent[p] || 0) + contrib[p];
+      pot = potNow(); contrib = {}; street = a.street; curBet = 0; atStart[street] = pot;
+    }
     pre.push({ pot: potNow(), curBet });
-    if (a.act === "fold" || a.act === "check") { perAct.push(0); continue; }
-    if (a.act === "limp") { contrib[a.actor] = unit; curBet = Math.max(curBet, unit); perAct.push(unit); continue; }
-    if (a.act === "call") { if (curBet) contrib[a.actor] = curBet; perAct.push(curBet); continue; }
+    const cap = room(a.actor);
+    if (a.act === "fold" || a.act === "check") { perAct.push(0); allIn.push(false); continue; }
+    if (a.act === "limp") {
+      const v = Math.min(unit, cap);
+      contrib[a.actor] = v; curBet = Math.max(curBet, v); perAct.push(v); allIn.push(isFinite(cap) && cap > 0 && v >= cap); continue;
+    }
+    if (a.act === "call") {
+      const v = Math.min(curBet, cap);
+      if (curBet) contrib[a.actor] = v;
+      perAct.push(v); allIn.push(isFinite(cap) && cap > 0 && !!curBet && v >= cap); continue;
+    }
     let lvl = 0;                                 // aggression → a new "to" level this street
     const s = a.size;
     if (s && /^\d+(\.\d+)?k$/i.test(s)) lvl = parseFloat(s);
@@ -4048,15 +4081,20 @@ function estimatePot(src, actions) {
     else if (s && /%$/.test(s)) lvl = (parseFloat(s) / 100) * potNow() + curBet;
     else if (s === "pot") lvl = potNow() + curBet;
     else if (s === "over") lvl = 1.3 * potNow() + curBet;
-    else if (s === "Jam" || a.act === "jam") lvl = eff || (curBet ? 2.5 * curBet : potNow());
+    else if (s === "Jam" || a.act === "jam") lvl = isFinite(cap) ? cap : (curBet ? 2.5 * curBet : potNow());
     else lvl = curBet ? 2.5 * curBet : 0.66 * potNow();
-    if (!isFinite(lvl) || lvl <= 0) { perAct.push(0); continue; }
-    if (eff) lvl = Math.min(lvl, eff);
+    lvl = Math.min(lvl, cap);
+    if (!isFinite(lvl) || lvl <= 0) { perAct.push(0); allIn.push(false); continue; }
     contrib[a.actor] = Math.max(contrib[a.actor] || 0, lvl);
     curBet = Math.max(curBet, lvl);
     perAct.push(lvl);
+    allIn.push(isFinite(cap) && cap > 0 && lvl >= cap);
   }
-  return { atStart, now: potNow(), curBet, perAct, pre, contrib: { ...contrib } };
+  // Everything each player has put in so far, earlier streets plus what is in
+  // front of him now — the felt subtracts it to show what he has left.
+  const invested = { ...spent };
+  for (const p in contrib) invested[p] = (invested[p] || 0) + contrib[p];
+  return { atStart, now: potNow(), curBet, perAct, allIn, pre, contrib: { ...contrib }, invested, stackOf };
 }
 const potStr = (n, raw = false) => !n ? "" :
   raw

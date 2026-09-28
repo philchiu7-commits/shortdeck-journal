@@ -1057,6 +1057,7 @@ textarea.noteedit { margin-bottom: 0; }
 .rpill .tpos { font-size: 9px; color: var(--muted); }
 .rpill .tnm { font-size: 11px; font-weight: 600; max-width: 62px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rpill .tstack { font-size: 9px; font-weight: 700; color: #7cd992; }
+.rpill .tstack.allin { color: #ff8a8a; }
 .rseat.hero .rpill { background: #1c2c47; border-color: var(--accent); }
 .rseat.focus .rpill .tnm { color: var(--accent); }
 .rseat.up .rpill { border-color: #ffb84a; box-shadow: 0 0 0 2px rgba(255,184,74,.35); }
