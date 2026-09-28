@@ -65,6 +65,7 @@ const HQ_PHRASES = [
   [/\b([345])[\s-]?bet(?:s|ted|ting)?\s+pots?\b|\b([345])[\s-]?bps?\b/g, (m, a, b) => ` ${a || b}bp `],
   [/\bsingle[\s-]?raised(?:\s+pots?)?\b|\bsrps?\b/g, " srp "],
   [/\blimped\s+pots?\b|\blimp\s+pots?\b/g, " limpedpot "],
+  [/(\b(?:folds?|calls?|raises?|jams?|[345]bets?)\s+)?\bfac(?:ed|es)\s+(?:an?\s+)?raises?\b/g, (m, verb) => verb ? m : " facedraise "],   // "folds faced a raise" stays an answer
   [/\bheads[\s-]?up\b/g, " hu "],
   [/\bmulti[\s-]?way\b/g, " mw "],
   [/\bwent\s+to\s+showdown\b|\bto\s+showdown\b|\bshow[\s-]?down\b/g, " sd "],
@@ -148,7 +149,7 @@ const HQ_WORDS = {
   nosquid: "f:squid:nS", ns: "f:squid:nS", squid1: "f:squid:w1S", w1s: "f:squid:w1S",
   squid2: "f:squid:w2S+", w2s: "f:squid:w2S+",
   pfr: "f:pfr", pfc: "f:pfc",
-  preallin: "f:preallin",
+  preallin: "f:preallin", facedraise: "f:facedr",
   hu: "f:hu", mw: "f:mw", multiway: "f:mw", sd: "f:sd", cards: "f:cards", shown: "f:cards", showed: "f:cards",
   ip: "f:ip", oop: "f:oop",
   no: "neg", not: "neg", never: "neg", didnt: "neg", doesnt: "neg", dont: "neg", without: "neg",
@@ -213,7 +214,9 @@ function hqParse(text) {
     }
     if (t.startsWith("f:")) {
       const [, kind, val] = t.split(":");
-      cur = push({ kind: "f", f: kind, val }); continue;
+      cur = push({ kind: "f", f: kind, val });
+      if (kind === "facedr" && pend.st) { cur.st = pend.st; pend.st = null; }   // "turn faced raise"
+      continue;
     }
     /* An action. "folds to cbet", "calls a 3bet", "raises the donk": a verb
        that answers another action takes that one as what it faced. */
@@ -287,12 +290,13 @@ const HQ_POS_NAME = { BTN: "on the button", CO: "in the CO", HJ: "in the HJ", MP
 function hqLabel(c) {
   let t;
   if (c.kind === "f") {
-    t = c.f === "sd" || c.f === "cards" || c.f === "hs" ? "" : "is ";
+    t = c.f === "sd" || c.f === "cards" || c.f === "hs" || c.f === "facedr" ? "" : "is ";
     t += { pos: HQ_POS_NAME[c.val],
       pot: { "3BP": "in a 3-bet pot", "4BP+": "in a 4-bet+ pot", SRP: "in a single-raised pot", Limped: "in a limped pot" }[c.val],
       squid: { nS: "in a hand with no squid", w1S: "in a hand with one squid", "w2S+": "in a hand with two or more squids" }[c.val],
       pfr: "the preflop raiser", pfc: "a preflop caller",
       preallin: "in a hand that went all-in preflop",
+      facedr: "faces a raise " + (c.st && c.st !== "post" ? "on the " + c.st : "postflop"),
       hu: "heads-up on the flop", mw: "multiway on the flop", sd: "gets to showdown", cards: "has his cards on record",
       ip: "in position on the flop", oop: "out of position on the flop",
       high: (c.op === "eq" ? `on a${c.val === 14 || c.val === 8 ? "n" : ""} ${HQ_RANK_NAME[c.val] || c.val}-high ${c.st === "flop" ? "flop" : "board"}`
@@ -432,6 +436,15 @@ function hqClause(h, oppId, c) {
       case "pot": return potBucket(h) === c.val;
       case "squid": return squidBucket(h) === c.val;
       case "preallin": return hqPreAllIn(h);
+      /* A raise over a bet on that street by someone else, with him still to act after it. */
+      case "facedr": {
+        const sts = c.st && c.st !== "post" && c.st !== "pre" ? [c.st] : ["flop", "turn", "river"];
+        return sts.some((st) => {
+          const on = (h.actions || []).filter((a) => a.street === st);
+          const r = on.findIndex((a, j) => a.actor !== me && AGG_ACTS.includes(a.act) && on.slice(0, j).some((b) => AGG_ACTS.includes(b.act)));
+          return r >= 0 && on.slice(r + 1).some((a) => a.actor === me);
+        });
+      }
       case "hu": return hqField(h) === "HU" && hqSaw(h, me, "flop");
       case "mw": return hqField(h) === "MW" && hqSaw(h, me, "flop");
       case "pfr": return isPFR(h, me);
