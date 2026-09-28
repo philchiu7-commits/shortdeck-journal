@@ -367,22 +367,34 @@ function sdHsBucket(h, oppId, key) {
   const shut = hqAllInStreet(h, me);
   if (shut === "pre") return null;
   if (shut) k = Math.min(k, ORD.indexOf(shut));
-  const b = board.slice(0, N[ORD[k]]), T = sdHsRank(hole, b);
+  return sdHsGrade(hole, board.slice(0, N[ORD[k]]));
+}
+function sdHsGrade(hole, b) {
+  const T = sdHsRank(hole, b);
   if (!T) return null;
   if (T.r === 0) { const d = sdDraws(hole, b); return b.length < 5 && (d.fd || d.oesd || d.gut) ? 1 : 0; }
   return T.r <= 2 ? 2 : T.r <= 4 ? 3 : T.r === 5 ? 4 : T.r === 6 ? 5 : 6;
 }
+/* His hand when he made a sizing-grid bet, on that bet's street. The grid only
+   takes bets whose cards are on record, so no showdown is needed here. */
+function sdHsBetBucket(h, oppId, st) {
+  const v = (h.villains || []).find((x) => x.opponentId === oppId);
+  const hole = ((v && v.cards) || []).filter(Boolean), board = (h.board || []).filter(Boolean), n = { flop: 3, turn: 4, river: 5 }[st];
+  return hole.length === 2 && n && board.length >= n ? sdHsGrade(hole, board.slice(0, n)) : null;
+}
 function sdHsStrip(p, key) {
   const byId = new Map(HANDS.map((h) => [h.id, h]));
-  const row = (ids, lbl) => {
+  const row = (ids, lbl, bets) => {
     const n = SD_HS_BK.map(() => 0);
-    for (const id of new Set(ids || [])) { const h = byId.get(id), b = h && sdHsBucket(h, curOppId, key); if (b != null) n[b]++; }
+    if (bets) for (const [id, st] of bets) { const h = byId.get(id), b = h && sdHsBetBucket(h, curOppId, st); if (b != null) n[b]++; }
+    else for (const id of new Set(ids || [])) { const h = byId.get(id), b = h && sdHsBucket(h, curOppId, key); if (b != null) n[b]++; }
     const tot = n.reduce((a, x) => a + x, 0);
     if (!tot) return "";
     const seg = n.map((x, j) => x ? `<span style="flex:${x};background:${SD_HS_BK[j][1]}"></span>` : "").join("");
     const leg = n.map((x, j) => x ? `<span><i style="background:${SD_HS_BK[j][1]}"></i>${SD_HS_BK[j][0]} ${x}</span>` : "").join("");
-    return `<div class="sphs"><div class="sphsl">${lbl} <em>${tot} shown</em></div><div class="sphsbar">${seg}</div><div class="sphsleg">${leg}</div></div>`;
+    return `<div class="sphs"><div class="sphsl">${lbl} <em>${tot} ${bets ? "graded" : "shown"}</em></div><div class="sphsbar">${seg}</div><div class="sphsleg">${leg}</div></div>`;
   };
+  if (key === "sz") return row(null, "His hand", p.r[5]);
   return row(p.r[2], "Did it") + row(p.r[3], "Didn't");
 }
 
@@ -412,7 +424,7 @@ function stPopShow(el) {
   const byId = new Map(HANDS.map((h) => [h.id, h]));
   const pick = (l) => [...new Set(l)].map((x) => byId.get(x)).filter(Boolean).sort(showdownFirst(curOppId));
   const hit = pick(p.r[2]), miss = pick(p.r[3]);
-  const HS = p.sizing || sk === "sq" || SD_PRE_KEYS.has(sk) ? "" : sdHsStrip(p, sk);
+  const HS = sk === "sz" ? sdHsStrip(p, sk) : p.sizing || sk === "sq" || SD_PRE_KEYS.has(sk) ? "" : sdHsStrip(p, sk);
   const show = HS ? [] : (hit.length ? hit : miss).slice(0, 4);
   const more = hit.length + miss.length - show.length;
   stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>
@@ -421,7 +433,7 @@ function stPopShow(el) {
     ${HS}
     ${hit.length || HS ? "" : `<div class="spn">Never did it, had the chance in:</div>`}
     ${show.map((h) => handRowHTML(h, curOppId)).join("")}
-    <div class="spn">${HS ? `His cards at showdown, on the ${SD_ST_OF[sk] || "last street he played"} · ` : more > 0 ? `+${more} more · ` : ""}click for all${p.sizing ? "" : ", split by did / didn't"}</div>`;
+    <div class="spn">${HS && sk === "sz" ? "His cards when he bet, on that street · " : HS ? `His cards at showdown, on the ${SD_ST_OF[sk] || "last street he played"} · ` : more > 0 ? `+${more} more · ` : ""}click for all${p.sizing ? "" : ", split by did / didn't"}</div>`;
   stPopPlace(el);
 }
 /* Never cover the stat being read: below it, else above, else beside it — and if
@@ -654,20 +666,21 @@ function renderSizing(oppId, hands) {
   const grid = (steps, pre, streets) => {
     const cols = steps.length;
     const row = (kind, sts, lbl, rid) => {
-      const cell = {}, ids = {}, split = {};
+      const cell = {}, ids = {}, split = {}, bets = {};
       for (const st of sts) for (const x of steps) {
         const c = A.rows[st + "-" + pre + kind]?.[x] || 0;
         if (!c) continue;
         cell[x] = (cell[x] || 0) + c;
         (split[x] ||= {})[st] = c;
         (ids[x] ||= []).push(...(A.ids[st + "-" + pre + kind + "|" + x] || []));
+        (bets[x] ||= []).push(...(A.ids[st + "-" + pre + kind + "|" + x] || []).map((id) => [id, st]));   // one per bet, with its street, for the hand-strength bar
       }
       const top = Math.max(0, ...steps.map((x) => cell[x] || 0));
       return `<div class="strow" style="--cols:${cols}"><div class="stlbl">${lbl}</div>${steps.map((x) => {
         const c = cell[x] || 0;
         if (!c) return `<div class="stc none">–</div>`;
         const key = "sz|" + rid + "|" + x;
-        sdSzT[key] = [c, c, [...new Set(ids[x])], [], streets ? null : split[x]];
+        sdSzT[key] = [c, c, [...new Set(ids[x])], [], streets ? null : split[x], bets[x]];
         return `<div class="stc stk szF sz${kind.toUpperCase()}" style="--f:${(c / top).toFixed(2)}" data-stk="${key}"><b>${c}</b></div>`;
       }).join("")}</div>`;
     };
