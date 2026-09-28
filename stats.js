@@ -350,6 +350,40 @@ function sdModelGrid(key, col) {
     html: `<div class="rggrid spgrid mdgrid">${cells.join("")}</div>` };
 }
 
+/* Hover strength strip: what he turned over at showdown, graded on the street the
+   stat is about (the last street he played for the whole-hand ones), stopped at the
+   street he went all in on. One slim bar for "did it", one for "didn't". */
+const SD_ST_OF = { cbetF: "flop", fcb: "flop", rcb: "flop", fxr: "flop", cbetT: "turn", fcbT: "turn", rT: "turn", cbetR: "river", fcbR: "river", rR: "river", afR: "river" };
+const SD_HS_BK = [["Air", "#4a4f57"], ["Draw", "#7d6a45"], ["Weak pair", "#a8843c"], ["Top pair+", "#d4a843"], ["Two pair", "#b3c24a"], ["Trips", "#55b85a"], ["Straight+", "#4a8fdc"]];
+function sdHsBucket(h, oppId, key) {
+  const i = (h.villains || []).findIndex((v) => v.opponentId === oppId), me = "v" + i;
+  if (i < 0 || !hqSD(h, me)) return null;
+  const hole = (h.villains[i].cards || []).filter(Boolean), board = (h.board || []).filter(Boolean);
+  if (hole.length !== 2 || board.length < 3) return null;
+  const ORD = ["flop", "turn", "river"], N = { flop: 3, turn: 4, river: 5 };
+  let k = Math.min(ORD.indexOf(SD_ST_OF[key] || "river"), board.length - 3);
+  const shut = hqAllInStreet(h, me);
+  if (shut === "pre") return null;
+  if (shut) k = Math.min(k, ORD.indexOf(shut));
+  const b = board.slice(0, N[ORD[k]]), T = sdHsRank(hole, b);
+  if (!T) return null;
+  if (T.r === 0) { const d = sdDraws(hole, b); return b.length < 5 && (d.fd || d.oesd || d.gut) ? 1 : 0; }
+  return T.r <= 2 ? 2 : T.r <= 4 ? 3 : T.r === 5 ? 4 : T.r === 6 ? 5 : 6;
+}
+function sdHsStrip(p, key) {
+  const byId = new Map(HANDS.map((h) => [h.id, h]));
+  const row = (ids, lbl) => {
+    const n = SD_HS_BK.map(() => 0);
+    for (const id of new Set(ids || [])) { const h = byId.get(id), b = h && sdHsBucket(h, curOppId, key); if (b != null) n[b]++; }
+    const tot = n.reduce((a, x) => a + x, 0);
+    if (!tot) return "";
+    const seg = n.map((x, j) => x ? `<span style="flex:${x};background:${SD_HS_BK[j][1]}"></span>` : "").join("");
+    const leg = n.map((x, j) => x ? `<span><i style="background:${SD_HS_BK[j][1]}"></i>${SD_HS_BK[j][0]} ${x}</span>` : "").join("");
+    return `<div class="sphs"><div class="sphsl">${lbl} <em>${tot} shown</em></div><div class="sphsbar">${seg}</div><div class="sphsleg">${leg}</div></div>`;
+  };
+  return row(p.r[2], "Did it") + row(p.r[3], "Didn't");
+}
+
 /* Desktop hover: a small popover with the hands that hit, showdowns first. Touch has no hover, so it taps into the sheet. */
 let stPop = null;
 function stPopHide() { if (stPop) stPop.classList.add("hidden"); }
@@ -376,14 +410,16 @@ function stPopShow(el) {
   const byId = new Map(HANDS.map((h) => [h.id, h]));
   const pick = (l) => [...new Set(l)].map((x) => byId.get(x)).filter(Boolean).sort(showdownFirst(curOppId));
   const hit = pick(p.r[2]), miss = pick(p.r[3]);
-  const show = (hit.length ? hit : miss).slice(0, 4);
+  const HS = p.sizing || sk === "sq" || SD_PRE_KEYS.has(sk) ? "" : sdHsStrip(p, sk);
+  const show = HS ? [] : (hit.length ? hit : miss).slice(0, 4);
   const more = hit.length + miss.length - show.length;
   stPop.innerHTML = `<div class="sph"><b>${esc(p.label)}</b></div>
     ${p.split ? `<div class="spsplit">${esc(p.split)}</div>` : ""}
     ${R ? `<div class="spn">No hand here has his cards logged, so no range to show.</div>` : ""}
-    ${hit.length ? "" : `<div class="spn">Never did it, had the chance in:</div>`}
+    ${HS}
+    ${hit.length || HS ? "" : `<div class="spn">Never did it, had the chance in:</div>`}
     ${show.map((h) => handRowHTML(h, curOppId)).join("")}
-    <div class="spn">${more > 0 ? `+${more} more · ` : ""}click for all${p.sizing ? "" : ", split by did / didn't"}</div>`;
+    <div class="spn">${HS ? `His cards at showdown, on the ${SD_ST_OF[sk] || "last street he played"} · ` : more > 0 ? `+${more} more · ` : ""}click for all${p.sizing ? "" : ", split by did / didn't"}</div>`;
   stPopPlace(el);
 }
 /* Never cover the stat being read: below it, else above, else beside it — and if
