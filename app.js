@@ -246,6 +246,22 @@ function villainStreetActs(h, actor) {
 
 const isAgg = (a) => AGG_ACTS.includes(a);
 
+/* DX logs every all-in as a jam, including a call for less than the bet in front of
+   him. That is a call, and counted as a raise it put 30K call-offs of 211K river
+   bets into Raise river and handed the preflop raise to whoever called off short.
+   Only an actual all-in is rewritten: a logged raise that merely resolves under the
+   bet is a misread size, not a call. The pot comes out identical either way. */
+function fixCallOffs(h) {
+  const acts = h.actions || [];
+  if (!acts.some((a) => isAgg(a.act))) return h;
+  const ep = estimatePot(h, acts);
+  acts.forEach((a, i) => {
+    const to = ep.perAct[i], faced = ep.pre[i].curBet;
+    if (isAgg(a.act) && ep.allIn[i] && to > 0 && faced > 0 && to <= faced * 1.000001) { a.act = "call"; delete a.size; }
+  });
+  return h;
+}
+
 /* The size Phil actually recorded, never a reconstruction: postflop sizes come
    off a fixed chip row ("50%" → B50), so the bucket is his own reading of the
    bet. A bet logged without a size has no bucket and stays out of every sizing
@@ -818,6 +834,7 @@ async function mergeOpponents(fromId, intoId) {
 
 async function refreshCache() {
   [OPP, HANDS] = await Promise.all(["opponents", "hands"].map(dbAll));
+  HANDS.forEach(fixCallOffs);
   for (const o of OPP) if (migrateRanges(o)) dbPut("opponents", o).catch(() => {});
   _statsCache = null;
 }
@@ -1456,6 +1473,7 @@ async function commitOneImport(rec, map) {
     note: rec.tableId ? `Imported · table ${rec.tableId}${rec.roundId ? ` #${rec.roundId}` : ""}` : "Imported",
     imported: { source: rec.source || "external", tableId: rec.tableId, roundId: rec.roundId, noK: (rec.source || "") === "hnlbds" },
   };
+  fixCallOffs(hand);
   const win = handWinner(hand); hand.showdown = !!win && win.how === "showdown";
   await dbPut("hands", hand);
   HANDS.push(hand); _statsCache = null;
@@ -1719,6 +1737,7 @@ async function noteToHand(n, oppId, d) {
     note: n.text, srcNoteId: n.id,
   };
   rec.result = null; rec.showdown = false;
+  fixCallOffs(rec);
   await dbPut("hands", rec);
   HANDS.push(rec); _statsCache = null;
   n.handId = rec.id;
@@ -4085,6 +4104,7 @@ function estimatePot(src, actions) {
     else if (s === "Jam" || a.act === "jam") lvl = isFinite(cap) ? cap : (curBet ? 2.5 * curBet : potNow());
     else lvl = curBet ? 2.5 * curBet : 0.66 * potNow();
     lvl = Math.min(lvl, cap);
+    if (cap - lvl > 0 && cap - lvl <= 0.05 * unit) lvl = cap;   // DX rounds each amount to 0.01k: a jam can land a hair under the stack
     if (!isFinite(lvl) || lvl <= 0) { perAct.push(0); allIn.push(false); continue; }
     contrib[a.actor] = Math.max(contrib[a.actor] || 0, lvl);
     curBet = Math.max(curBet, lvl);
@@ -4908,6 +4928,7 @@ async function saveHand() {
       : null,
     note: d.note.trim(),
   };
+  fixCallOffs(rec);
   const win = handWinner(rec);                 // result is inferred, never entered
   rec.showdown = !!win && win.how === "showdown";
   rec.result = hIn ? heroResult(rec) : null;
