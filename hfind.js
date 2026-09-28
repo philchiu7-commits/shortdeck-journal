@@ -537,8 +537,9 @@ function hqClause(h, oppId, c) {
    His own cards have to make it (a pair on the board is no pair of his).
    Value / bluff are the Sizings grid's own verdict via madeTier, which is the
    street-by-street bar: top pair is value on the flop, two pair from the turn.
-   With no street named it is the last street he was still in on; draws, any
-   street before the river. No cards on record: the hand is left out either way,
+   With no street named it is the last street he was still in on — and still
+   had chips on: all in on the turn, the river is a runout that doesn't count;
+   draws, any street before the river. No cards on record: the hand is left out either way,
    "not top pair" included. */
 const HQ_HS_R = { nopair: 0, air: 0, weak: 1, pair: 1, second: 2, top: 3, over: 4, "2pair": 5, set: 6, trips: 6,
   straight: 7, boat: 8, flush: 9, quads: 10, sf: 11 };
@@ -604,14 +605,29 @@ function hqHsLabel(c) {
   if (c.val === "value" || c.val === "bluff") return "shows " + HQ_HS_NAME[c.val]
     + (c.st && c.st !== "pre" && c.st !== "post" ? " on the " + c.st : " on the street he bet");
   return "shows " + HQ_HS_NAME[c.val] + (!draw && c.op !== "eq" && HQ_HS_R[c.val] != null ? (c.op === "ge" ? " or better" : " or worse") : "")
-    + (c.st && c.st !== "pre" && c.st !== "post" ? " on the " + c.st : draw ? " on the flop or turn" : " by the last street he saw");
+    + (c.st && c.st !== "pre" && c.st !== "post" ? " on the " + c.st : draw ? " on the flop or turn" : " by the last street he played");
+}
+/* The street his betting stopped on: he went all in, or everyone left against
+   him did and he called. Cards that come after it are a runout he could no
+   longer act on, so "made two pair" can't count a river that fell after the
+   money was in. null = he was never all in. */
+function hqAllInStreet(h, me) {
+  const A = h.actions || [], pe = estimatePot(h, A), ORD = ["pre", "flop", "turn", "river"], at = {};
+  A.forEach((a, k) => { if (!(a.actor in at) && (pe.allIn[k] || a.act === "jam" || a.size === "Jam")) at[a.actor] = a.street; });
+  if (at[me]) return at[me];
+  const out = new Set(A.filter((a) => a.act === "fold").map((a) => a.actor));
+  const rest = [...new Set(A.map((a) => a.actor))].filter((p) => p !== me && !out.has(p));
+  if (!rest.length || !rest.every((p) => at[p])) return null;
+  return rest.map((p) => at[p]).sort((x, y) => ORD.indexOf(y) - ORD.indexOf(x))[0];
 }
 function hqHs(h, i, c) {
   const hole = ((h.villains[i] || {}).cards || []).filter(Boolean), board = (h.board || []).filter(Boolean);
   if (hole.length !== 2 || ![...hole, ...board].every((x) => SD_CARDRE.test(String(x)))) return null;
   const ORD = ["pre", "flop", "turn", "river"], N = { flop: 3, turn: 4, river: 5 };
   const fold = (h.actions || []).find((a) => a.actor === "v" + i && a.act === "fold");
-  const reached = ["flop", "turn", "river"].filter((st) => board.length >= N[st] && (!fold || ORD.indexOf(fold.street) >= ORD.indexOf(st)));
+  const shut = fold ? null : hqAllInStreet(h, "v" + i);
+  const reached = ["flop", "turn", "river"].filter((st) => board.length >= N[st] && (!fold || ORD.indexOf(fold.street) >= ORD.indexOf(st))
+    && (!shut || ORD.indexOf(shut) >= ORD.indexOf(st)));
   if (!reached.length) return null;
   const draw = HQ_HS_DRAW[c.val];
   const sts = ["flop", "turn", "river"].includes(c.st) ? (reached.includes(c.st) ? [c.st] : [])
