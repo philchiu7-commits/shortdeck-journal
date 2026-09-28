@@ -391,7 +391,7 @@ function sdHsStrip(p, key) {
     const tot = n.reduce((a, x) => a + x, 0);
     if (!tot) return "";
     const seg = n.map((x, j) => x ? `<span style="flex:${x};background:${SD_HS_BK[j][1]}"></span>` : "").join("");
-    const leg = n.map((x, j) => x ? `<span><i style="background:${SD_HS_BK[j][1]}"></i>${SD_HS_BK[j][0]} ${x}</span>` : "").join("");
+    const leg = n.map((x, j) => x ? `<span><i style="background:${SD_HS_BK[j][1]}"></i>${SD_HS_BK[j][0]} <b>${Math.round(100 * x / tot)}%</b> <small>${x}</small></span>` : "").join("");
     return `<div class="sphs"><div class="sphsl">${lbl} <em>${tot} ${bets ? "graded" : "shown"}</em></div><div class="sphsbar">${seg}</div><div class="sphsleg">${leg}</div></div>`;
   };
   if (key === "sz") return row(null, "His hand", p.r[5]);
