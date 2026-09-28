@@ -3,7 +3,7 @@
    A stat is always [hits, chances]; the UI shows the raw x/y next to every percentage,
    because the sample is only the hands he chose to log. */
 
-const SD_MINR_X = 2;                             // a raise up to this many times the bet it raises is a min-raise (5% slack for rounded sizes)
+const SD_MINR_X = 2;                             // a raise up to this many times the bet it raises is a min-raise — the same 2× the sizing table's Min rung uses
 const SD_MINR = new Set(["minOpen", "min3bet"]);
 const SD_VOL = new Set(["limp", "call", "raise", "3bet", "4bet", "5bet", "jam", "bet"]);
 
@@ -26,7 +26,7 @@ function sdHandEvents(h, idx, put) {
     const s = seq[a.street];
     if (!s) continue;
     const c = cnt[a.street];
-    const min = a.street === "pre" && isAgg(a.act) && !!a.size && lastTo > 0 && to[ai] > 0 && to[ai] <= SD_MINR_X * lastTo * 1.05;
+    const min = a.street === "pre" && isAgg(a.act) && !!a.size && lastTo > 0 && to[ai] > 0 && to[ai] <= SD_MINR_X * lastTo + 1e-9;
     s.push({ actor: a.actor, act: a.act, aggBefore: c.agg, aggBy: c.last, limpsBefore: c.limps, i: s.length, min });
     if (a.street === "pre" && isAgg(a.act) && to[ai] > 0) lastTo = to[ai];
     if (isAgg(a.act)) { c.agg++; c.last = a.actor; }
@@ -57,7 +57,7 @@ function sdHandEvents(h, idx, put) {
     if (f.aggBefore === 0 && isAgg(f.act)) {
       const r = pre.slice(1).find((x) => x.aggBefore >= 2);         // his answer to a 3bet over his raise
       if (r) {
-        put("f3bet", pc, r.act === "fold");
+        if (!f.min) put("f3bet", pc, r.act === "fold");            // a min-open folds to a 3bet far less often; it would blur the number
         if (f.limpsBefore > 0 && !f.min) put("isoFold", pc, r.act === "fold");   // the same answer, counted only where his raise was an iso
       }
     }
@@ -82,13 +82,14 @@ function sdHandEvents(h, idx, put) {
     const cols = colsAt(1), f1 = mf[0];
     if (pfa === me && f1.aggBefore === 0) {
       put("cbetF", cols, isAgg(f1.act));
+      const raisedAfter = (st, x) => seq[st].some((y) => y.i > x.i && y.actor !== me && isAgg(y.act));   // his bet got raised: no longer his barrel to fire
       if (isAgg(f1.act)) {
         const t1 = mine("turn")[0];
-        if (t1 && t1.aggBefore === 0) {
+        if (t1 && t1.aggBefore === 0 && !raisedAfter("flop", f1)) {
           put("cbetT", colsAt(2), isAgg(t1.act));
           if (isAgg(t1.act)) {
             const v1 = mine("river")[0];
-            if (v1 && v1.aggBefore === 0) put("cbetR", colsAt(3), isAgg(v1.act));
+            if (v1 && v1.aggBefore === 0 && !raisedAfter("turn", t1)) put("cbetR", colsAt(3), isAgg(v1.act));
           }
         }
         const R = F.find((x) => x.i > f1.i && x.actor !== me && isAgg(x.act));      // his cbet got raised
@@ -100,7 +101,7 @@ function sdHandEvents(h, idx, put) {
       const A = F.find((x) => isAgg(x.act));
       if (A && A.actor === pfa) {                                    // the first flop bet was the raiser's: a cbet
         const r = F.find((x) => x.actor === me && x.i > A.i);
-        if (r) { put("fcb", cols, r.act === "fold"); put("rcb", cols, isAgg(r.act)); }
+        if (r) put("fcb", cols, r.act === "fold");
         if (r && r.act === "call") {                                 // called the flop cbet: his answer to the raiser's turn barrel
           const T = seq.turn, B = T.find((x) => isAgg(x.act));
           const r2 = B && B.actor === pfa && T.find((x) => x.actor === me && x.i > B.i);
@@ -120,7 +121,7 @@ function sdHandEvents(h, idx, put) {
     const ci = mf.findIndex((x) => x.act === "check");
     if (ci >= 0 && mf[ci + 1] && mf[ci + 1].aggBefore > 0) put("cr", cols, isAgg(mf[ci + 1].act));
   }
-  for (const [st, si, key] of [["turn", 2, "rT"], ["river", 3, "rR"]]) {    // his first answer to someone else's bet on the street
+  for (const [st, si, key] of [["flop", 1, "rcb"], ["turn", 2, "rT"], ["river", 3, "rR"]]) {    // his first answer to someone else's bet on the street
     const x = mine(st).find((y) => y.aggBefore === 1 && y.aggBy !== me);
     if (x) put(key, colsAt(si), isAgg(x.act));
   }
@@ -183,12 +184,12 @@ const SD_DEFS = [
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet. A min raise doesn't count — it goes to MinO/Iso."],
   ["Iso fold", "He isolated and someone re-raised behind him: folded, out of the isos that got re-raised. Any re-raise counts — a min 3bet or a jam the same as a normal one. The base is the Iso row's raises, so a min iso isn't in it."],
   ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged). A min re-raise (at most double the raise he faced) doesn't count as an LRR."],
-  ["Fold 3bet", "After he raised first and got 3bet: folded."],
+  ["Fold 3bet", "After he raised first and got 3bet: folded. Min-opens and min isos are left out — he defends those far more."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
-  ["Cbet turn / river", "Kept barrelling after his own cbet, out of the streets where he acted first having bet the one before. Cbet river counts only hands he cbet the flop and the turn."],
-  ["Fold / Raise vs cbet", "His first answer to a flop bet from the preflop raiser (Raise flop = the raise). Calls are the rest."],
+  ["Cbet turn / river", "Kept barrelling after his own cbet, out of the streets where nobody had bet before him and his last bet wasn't raised. Cbet river counts only hands he cbet the flop and the turn."],
+  ["Fold to cbet", "His first answer to a flop bet from the preflop raiser: folded. Calls and raises are the rest."],
   ["Fold to turn / river cbet", "He called the raiser's cbet, the raiser barrelled again: folded, out of those barrels he faced. The river one counts only hands he called the flop and the turn."],
-  ["Raise turn / river", "His first action facing someone else's single bet on that street: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
+  ["Raise flop / turn / river", "His first action facing someone else's single bet on that street — anyone's bet, not just a cbet: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
   ["Check-raise", "Checked the flop, faced a bet, raised."],
   ["Donk lead", "Bet the flop into the preflop raiser before they acted."],
   ["HU / MW", "Heads-up against one other player who saw that street, or three-plus. The Cbet and Fold cbet chips are split this way because a cbet into one player and a cbet into three are different bets; the same stat's All number is the Postflop table's first column."],
