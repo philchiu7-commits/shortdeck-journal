@@ -750,7 +750,7 @@ function showdownFirst(oppId) {
     const v = i < 0 ? null : vs[i];
     // The stored flag is stamped on save and survives imports handWinner can't
     // resolve; a showdown he folded out of is not a look at his cards.
-    const sd = h.showdown ?? (handWinner(h)?.how === "showdown");
+    const sd = handSD(h) || (h.showdown == null && handWinner(h)?.how === "showdown");
     if (sd && (i < 0 || !(h.actions || []).some((a) => a.actor === "v" + i && a.act === "fold"))) return 2;
     return v && (v.cards || []).filter(Boolean).length === 2 ? 1 : 0;
   };
@@ -1138,6 +1138,23 @@ const cardsSeen = (h, oppId) => {
   const v = (h.villains || []).find((x) => x.opponentId === oppId);
   return !!(v && (v.cards || []).some(Boolean));
 };
+/* The stored flag only comes from handWinner, which needs every live player's
+   cards — a DX capture rarely has them, so it's false on every DX hand. A DX
+   record is complete (every fold is on it), so two or more still in over a
+   full board is a showdown with or without cards. A short board with two
+   still in is a capture gap: left out, not guessed. */
+const foldedIn = (h) => new Set((h.actions || []).filter((a) => a.act === "fold").map((a) => a.actor));
+function handSD(h) {
+  if (h.showdown) return true;
+  if (h.imported?.source !== "dx" || (h.board || []).filter(Boolean).length !== 5) return false;
+  const f = foldedIn(h);
+  return (h.villains || []).filter((_, i) => !f.has("v" + i)).length + (h.hero !== false && !f.has("hero") ? 1 : 0) >= 2;
+}
+/* "He got to showdown": the hand went there and he was still in it. */
+function oppSD(h, oppId) {
+  const i = (h.villains || []).findIndex((v) => v.opponentId === oppId);
+  return i >= 0 && handSD(h) && !foldedIn(h).has("v" + i);
+}
 /* Villain seat → coarse bucket for filtering (BTN/CO/HJ/EP/Blinds/Straddle). */
 function posBucket(pos) {
   if (!pos) return null;
@@ -1179,7 +1196,7 @@ function villainRole(h, oppId) {
 function handMatchesFilters(h, oppId) {
   const f = handFilters;
   if (f.q?.groups.length && !hqMatch(h, oppId, f.q)) return false;
-  if (f.sd && !h.showdown) return false;
+  if (f.sd && !oppSD(h, oppId)) return false;
   if (f.pot.size && !f.pot.has(potBucket(h))) return false;
   if (f.squid.size && !f.squid.has(squidBucket(h))) return false;
   if (f.role.size) {
@@ -1223,7 +1240,7 @@ function renderHandFilters(oppId, allHands) {
     row("Squid", "squid", SQUID_BUCKETS) +
     row("Role", "role", ROLE_BUCKETS) +
     `<div class="hfrow"><span class="hflbl">Show</span><div class="chiprow tight">
-      <button class="hfchip${f.sd ? " on" : ""}" data-hf="sd" data-hfv="1">Showdown<i>${allHands.filter((h) => h.showdown).length}</i></button>
+      <button class="hfchip${f.sd ? " on" : ""}" data-hf="sd" data-hfv="1" title="He got to showdown">Showdown<i>${allHands.filter((h) => oppSD(h, oppId)).length}</i></button>
     </div></div>`;
   $("od-hf-clear").classList.toggle("hidden", !handFiltersActive());
 }
@@ -3865,6 +3882,7 @@ function parseNoteToDraft(text, opponentId) {
     Ld:    { act: "limp",    who: "v0" },
     Lb:    { act: "limp",    who: "v0" },
     limp:  { act: "limp",    who: "v0" },
+    Limp:  { act: "limp",    who: "v0" },
     L:     { act: "limp",    who: "v0" },
     oL:    { act: "limp",    who: "v0" },   // overlimp — same act, different context marker
     Ls:    { act: "limp",    who: "v0" },
@@ -3875,7 +3893,10 @@ function parseNoteToDraft(text, opponentId) {
   // swallow a following number as their size — those actions are un-sized in
   // Phil's shorthand, and a following "88" is almost always a holding.
   const SIZED_CHAIN_RX = /\b(Open|open|raise|Raise|Iso|3b|4b|cc|call)(?:\s*(\d{1,4})[Kk]?\b|\s*(\d(?:\.\d+)?)[xX]\b)?/g;
-  const UNSIZED_CHAIN_RX = /\b(Lrr|Lc|Ld|Lb|Ls|oL|limp|L)\b/g;
+  /* Capitalised Limp is listed the way Open/open and raise/Raise already are:
+     "CO Limp AQo" otherwise saves with no preflop action and the range grid
+     paints the class grey as No Action. */
+  const UNSIZED_CHAIN_RX = /\b(Lrr|Lc|Ld|Lb|Ls|oL|limp|Limp|L)\b/g;
   // Walk both regexes and merge by match index so tokens stay in source order.
   const raw = [];
   let cmm;
@@ -4658,7 +4679,7 @@ function handActionClick(b) {
     }
     // Global end-hand rules: one live player remaining (everyone else folded),
     // or river checked/called through with betting closed.
-    if (liveActors().length < 2) {
+    if (draftParticipants().length >= 2 && liveActors().length < 2) {   // one villain, Hero out: nobody left to fold to
       hideSheet();
       toast("Hand over — one player remaining");
       return true;

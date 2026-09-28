@@ -424,7 +424,7 @@ function hqPreAllIn(h) {
   return [...players].filter((p) => !out.has(p)).length >= 2;
 }
 const hqSaw = (h, me, st) => (h.actions || []).some((a) => a.actor === me && a.street === st);
-const hqSD = (h, me) => !!h.showdown && !(h.actions || []).some((a) => a.actor === me && a.act === "fold");
+const hqSD = (h, me) => handSD(h) && !(h.actions || []).some((a) => a.actor === me && a.act === "fold");
 const hqSize = (t, sz) => sz === "ob" ? t.ratio !== null && t.ratio > 1.001 : t.step === sz;
 function hqClause(h, oppId, c) {
   const i = (h.villains || []).findIndex((v) => v.opponentId === oppId);
