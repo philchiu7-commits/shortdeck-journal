@@ -76,6 +76,7 @@ const HQ_PHRASES = [
   [/\bunder\s+the\s+gun\b/g, " utg "],
   [/\bmiddle\s+position\b/g, " mp "],
   [/\bearly\s+position\b/g, " ep "],
+  [/\b(?:pre[\s-]?flop|pre)\s+all[\s-]?ins?\b|\ball[\s-]?ins?\s+(?:pre[\s-]?flop|pre)\b/g, " preallin "],
   [/\ball[\s-]?in\b/g, " jam "],
   /* Squid, same three states as the chips. */
   [/\bno\s+squids?\b|\bzero\s+squids?\b/g, " nosquid "],
@@ -147,10 +148,11 @@ const HQ_WORDS = {
   nosquid: "f:squid:nS", ns: "f:squid:nS", squid1: "f:squid:w1S", w1s: "f:squid:w1S",
   squid2: "f:squid:w2S+", w2s: "f:squid:w2S+",
   pfr: "f:pfr", pfc: "f:pfc",
+  preallin: "f:preallin",
   hu: "f:hu", mw: "f:mw", multiway: "f:mw", sd: "f:sd", cards: "f:cards", shown: "f:cards", showed: "f:cards",
   ip: "f:ip", oop: "f:oop",
   no: "neg", not: "neg", never: "neg", didnt: "neg", doesnt: "neg", dont: "neg", without: "neg",
-  except: "neg", excluding: "neg", isnt: "neg", wasnt: "neg",
+  except: "neg", excluding: "neg", exclude: "neg", excludes: "neg", hide: "neg", isnt: "neg", wasnt: "neg",
   or: "or",
   saw: "seen", sees: "seen", seen: "seen", see: "seen", reached: "seen", reaches: "seen", reach: "seen",
   to: "vs", vs: "vs", versus: "vs", against: "vs", facing: "vs", faces: "vs", faced: "vs",
@@ -290,6 +292,7 @@ function hqLabel(c) {
       pot: { "3BP": "in a 3-bet pot", "4BP+": "in a 4-bet+ pot", SRP: "in a single-raised pot", Limped: "in a limped pot" }[c.val],
       squid: { nS: "in a hand with no squid", w1S: "in a hand with one squid", "w2S+": "in a hand with two or more squids" }[c.val],
       pfr: "the preflop raiser", pfc: "a preflop caller",
+      preallin: "in a hand that went all-in preflop",
       hu: "heads-up on the flop", mw: "multiway on the flop", sd: "gets to showdown", cards: "has his cards on record",
       ip: "in position on the flop", oop: "out of position on the flop",
       high: (c.op === "eq" ? `on a${c.val === 14 || c.val === 8 ? "n" : ""} ${HQ_RANK_NAME[c.val] || c.val}-high ${c.st === "flop" ? "flop" : "board"}`
@@ -407,6 +410,15 @@ function isPFC(h, me) {
 /* How many players saw the flop, and which streets he was in for. Counted off
    the action stream, the same way the stats engine reads segments. */
 const hqField = (h) => { const n = new Set((h.actions || []).filter((a) => a.street === "flop").map((a) => a.actor)).size; return n ? (n === 2 ? "HU" : "MW") : null; };
+/* Someone went all-in preflop and somebody else stayed in with him: the board just
+   runs out, so there is no postflop decision in it. A jam everyone folded to isn't one. */
+function hqPreAllIn(h) {
+  const acts = h.actions || [], ep = estimatePot(h, acts);
+  const pre = acts.map((a, j) => [a, j]).filter(([a]) => a.street === "pre");
+  if (!pre.some(([a, j]) => ep.allIn[j] || a.act === "jam")) return false;
+  const players = new Set(pre.map(([a]) => a.actor)), out = new Set(pre.filter(([a]) => a.act === "fold").map(([a]) => a.actor));
+  return [...players].filter((p) => !out.has(p)).length >= 2;
+}
 const hqSaw = (h, me, st) => (h.actions || []).some((a) => a.actor === me && a.street === st);
 const hqSD = (h, me) => !!h.showdown && !(h.actions || []).some((a) => a.actor === me && a.act === "fold");
 const hqSize = (t, sz) => sz === "ob" ? t.ratio !== null && t.ratio > 1.001 : t.step === sz;
@@ -419,6 +431,7 @@ function hqClause(h, oppId, c) {
       case "pos": return posBucket(h.villains[i].pos) === c.val;
       case "pot": return potBucket(h) === c.val;
       case "squid": return squidBucket(h) === c.val;
+      case "preallin": return hqPreAllIn(h);
       case "hu": return hqField(h) === "HU" && hqSaw(h, me, "flop");
       case "mw": return hqField(h) === "MW" && hqSaw(h, me, "flop");
       case "pfr": return isPFR(h, me);

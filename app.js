@@ -3105,16 +3105,14 @@ function renderRail() {
     const vi = focus ? (h.villains || []).findIndex((v) => v.opponentId === focus) : -1;
     const who = vi >= 0 ? h.villains[vi] : { pos: h.heroPos, cards: h.heroCards };
     const cards = (who.cards || []).some(Boolean) ? tilesHTML(who.cards) : `<span class="rl-none">· ·</span>`;
-    const n = Number(h.seats) || ((h.villains || []).length + (h.hero === false ? 0 : 1));
     const win = handWinner(h);
     const seat = vi >= 0 ? "v" + vi : (h.hero === false ? null : "hero");
-    const res = win && seat ? (win.winners.includes(seat) ? (win.winners.length > 1 ? "chop" : "won") : "lost") : null;
-    return `<button class="rlrow${id === curHandId ? " on" : ""}" data-railhand="${esc(id)}">
+    const folded = seat && (h.actions || []).some((a) => a.actor === seat && a.act === "fold");
+    const res = folded ? "lost" : win && seat ? (win.winners.includes(seat) ? (win.winners.length > 1 ? "chop" : "won") : "lost") : null;
+    return `<button class="rlrow${id === curHandId ? " on" : ""}${res ? " " + res : ""}" data-railhand="${esc(id)}">
         <span class="rl-n">${i + 1}</span>
         <span class="rl-c">${cards}</span>
         <span class="rl-p">${esc(who.pos || "")}</span>
-        <span class="rl-m">${n}p ${esc(blindsStr(h, isRawSize(h)))}</span>
-        ${res ? `<span class="dot ${res}"></span>` : ""}
       </button>`;
   }).join("");
 }

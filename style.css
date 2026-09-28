@@ -1117,13 +1117,14 @@ textarea.noteedit { margin-bottom: 0; }
 #hv-rail-list { flex: 1; overflow-y: auto; padding: 4px 6px calc(12px + env(safe-area-inset-bottom)); }
 .rlrow { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
   background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.05);
-  padding: 7px 6px; cursor: pointer; color: var(--text); }
-.rlrow.on { background: #1c2c47; border-radius: 8px; border-bottom-color: transparent; }
+  padding: 7px 6px; cursor: pointer; color: var(--text);
+  border-left: 4px solid transparent; }                  /* the focus player's result */
+.rlrow.won { border-left-color: var(--good); } .rlrow.lost { border-left-color: var(--bad); }
+.rlrow.on { background: #1c2c47; border-radius: 0 8px 8px 0; border-bottom-color: transparent; }
 .rl-n { flex: 0 0 22px; font-size: 11px; font-weight: 700; color: var(--muted); }
 .rl-c { display: flex; gap: 2px; flex: 0 0 auto; }
 .rl-none { color: var(--muted); font-size: 12px; letter-spacing: 2px; }
-.rl-p { font-size: 10px; font-weight: 700; color: var(--accent); min-width: 22px; }
-.rl-m { flex: 1; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl-p { flex: 1; text-align: right; font-size: 11px; font-weight: 700; color: var(--accent); }
 
 /* Felt cards ride smaller than in the hand text — seven seats and a board have
    to share one screen width. */
