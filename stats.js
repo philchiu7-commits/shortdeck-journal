@@ -75,7 +75,7 @@ function sdHandEvents(h, idx, put) {
     const first = seq[STREETS[si]].find((x) => x.actor === me || x.actor === other);   // no seats logged: first to act is out of position
     return first ? (first.actor === me ? "oop" : "ip") : null;
   };
-  const colsAt = (si) => { const s = segAt(si); return s ? ["all", s] : ["all"]; };
+  const colsAt = (si) => { const s = segAt(si); return s ? (s === "mw" ? ["all", "mw"] : ["all", "hu", s]) : ["all"]; };   // "hu" is IP and OOP together
   const pfa = cnt.pre.last;
   const F = seq.flop, mf = mine("flop");
   if (mf.length) {
@@ -169,7 +169,7 @@ let sdMinHide = localStorage.getItem("sd-minhide") === "1";   // MinO/Iso and Mi
    showdown, which is where the postflop block ends. */
 /* Two questions, one row each: how he enters a pot, then how the raising war goes. */
 const SD_HUD_PRE = [["VPIP", "vpip"], ["Limp", "limp"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"]];
-const SD_HUD_POST = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Fold cbet", "fcb"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
+const SD_HUD_POST = [["Cbet HU", "cbetF", "hu"], ["Cbet MW", "cbetF", "mw"], ["Cbet turn", "cbetT"], ["Fold cbet HU", "fcb", "hu"], ["Fold cbet MW", "fcb", "mw"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["AFq", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Iso fold", "isoFold"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet river", "cbetR"], ["Fold to cbet", "fcb"], ["Fold to turn cbet", "fcbT"], ["Fold to river cbet", "fcbR"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
@@ -191,6 +191,7 @@ const SD_DEFS = [
   ["Raise turn / river", "His first action facing someone else's single bet on that street: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
   ["Check-raise", "Checked the flop, faced a bet, raised."],
   ["Donk lead", "Bet the flop into the preflop raiser before they acted."],
+  ["HU / MW", "Heads-up against one other player who saw that street, or three-plus. The Cbet and Fold cbet chips are split this way because a cbet into one player and a cbet into three are different bets; the same stat's All number is the Postflop table's first column."],
   ["HU IP / HU OOP / MW", "Heads-up in or out of position against the one other player who saw that street, or three-plus players. Only players you logged in the hand are counted."],
   ["AFq", "Postflop bets and raises out of bets, raises and calls."],
   ["WTSD / W$SD", "Went to showdown out of flops seen / won it (needs both hands and the board logged). Hands still unfinished are skipped."],
@@ -199,7 +200,7 @@ const SD_DEFS = [
 let sdStatT = {};                                // the tallies behind the stats now on screen
 let sdSzT = {};                                  // same for the sizing grid: "sz|flop-v|B50" → [n, n, handIds, []]
 const SD_EXTRA_ROWS = [["Fold to flop raise", "fxr"], ["River AF", "afR"]];
-const SD_COL_LBL = { all: "", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
+const SD_COL_LBL = { all: "", hu: "heads-up", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
 
 function statCell(r, k, c) {
   if (!r || !r[1]) return `<div class="stc none">–</div>`;
@@ -217,7 +218,8 @@ function statProof(el) {
     const what = st === "all" ? vb[0].toUpperCase() + vb.slice(1) : `${st[0].toUpperCase() + st.slice(1)} ${vb}`;
     return { r, sizing: true, split, label: `${what} ${rz ? "raise" : "bet"} · ${step} · ${r[0]} ${rz ? "raise" : "bet"}${r[0] === 1 ? "" : "s"}` };
   }
-  const name = [...SD_HUD, ...SD_PRE_ROWS, ...SD_POST_ROWS, ...SD_EXTRA_ROWS].find(([, kk]) => kk === k)?.[0] || k;
+  const all = [...SD_HUD, ...SD_PRE_ROWS, ...SD_POST_ROWS, ...SD_EXTRA_ROWS];
+  const name = (all.find(([, kk, cc]) => kk === k && !cc) || all.find(([, kk]) => kk === k))?.[0] || k;
   const col = SD_COL_LBL[c] ?? c;
   return { r, label: `${name}${col ? " · " + col : ""} · ${r[0]}/${r[1]}` };
 }
@@ -421,9 +423,9 @@ function renderStats(oppId, hands) {
   if (!n) { host.innerHTML = `<div class="empty">No hands logged for this player yet.</div>`; return; }
   const hasMin = [...SD_MINR].some((k) => (g(k, "all")?.[0] || 0) > 0);
   const used = ([, k]) => !SD_MINR.has(k) || (!sdMinHide && (g(k, "all")?.[0] || 0) > 0);   // min-raise stats show only for players who do it, and only while un-hidden
-  const hudBlock = (rows) => rows.filter(used).map(([l, k]) => {
-    const r = g(k, "all");
-    return `<div class="stchip${r && r[1] ? " stk" : ""}${!r || r[1] < 5 ? " thin" : ""}"${r && r[1] ? ` data-stk="${k}|all"` : ""}><label>${esc(l)}</label><b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b><i>${r && r[1] ? `${r[0]}/${r[1]}` : "no data"}</i></div>`;
+  const hudBlock = (rows) => rows.filter(used).map(([l, k, c = "all"]) => {
+    const r = g(k, c);
+    return `<div class="stchip${r && r[1] ? " stk" : ""}${!r || r[1] < 5 ? " thin" : ""}"${r && r[1] ? ` data-stk="${k}|${c}"` : ""}><label>${esc(l)}</label><b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b><i>${r && r[1] ? `${r[0]}/${r[1]}` : "no data"}</i></div>`;
   }).join("");
   const seats = ["all", ...RANGE_BUCKETS];
   const table = (rows, cols, cw) => {
