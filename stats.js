@@ -122,6 +122,15 @@ function sdHandEvents(h, idx, put) {
     const ci = mf.findIndex((x) => x.act === "check");
     if (ci >= 0 && mf[ci + 1] && mf[ci + 1].aggBefore > 0) put("cr", cols, isAgg(mf[ci + 1].act));
   }
+  /* Turn / river donk: he called the last street's bet and leads into that bettor
+     before they act. Raised pots only — a limped pot has no preflop raiser, so
+     its flop donk doesn't exist and the later ones aren't comparable. */
+  if (pfa) for (const [st, si, key] of [["turn", 2, "donkT"], ["river", 3, "donkR"]]) {
+    const pa = cnt[STREETS[si - 1]].last, m1 = mine(st)[0];
+    if (!pa || pa === me || !m1 || m1.aggBefore > 0) continue;
+    const pp = seq[st].find((x) => x.actor === pa);
+    if (pp && m1.i < pp.i) put(key, colsAt(si), isAgg(m1.act));
+  }
   for (const [st, si, key] of [["flop", 1, "rcb"], ["turn", 2, "rT"], ["river", 3, "rR"]]) {    // his first answer to someone else's bet on the street
     const x = mine(st).find((y) => y.aggBefore === 1 && y.aggBy !== me);
     if (x) put(key, colsAt(si), isAgg(x.act));
@@ -171,10 +180,10 @@ let sdMinHide = localStorage.getItem("sd-minhide") === "1";   // MinO/Iso and Mi
    showdown, which is where the postflop block ends. */
 /* Two questions, one row each: how he enters a pot, then how the raising war goes. */
 const SD_HUD_PRE = [["VPIP", "vpip"], ["Limp", "limp"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"]];
-const SD_HUD_POST = [["Cbet HU", "cbetF", "hu"], ["Cbet MW", "cbetF", "mw"], ["Cbet turn", "cbetT"], ["Fold cbet HU", "fcb", "hu"], ["Fold cbet MW", "fcb", "mw"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Agg %", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
+const SD_HUD_POST = [["Cbet HU", "cbetF", "hu"], ["Cbet MW", "cbetF", "mw"], ["Cbet turn", "cbetT"], ["Fold cbet HU", "fcb", "hu"], ["Fold cbet MW", "fcb", "mw"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk flop", "donk"], ["Donk turn", "donkT"], ["Donk river", "donkR"], ["Agg %", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
 const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Iso fold", "isoFold"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
-const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet river", "cbetR"], ["Fold to cbet", "fcb"], ["Fold to turn cbet", "fcbT"], ["Fold to river cbet", "fcbR"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk lead", "donk"]];
+const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet river", "cbetR"], ["Fold to cbet", "fcb"], ["Fold to turn cbet", "fcbT"], ["Fold to river cbet", "fcbR"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk flop", "donk"], ["Donk turn", "donkT"], ["Donk river", "donkR"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
   ["VPIP", "VPIP: put chips in at any point preflop, out of the hands where he acted preflop."],
@@ -192,7 +201,7 @@ const SD_DEFS = [
   ["Fold to turn / river cbet", "He called the raiser's cbet, the raiser barrelled again: folded, out of those barrels he faced. The river one counts only hands he called the flop and the turn. Left out when someone raised the barrel before he acted."],
   ["Raise flop / turn / river", "His first action facing someone else's single bet on that street — anyone's bet, not just a cbet: raised, out of the times he faced one (folds and calls are the rest). Includes check-raises."],
   ["Check-raise", "Checked the flop, faced a bet, raised."],
-  ["Donk lead", "Bet the flop into the preflop raiser before they acted."],
+  ["Donk flop / turn / river", "Led into the last street's aggressor before they acted: the flop into the preflop raiser, the turn into whoever bet or raised the flop last (he called it), the river likewise off the turn. Raised pots only — out of the times he acted first on that street with that player still to act. A street that checked through has no aggressor, so a bet after it isn't a donk."],
   ["HU / MW", "Heads-up against one other player who saw that street, or three-plus. The Cbet and Fold cbet chips are split this way because a cbet into one player and a cbet into three are different bets; the same stat's All number is the Postflop table's first column."],
   ["HU IP / HU OOP / MW", "Heads-up in or out of position against the one other player who saw that street, or three-plus players. Only players you logged in the hand are counted."],
   ["Agg % / River agg %", "Postflop (or river-only) bets and raises out of every bet, raise, call and fold he made there. Checks are left out. Folds count, so a player who folds a lot shows as passive."],
@@ -355,7 +364,7 @@ function sdModelGrid(key, col) {
 /* Hover strength strip: what he turned over at showdown, graded on the street the
    stat is about (the last street he played for the whole-hand ones), stopped at the
    street he went all in on. One slim bar for "did it", one for "didn't". */
-const SD_ST_OF = { cbetF: "flop", fcb: "flop", rcb: "flop", fxr: "flop", cbetT: "turn", fcbT: "turn", rT: "turn", cbetR: "river", fcbR: "river", rR: "river", afR: "river" };
+const SD_ST_OF = { donk: "flop", donkT: "turn", donkR: "river", cbetF: "flop", fcb: "flop", rcb: "flop", fxr: "flop", cbetT: "turn", fcbT: "turn", rT: "turn", cbetR: "river", fcbR: "river", rR: "river", afR: "river" };
 const SD_HS_BK = [["Air", "#4a4f57"], ["Draw", "#7d6a45"], ["Weak pair", "#a8843c"], ["Top pair+", "#d4a843"], ["Two pair", "#b3c24a"], ["Trips", "#55b85a"], ["Straight+", "#4a8fdc"]];
 function sdHsBucket(h, oppId, key) {
   const i = (h.villains || []).findIndex((v) => v.opponentId === oppId), me = "v" + i;
