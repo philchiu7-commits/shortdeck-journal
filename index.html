@@ -190,8 +190,9 @@
 <!-- ===== Hand detail ===== -->
 <section id="view-handview" class="hidden">
   <header class="vhead">
-    <button class="backbtn" data-back aria-label="Back">‹</button>
+    <button id="hv-back" class="backbtn" aria-label="Back">‹</button>
     <h1>Hand</h1>
+    <button id="hv-reads" class="iconbtn hidden" title="Mark reads" aria-label="Mark reads">✍</button>
     <button id="hv-list" class="iconbtn hidden" title="All hands" aria-label="Hand list">☰</button>
     <button id="hv-edit" class="iconbtn" title="Edit" aria-label="Edit hand">✎</button>
   </header>
@@ -203,6 +204,15 @@
   </aside>
   <div id="hv-felt"></div>
   <div id="hv-text" class="handview"></div>
+  <div id="hv-split" class="hvsplit hidden">
+    <div id="hv-split-grab" class="hvgrab" aria-label="Drag to resize"></div>
+    <div class="hvsplit-head">
+      <span id="hv-split-who"></span>
+      <div id="hv-split-vill" class="chiprow tight"></div>
+      <button id="hv-split-close" class="iconbtn" aria-label="Close reads">✕</button>
+    </div>
+    <div id="hv-split-body"></div>
+  </div>
   <button id="hv-delete" class="danger">Delete hand</button>
   <div id="hv-nav" class="hvnav hidden">
     <button class="hvstep" data-hvstep="-1" aria-label="Previous hand">‹</button>

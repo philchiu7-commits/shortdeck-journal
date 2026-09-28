@@ -11,6 +11,7 @@ let curOppId = null, curHandId = null;
 /* Hand player: a snapshot of one opponent's shown hands, in the order the Hands
    panel listed them (so the active filters carry into the review). */
 let handPlay = null, handPlayIds = [];
+let handFiltersFor = null;              // the opponent the hands-panel filters were set for
 let editNoteId = null, editExploitId = null;
 let storageDurable = false;
 let showSuggestedExploits = {};   // per-opponent toggle for suggested exploits (oppId -> bool)
@@ -1063,9 +1064,10 @@ function route() {
   }
   const v = VIEWS.includes(view) ? view : "opponents";
   if (v !== "handview" && v !== "opp") handPlay = null;
-  if (v !== "handview") { replayStop(); railOpen(false); }
-  // Leaving a specific opponent, or navigating to a different one → drop filters.
-  if (v !== "opp" || arg !== curOppId) { resetHandFilters(); noCardsOpen = false; }
+  if (v !== "handview") { replayStop(); railOpen(false); splitDetach(); }
+  // Filters belong to a player, not to a screen: narrowing to four hands is the
+  // prelude to reading them one by one, so opening one and coming back keeps them.
+  if (v === "opp" ? arg !== handFiltersFor : v !== "handview") { resetHandFilters(); noCardsOpen = false; }
   VIEWS.forEach((x) => $("view-" + x).classList.toggle("hidden", x !== v));
   document.querySelectorAll("#tabbar button").forEach((b) =>
     b.classList.toggle("on", b.dataset.tab === TAB_FOR[v]));
@@ -2568,6 +2570,7 @@ function renderOppDetail(id) {
   const seen = hands.filter((h) => cardsSeen(h, id));
   const noCards = hands.filter((h) => !cardsSeen(h, id));
   handPlayIds = hands.map((h) => h.id);                 // the reel is whatever the filters left
+  handFiltersFor = id;
   $("od-play").classList.toggle("hidden", !hands.length);
   $("od-play").textContent = `▶ Play ${hands.length}`;
   const seenHTML = seen.map((h) => handRowHTML(h, id)).join("");
@@ -2963,6 +2966,7 @@ function replayHTML(h, k) {
   const ctl = `<div class="rctl">
       <div class="chiprow tight">${jump}</div>
       <div class="rtrans">
+        <button data-hvstep="-1" aria-label="Previous hand"${ri <= 0 ? " disabled" : ""}>⏮</button>
         <button data-rgo="0" aria-label="Restart">↺</button>
         <button data-rstep="-1" aria-label="Back"${k === 0 ? " disabled" : ""}>◀</button>
         <button data-rplay class="rplay" aria-label="Play">${replayTimer ? "❚❚" : "▶"}</button>
@@ -3031,10 +3035,18 @@ function renderHandView(id) {
   if (!h) { location.hash = "#opponents"; return; }
   curHandId = id;
   replayStop(); replayStep = 0;                               // every hand opens at the deal
-  const list = handPlayList(), i = list.indexOf(id);
+  let list = handPlayList(), i = list.indexOf(id);
+  // Opened outside a reel — a note link, a reload — so build one from this
+  // player's own hands; the steppers are useless without it.
+  if (i < 0) {
+    const oid = hvOppId(h);
+    const own = oid ? HANDS.filter((x) => (x.villainIds || []).includes(oid)).sort((a, b) => b.ts - a.ts).map((x) => x.id) : [];
+    if (own.length > 1) { handPlay = { oppId: oid, ids: own }; list = handPlayList(); i = list.indexOf(id); }
+  }
   $("hv-text").innerHTML = handHTML(h, i >= 0 ? handPlay.oppId : null);
   renderReplay();
   renderRail();
+  splitSync();
   const nav = $("hv-nav");
   nav.classList.toggle("hidden", i < 0);
   $("view-handview").classList.toggle("playing", i >= 0);   // keeps Delete clear of the floating stepper
@@ -3075,6 +3087,76 @@ function railOpen(v) {
   if (!v) return;
   const on = $("hv-rail-list").querySelector(".rlrow.on");
   if (on) $("hv-rail-list").scrollTop = on.offsetTop - $("hv-rail-list").clientHeight / 2;
+}
+/* ---- Reads split: mark a read without leaving the hand ----
+   The pane borrows the opponent page's own #od-tags grid instead of cloning it,
+   so one set of handlers serves both screens; it is moved home on the way out. */
+let splitWant = false, splitSlot = null;
+const hvVillains = (h) => (h?.villains || []).filter((v) => v.opponentId && oppById(v.opponentId));
+function hvOppId(h) {
+  const vs = hvVillains(h);
+  if (vs.some((v) => v.opponentId === curOppId)) return curOppId;
+  if (handPlay && vs.some((v) => v.opponentId === handPlay.oppId)) return handPlay.oppId;
+  return vs[0]?.opponentId || null;
+}
+function splitHome() {
+  const t = $("od-tags");
+  if (splitSlot && t.parentNode !== splitSlot.parent) splitSlot.parent.insertBefore(t, splitSlot.next);
+}
+/* Leaving the hand view puts the grid back but remembers he wanted it open. */
+function splitDetach() {
+  splitHome();
+  $("hv-split").classList.add("hidden");
+  $("view-handview").classList.remove("reading");
+}
+function splitSync(oppId) {
+  const h = HANDS.find((x) => x.id === curHandId), vs = hvVillains(h);
+  if (!splitSlot) { const t = $("od-tags"); splitSlot = { parent: t.parentNode, next: t.nextSibling }; }
+  $("hv-reads").classList.toggle("hidden", !vs.length);
+  $("hv-reads").classList.toggle("on", splitWant && !!vs.length);
+  const on = splitWant && !!vs.length;
+  if (!on) { splitDetach(); return; }
+  const id = oppId || hvOppId(h);
+  if (id && id !== curOppId) renderOppDetail(id);
+  $("hv-split-body").appendChild($("od-tags"));
+  $("hv-split").classList.remove("hidden");
+  $("view-handview").classList.add("reading");
+  $("hv-split-who").textContent = oppById(curOppId)?.name || "Reads";
+  // Two villains in the hand, two sets of reads — say whose you are marking.
+  $("hv-split-vill").innerHTML = vs.length > 1
+    ? vs.map((v) => `<button class="chip mini${v.opponentId === curOppId ? " on" : ""}" data-splitopp="${esc(v.opponentId)}">${esc(oppById(v.opponentId).name)}</button>`).join("")
+    : "";
+}
+/* Backing out of a hand goes to the player, not to the hand read before it —
+   stepping through a reel would otherwise unwind one hand at a time. */
+function hvBack() {
+  const h = HANDS.find((x) => x.id === curHandId);
+  const id = (handPlay && handPlay.oppId) || hvOppId(h) || curOppId;
+  // Going back to the list he came from, so the filters he left are still his —
+  // matching curOppId first keeps go() from clearing them.
+  if (id && oppById(id)) { curOppId = id; location.hash = "#opp/" + id; }
+  else location.hash = "#opponents";
+}
+/* Drag the grab bar to trade hand for reads; the size is his, so it is kept. */
+function bindSplitGrab() {
+  const g = $("hv-split-grab");
+  let y0 = 0, h0 = 0, px = null;
+  g.addEventListener("pointerdown", (e) => {
+    y0 = e.clientY; h0 = $("hv-split").getBoundingClientRect().height; px = e.pointerId;
+    g.setPointerCapture(px); e.preventDefault();
+  });
+  g.addEventListener("pointermove", (e) => {
+    if (px === null) return;
+    const h = Math.round(Math.max(150, Math.min(window.innerHeight * 0.75, h0 + (y0 - e.clientY))));
+    document.documentElement.style.setProperty("--hvsplit-h", h + "px");
+  });
+  const end = () => {
+    if (px === null) return;
+    px = null;
+    metaSet("hvSplitH", document.documentElement.style.getPropertyValue("--hvsplit-h"));
+  };
+  g.addEventListener("pointerup", end);
+  g.addEventListener("pointercancel", end);
 }
 /* Deleted hands drop out of the reel rather than dead-ending it. */
 const handPlayList = () => handPlay ? handPlay.ids.filter((x) => HANDS.some((h) => h.id === x)) : [];
@@ -4883,6 +4965,7 @@ function bindStatic() {
     b.onclick = () => { location.hash = "#" + b.dataset.tab; });
   document.querySelectorAll("[data-back]").forEach((b) =>
     b.onclick = () => history.back());
+  $("hv-back").onclick = hvBack;
 
   // opponents list
   $("opp-search").oninput = renderOpponents;
@@ -5339,6 +5422,13 @@ function bindStatic() {
     const b = e.target.closest("[data-hvstep]");
     if (b && !b.disabled) handStep(Number(b.dataset.hvstep));
   };
+  $("hv-reads").onclick = () => { splitWant = !splitWant; splitSync(); };
+  $("hv-split-close").onclick = () => { splitWant = false; splitSync(); };
+  $("hv-split-vill").onclick = (e) => {
+    const b = e.target.closest("[data-splitopp]");
+    if (b) splitSync(b.dataset.splitopp);
+  };
+  bindSplitGrab();
   $("hv-list").onclick = () => railOpen($("hv-rail").classList.contains("hidden"));
   $("hv-rail-close").onclick = () => railOpen(false);
   $("hv-rail-backdrop").onclick = () => railOpen(false);
@@ -5370,7 +5460,7 @@ function bindStatic() {
     if (!confirm("Delete this hand?")) return;
     await dbDel("hands", curHandId);
     HANDS = HANDS.filter((h) => h.id !== curHandId); _statsCache = null;
-    history.back();
+    hvBack();
   };
 
   // data / backup
@@ -5474,6 +5564,7 @@ async function boot() {
   await migrateDupBoardCards();
   await fixDxSeats();
   await loadBlindsDefault();
+  metaGet("hvSplitH").then((h) => { if (h) document.documentElement.style.setProperty("--hvsplit-h", h); });
   collapsedGroups = new Set((await metaGet("collapsedGroups")) || []);
   pinnedGroup = (await metaGet("pinnedGroup")) ?? null;
   tableLineup = (await metaGet("tableLineup")) || [];
