@@ -45,10 +45,8 @@ function sdHandEvents(h, idx, put) {
     if (f.aggBefore === 0) {
       if (f.act !== "check" && posOf(me) !== "BN") put("limp", pc, f.act === "limp");   // the button's double ante is already in: he checks, he can't limp
       put("minOpen", pc, isAgg(f.act) && f.min);                 // min opens and min isos together — neither counts in Open or Iso
-      if (f.limpsBefore > 0) {
-        put("iso", pc, isAgg(f.act) && !f.min);
-        if (posOf(me) !== "BN") put("isoFold", pc, f.act === "fold");   // the button can't fold behind limps — his double ante is already in
-      } else put("open", pc, isAgg(f.act) && !f.min);
+      if (f.limpsBefore > 0) put("iso", pc, isAgg(f.act) && !f.min);
+      else put("open", pc, isAgg(f.act) && !f.min);
     } else {
       if (f.aggBefore === 1) { put("cc", pc, f.act === "call"); put("3bet", pc, isAgg(f.act) && !f.min); put("min3bet", pc, isAgg(f.act) && f.min); }
     }
@@ -58,7 +56,10 @@ function sdHandEvents(h, idx, put) {
     }
     if (f.aggBefore === 0 && isAgg(f.act)) {
       const r = pre.slice(1).find((x) => x.aggBefore >= 2);         // his answer to a 3bet over his raise
-      if (r) put("f3bet", pc, r.act === "fold");
+      if (r) {
+        put("f3bet", pc, r.act === "fold");
+        if (f.limpsBefore > 0 && !f.min) put("isoFold", pc, r.act === "fold");   // the same answer, counted only where his raise was an iso
+      }
     }
   }
 
@@ -180,7 +181,7 @@ const SD_DEFS = [
   ["MinO/Iso", "A raise of at most 2× the ante when no one had raised yet — first in, or over limpers. Out of every hand where he acted with no raise in front of him. These never count in Open or Iso."],
   ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet. A min raise doesn't count — it goes to MinO/Iso."],
-  ["Iso fold", "Folded behind limpers instead of isolating — same spots as Iso, so the two read against the same base. Over-limping and calling are the rest. Not counted on the button: his double ante is already in, so he checks rather than folds."],
+  ["Iso fold", "He isolated and someone re-raised behind him: folded, out of the isos that got re-raised. Any re-raise counts — a min 3bet or a jam the same as a normal one. The base is the Iso row's raises, so a min iso isn't in it."],
   ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged). A min re-raise (at most double the raise he faced) doesn't count as an LRR."],
   ["Fold 3bet", "After he raised first and got 3bet: folded."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
