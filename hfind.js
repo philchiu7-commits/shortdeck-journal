@@ -131,6 +131,7 @@ const HQ_WORDS = {
   lead: "a:donk", leads: "a:donk", led: "a:donk", leading: "a:donk",
   open: "a:open", opens: "a:open", opened: "a:open", opening: "a:open", rfi: "a:open",
   iso: "a:iso", isos: "a:iso",
+  agg: "a:agg", aggressor: "a:agg", aggressors: "a:agg", aggressive: "a:agg", aggro: "a:agg",
   flat: "a:flat", flats: "a:flat", flatted: "a:flat", flatting: "a:flat",
   "3bet": "a:3bet", "3bets": "a:3bet", "3betting": "a:3bet", "4bet": "a:4bet", "4bets": "a:4bet",
   "5bet": "a:5bet", "5bets": "a:5bet", lrr: "a:lrr",
@@ -537,7 +538,7 @@ function hqClause(h, oppId, c) {
     if (L.length === 2) return my.length > 1 && is(my[0], L[0]) && my.slice(1).some((t) => is(t, L[1]));
     return my.length > 0 && (L === "x" ? my.every((t) => t.a.act === "check") : my.some((t) => t.k.has(HQ_LINE_ACT[L])));
   });
-  if (c.kind === "agg") return streets.some((st) => mine(st).some((t) => t.k.has("agg") && hqSize(t, c.sz)));
+  if (c.kind === "agg") return streets.some((st) => mine(st).some((t) => t.k.has("agg") && (!c.sz || hqSize(t, c.sz))));
   return streets.some(onStreet);
 }
 /* Hand strength off his shown cards, on the short-deck ladder: 0 no pair ·
