@@ -3136,13 +3136,18 @@ function splitSync(oppId) {
 }
 /* Backing out of a hand goes to the player, not to the hand read before it —
    stepping through a reel would otherwise unwind one hand at a time. */
+/* Back steps out of a screen rather than rewinding history: assigning the hash
+   would stack player-hand-player and trap ‹ between the two, and location.replace
+   only lands on the next tick. replaceState + route() is immediate. */
+function navUp(hash) { history.replaceState(null, "", hash); route(); }
 function hvBack() {
   const h = HANDS.find((x) => x.id === curHandId);
   const id = (handPlay && handPlay.oppId) || hvOppId(h) || curOppId;
   // Going back to the list he came from, so the filters he left are still his —
-  // matching curOppId first keeps go() from clearing them.
-  if (id && oppById(id)) { curOppId = id; location.hash = "#opp/" + id; }
-  else location.hash = "#opponents";
+  // matching curOppId first keeps go() from clearing them. replace, not assign:
+  // pushing would stack player-hand-player and trap ‹ between the two.
+  if (id && oppById(id)) { curOppId = id; navUp("#opp/" + id); }
+  else navUp("#opponents");
 }
 /* Drag the grab bar to trade hand for reads; the size is his, so it is kept. */
 function bindSplitGrab() {
@@ -4974,8 +4979,10 @@ function loadHandIntoDraft(h) {
 function bindStatic() {
   document.querySelectorAll("#tabbar button").forEach((b) =>
     b.onclick = () => { location.hash = "#" + b.dataset.tab; });
+  // ‹ is an up-button, not a history button: from a player it always reaches the
+  // list, however he got here — a hand, a reload, a link.
   document.querySelectorAll("[data-back]").forEach((b) =>
-    b.onclick = () => history.back());
+    b.onclick = () => navUp("#opponents"));
   $("hv-back").onclick = hvBack;
 
   // opponents list
