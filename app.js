@@ -5805,7 +5805,7 @@ function bindStatic() {
       await refreshCache();
       await fixDxSeats();
       await recordImport(f.name, counts);
-      toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands` + (counts.nlhe ? ` · rejected ${counts.nlhe} NLHE hand${counts.nlhe === 1 ? "" : "s"}` : ""));
+      toast(`Imported ${counts.opponents} opp` + (counts.merged ? ` · ${counts.merged} merged` : "") + ` · ${counts.hands} hands` + (counts.stacks ? ` · ${counts.stacks} stacks filled` : "") + (counts.nlhe ? ` · rejected ${counts.nlhe} NLHE hand${counts.nlhe === 1 ? "" : "s"}` : ""));
       renderData();
     } catch (err) { toast("Import failed: " + err.message); }
     e.target.value = "";
