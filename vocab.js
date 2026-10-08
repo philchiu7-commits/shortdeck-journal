@@ -237,6 +237,12 @@ const TENDENCY_TAGS = [
   { id: "timing-tells",      cat: "live",     label: "Timing tells" },
   { id: "snap-call-weak",    cat: "live",     label: "Snap-call = weak" },
   { id: "talks-when-strong", cat: "live",     label: "Chatty = strong" },
+  // NLHE's Physical Tells, same ids
+  { id: "tell-long-strong",  cat: "live",     label: "Timing Long = Strong" },
+  { id: "tell-long-weak",    cat: "live",     label: "Timing Long = Weak" },
+  { id: "tell-fast-strong",  cat: "live",     label: "Timing Fast = Strong" },
+  { id: "tell-fast-weak",    cat: "live",     label: "Timing Fast = Weak" },
+  { id: "tell-acting",       cat: "live",     label: "Acting" },
 ];
 /* Player archetype — Phil sets it manually and it themes the opponent's row
    on the list plus a pill in the detail header. */

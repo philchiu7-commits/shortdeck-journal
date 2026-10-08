@@ -162,8 +162,11 @@ const READ_LAYOUT = [
   ] }] }] },
   { title: "Live tells", subs: [{ rows: [{ lines: true, ids: [
     words("Timing tells", ["timing-tells", "Yes"]),
+    words("Timing Long", ["tell-long-strong", "S"], ["tell-long-weak", "W"]),
+    words("Timing Fast", ["tell-fast-strong", "S"], ["tell-fast-weak", "W"]),
     words("Snap-call = weak", ["snap-call-weak", "Yes"]),
     words("Chatty = strong", ["talks-when-strong", "Yes"]),
+    words("Acting", ["tell-acting", "Yes"]),
   ] }] }] },
 ];
 
@@ -227,6 +230,10 @@ function suggestedExploits(o) {
     const weight = 6 + Math.max(0, strongCount - 1) * 2;
     out.push({ key, text: rule.label + " — " + rule.text, compound: true, weight, strong: true });
   }
+  /* An old read and the one that replaced it can share a text (cc-width wide,
+     cc-loose): it is offered once, and added or dismissed under either key it
+     stays retired under both. */
+  const textDone = new Set([...dismissed].map((k) => { const [id, st] = k.split(":"); return EXPLOIT_RULES[id]?.[st]; }).filter(Boolean));
   for (const [id, state] of Object.entries(reads)) {
     if (!state) continue;
     const rule = EXPLOIT_RULES[id];
@@ -236,8 +243,8 @@ function suggestedExploits(o) {
     const text = useAny ? rule.any : rule[base];
     if (!text) continue;
     const key = id + ":" + (useAny ? "any" : base);
-    if (dismissed.has(key) || seen.has(key)) continue;
-    seen.add(key);
+    if (dismissed.has(key) || seen.has(key) || textDone.has(text)) continue;
+    seen.add(key); textDone.add(text);
     // Singles: strong=4, regular=2. "any"-kind rules are position/scale reads
     // where strength doesn't apply — treat as 2.
     const weight = useAny ? 2 : (isStrongRead(state) ? 4 : 2);
