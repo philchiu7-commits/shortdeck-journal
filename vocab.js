@@ -180,6 +180,7 @@ const TENDENCY_TAGS = [
   { id: "cc-standard",          cat: "preflop",  label: "CC Standard" },
   { id: "lc-loose",             cat: "preflop",  label: "Lc Loose" },             // limps, then calls a raise over it wide
   { id: "lc-standard",          cat: "preflop",  label: "Lc Standard" },
+  { id: "iso-fold",             cat: "preflop",  label: "Iso fold" },             // iso-raised a limper, then folded to a re-raise (Stats' Iso fold row)
   // postflop
   { id: "fastplay",             cat: "postflop", label: "Fastplay" },
   // flop
@@ -271,6 +272,8 @@ const EXPLOIT_RULES = {
   "cc-width":          { wide:  "He cold-calls raises with a wide, capped range (suited/connected junk, weak broadways, small pairs — no premiums, those 3-bet). Size your opens up: he flats and pays off dominated. Postflop he's a value target, not a bluff target — bet bigger and thinner, but don't run big bluffs into a range this wide; it just calls.",
                          tight: "His cold-call range is tight and strong (pairs to set-mine, AK, big broadways) — steal more preflop (a narrow calling range over-folds to iso/3bet) but believe his postflop continues; don't stack off into a low/paired board that hits his set-miners." },
   "cc-loose":          { yes: "He cold-calls raises with a wide, capped range (suited/connected junk, weak broadways, small pairs — no premiums, those 3-bet). Size your opens up: he flats and pays off dominated. Postflop he's a value target, not a bluff target — bet bigger and thinner, but don't run big bluffs into a range this wide; it just calls." },
+  "iso-fold":          { yes: "Isos get folded to a re-raise — re-raise them light: limp-reraise, or 3bet from behind.",
+                         no:  "Isos don't get folded to a re-raise — re-raise them for value only." },
   "3bets-light":       { yes: "4-bet or jam AK/QQ+ vs his 3-bet, flat with pairs to trap — his 3-bets are not the nuts.",
                          no:  "Fold to his 3-bet without AA/KK/AK — he only re-raises premiums." },
   "over-folds-3bet":   { yes: "3-bet his opens wider, especially with blockers (Ax, Kx) — he folds too much preflop." },

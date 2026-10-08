@@ -130,6 +130,7 @@ const READ_LAYOUT = [
     "raise-earliest-v",
     words("CC", ["cc-loose", "Loose"], ["cc-standard", "Standard"]),
     words("Lc", ["lc-loose", "Loose"], ["lc-standard", "Standard"], ["lc-pp", "Low Pockets"]),
+    words("Iso fold", ["iso-fold", "Yes"]),
   ] }] }] },
   { title: "Postflop", subs: [{ rows: [{ lines: true, ids: [
     words("Fastplay", ["fastplay", "Yes"]),
@@ -158,6 +159,11 @@ const READ_LAYOUT = [
     words("Bluff Type", ["r-bluff-type-hit", "DrawsHit"], ["r-bluff-type-miss", "DrawsMiss"]),
     words("Lead", ["have-lead-r-draw", "Draw"], ["have-lead-r-bluff", "Bluff"], ["have-lead-r-strong", "Strong"], ["have-lead-r-merge", "Merged"]),
     words("Bluffcatch", ["r-fold-bal-overfold", "Overfold"], ["r-fold-bal-underfold", "Underfold"]),
+  ] }] }] },
+  { title: "Live tells", subs: [{ rows: [{ lines: true, ids: [
+    words("Timing tells", ["timing-tells", "Yes"]),
+    words("Snap-call = weak", ["snap-call-weak", "Yes"]),
+    words("Chatty = strong", ["talks-when-strong", "Yes"]),
   ] }] }] },
 ];
 
