@@ -30,6 +30,7 @@ let openSizeStats = {};           // adaptive open-raise sizes: { [bb]: { [bbSiz
 const DEFAULT_OPEN_A = [3, 4, 5, 6];   // standard short-deck open sizes, in antes
 let blindsDefault = { ante: "" };   // 2/4 default; sticky once you change it
 let pendingReadWrite = null;      // scale-slider write waiting on the debounce timer
+const readCatShut = new Set();    // read-picker sections folded shut — view state, not saved
 
 const oppById = (id) => OPP.find((o) => o.id === id);
 
@@ -67,6 +68,10 @@ const STATE_CLASS = {
   yes: "sgreen", "yes!": "sgreen sstrong",
   no: "sred", "no!": "sred sstrong",
   green: "sgreen", yellow: "syellow", red: "sred",
+};
+const STATE_WORD = {
+  yes: "Yes", "yes!": "Yes!", no: "No", "no!": "No!",
+  green: "Green", yellow: "Yellow", red: "Red",
 };
 /* Normalise strength suffix ("yes!"/"no!") to base state for exploit lookup. */
 const readBase = (s) => s === "yes!" ? "yes" : s === "no!" ? "no" : s;
@@ -111,43 +116,58 @@ const readChip = (id, state) => {
   }
   return `<span class="chip mini on ${STATE_CLASS[state] || ""}">${esc(lbl)}</span>`;
 };
-/* How the picker is organised: street -> role (As PFR / As PFC) -> When Bet / When X.
-   Display only: ids, saved reads and the exploit rules never see this. A read
-   listed nowhere lands in Uncategorized > Other, so nothing can go missing. Edit the
-   id lists freely to move a read. Graded reads (choice / position / tally / scale)
-   can be listed like any other id. */
-const wb = (bet, x) => [{ label: "When Bet", ids: bet }, { label: "When X", ids: x }];
+/* How the picker is organised: Phil's reads outline (2026-10-08), street by
+   street, one line per spot and every word on it its own yes/no chip — the
+   shape poker-journal's Live tab uses. Display only: ids, saved reads and the
+   exploit rules never see this. A read he holds that no line names shows under
+   "Other reads" at the bottom, so nothing set can go missing. A line is a
+   position-pair id, or { id, label, chip, chips: true, also: [["id", "Word"]…] }:
+   the label names the spot, chip / also are the words. */
+const words = (label, [id, chip], ...also) => ({ id, label, chip, chips: true, also });
 const READ_LAYOUT = [
-  { title: "Preflop", subs: [{ rows: [
-    { label: "Limping", ids: ["limp-width", "lc-width", "iso-width", "can-ls-light", "lrr-latest-v", "lrr-latest-b", "lc-pp"] },
-    { label: "Raising", ids: ["opens-premium", "raise-earliest-v", "raise-earliest-b", "cc-width", "3bets-light", "jams-pre-light"] },
-  ] }] },
-  { title: "Postflop general", subs: [
-    { label: "MWP limp", rows: [{ ids: ["mwl-oop-probe", "mwl-xr", "mwl-ip-stab"] }] },
-  ] },
-  { title: "Flop exploit", subs: [
-    { label: "As PFR", rows: wb(["f-cbet-freq", "f-fold-to-xr"], ["checks-range-oop", "f-xr-freq-pfr"]) },
-    { label: "As PFC", rows: [{ ids: ["f-xr-freq-pfc", "punchbag-f-pfc"] }] },
-  ] },
-  { title: "Turn exploit", subs: [
-    { label: "As PFR", rows: wb(["t-barrel2-freq", "t-bluff-hands", "t-call-range"], ["punchbag-t-pfr"]) },
-    { label: "As PFC", rows: [{ ids: ["floats-wide", "t-bet-vol", "t-call-style"] }] },
-  ] },
-  { title: "River exploit", subs: [
-    { label: "As PFR", rows: wb(["r-bluff-lines", "r-bluff-hands", "r-af", "r-bluff-bal"], ["r-traps", "punchbag-r-pfr"]) },
-    { label: "As PFC", rows: [{ ids: ["r-fold-bal", "r-to-sizing", "r-bet-vol", "r-can-raise", "r-call-range", "r-call-hands"] }] },
-  ] },
-  { title: "Uncategorized", subs: [{ rows: [] }] },
+  { title: "Preflop", subs: [{ rows: [{ lines: true, ids: [
+    "lrr-latest-v",
+    "raise-earliest-v",
+    words("CC", ["cc-loose", "Loose"], ["cc-standard", "Standard"]),
+    words("Lc", ["lc-loose", "Loose"], ["lc-standard", "Standard"], ["lc-pp", "Low Pockets"]),
+  ] }] }] },
+  { title: "Postflop", subs: [{ rows: [{ lines: true, ids: [
+    words("Fastplay", ["fastplay", "Yes"]),
+  ] }] }] },
+  { title: "Flop", subs: [{ rows: [{ lines: true, ids: [
+    words("OOP", ["checks-range-oop", "RangeX"], ["f-oop-mergeprob", "MergeProb"], ["f-oop-strongdraw", "StrongDraw"], ["f-oop-strong", "Strong"]),
+    words("Bet Vol", ["f-bet-vol-high", "High"], ["f-bet-vol-low", "Low"]),
+    words("BXT", ["f-adv-board-bxt", "Adv. Board"], ["f-disadv-board-bxt", "Dis. Board"]),
+    words("xR", ["xr-value-f", "Strong"], ["xr-bluff-f", "Bluff"]),
+    words("Lead", ["have-lead-f-draw", "Draw"], ["have-lead-f-bluff", "Bluff"], ["have-lead-f-strong", "Strong"], ["have-lead-f-merge", "Merged"]),
+    words("Calling range", ["f-call-range-wide", "Wide"], ["f-call-range-tpdraws", "TP+/Draws"]),
+  ] }] }] },
+  { title: "Turn", subs: [{ rows: [{ lines: true, ids: [
+    words("Bet Vol", ["t-bet-vol-high", "High"], ["t-bet-vol-low", "Low"]),
+    words("BXT", ["t-adv-turn-bxt", "Adv. Turn"], ["t-disadv-turn-bxt", "Dis. Turn"]),
+    words("xR", ["xr-value-t", "Strong"], ["xr-bluff-t", "Bluff"]),
+    words("Lead", ["have-lead-t-draw", "Draw"], ["have-lead-t-bluff", "Bluff"], ["have-lead-t-strong", "Strong"], ["have-lead-t-merge", "Merged"]),
+    words("Turn Probing", ["t-probe-tight", "Tight"], ["t-probe-normal", "Normal"], ["t-probe-wide", "Wide"], ["t-probe-merge", "Merge"], ["t-probe-polar", "Polar"]),
+    words("Calling range", ["t-call-range-wide", "Wide"], ["t-call-range-tpdraws", "TP+/Draws"]),
+    words("Protect Draw complete", ["t-protect-draw-done", "Yes"]),
+  ] }] }] },
+  { title: "River", subs: [{ rows: [{ lines: true, ids: [
+    words("Bet Vol", ["r-bet-vol-high", "High"], ["r-bet-vol-low", "Low"]),
+    words("Bluff hands", ["r-bh-fd", "FD"], ["r-bh-sd", "SD"], ["r-bh-air", "Air"], ["r-bh-mwp", "MWP"]),
+    words("Bluff Rivers", ["r-rcard-3str", "3Str"], ["r-rcard-4str", "4Str"], ["r-rcard-4flush", "4Flush"], ["r-rcard-blank", "Blanks"]),
+    words("Bluff Type", ["r-bluff-type-hit", "DrawsHit"], ["r-bluff-type-miss", "DrawsMiss"]),
+    words("Lead", ["have-lead-r-draw", "Draw"], ["have-lead-r-bluff", "Bluff"], ["have-lead-r-strong", "Strong"], ["have-lead-r-merge", "Merged"]),
+    words("Bluffcatch", ["r-fold-bal-overfold", "Overfold"], ["r-fold-bal-underfold", "Underfold"]),
+  ] }] }] },
 ];
 
-/* Value/bluff position-read pairs — shown in the picker as one compact
-   "Label [V ▾][B ▾]" row instead of two separate wide dropdown boxes. */
+/* Value/bluff position-read pairs — one "Label  V [▾]  B [▾]" line instead of
+   two separate dropdown rows. */
 const POS_PAIRS = [
-  { label: "Latest LRR",     v: "lrr-latest-v",     b: "lrr-latest-b" },
-  { label: "Earliest raise", v: "raise-earliest-v", b: "raise-earliest-b" },
+  { label: "Latest Limp Trap", v: "lrr-latest-v",     b: "lrr-latest-b" },
+  { label: "Earliest Raise",   v: "raise-earliest-v", b: "raise-earliest-b" },
 ];
 const POS_PAIR_BY_V = Object.fromEntries(POS_PAIRS.map((p) => [p.v, p]));
-const POS_PAIR_SECONDARY = new Set(POS_PAIRS.map((p) => p.b));
 
 /* Felt villain-pill engine tag — one-word read summary shown on each seated
    villain's card. Compound rules win over singles (higher signal), and inside
@@ -2428,97 +2448,82 @@ function renderOppDetail(id) {
   $("od-e-physical").value = o.physical || "";
 
   const reads = oppReads(o);
-  const readBtn = (id, lbl, bubble) => {
+  /* a chip whose word is Yes answers in the word as well as the colour:
+     Yes / Yes! green, No / No! red (as in poker-journal) */
+  const readBtn = (id, lbl) => {
     const st = reads[id];
-    if (isPositionRead(id)) {
-      const active = readIsActive(id, st);
-      const opts = ['<option value="">–</option>']
-        .concat(POSITIONS.map((p) => `<option value="${p}"${st === p ? " selected" : ""}>${p}</option>`))
-        .join("");
-      return `<div class="posread${active ? " on" : ""}" title="${esc(lbl)}">
-        <span class="prlbl">${esc(lbl)}</span>
-        <select class="prselect" data-posselect="${id}">${opts}</select>
-      </div>`;
-    }
-    if (isChoiceRead(id)) {
-      const active = readIsActive(id, st);
-      const opts = CHOICE_READS[id].map((v) =>
-        `<button class="chip mini${st === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("");
-      return `<div class="choiceread${active ? " on" : ""}"><span class="prlbl">${esc(lbl)}</span><div class="choiceopts">${opts}</div></div>`;
-    }
-    if (isScaleRead(id)) {                                            // computed from his logged hands, not a manual slider
-      const k = SCALE_STAT[id], r = k && ST[k + "|all"];
-      if (!r || !r[1]) return `<div class="scaleread statread"><span class="scalelbl">${esc(lbl)}</span><span class="scaleval">–</span></div>`;
-      const pc = Math.round((100 * r[0]) / r[1]);
-      return `<div class="scaleread statread on stk" data-stk="${k}|all"><span class="scalelbl">${esc(lbl)}</span><span class="scaleval"><b>${pc}%</b> · ${r[0]}/${r[1]}</span></div>`;
-    }
-    const base = bubble ? "bubble" : "chip mini";
-    return `<button class="${base}${st ? " on " + STATE_CLASS[st] : ""}" data-tag="${id}">${esc(lbl)}</button>`;
+    return `<button class="chip mini${st ? " on " + STATE_CLASS[st] : ""}" data-tag="${id}">${esc(lbl === "Yes" && STATE_WORD[st] ? STATE_WORD[st] : lbl)}</button>`;
   };
-  // A single seat <select> for a position read.
   const posSelect = (id) => {
     const st = reads[id];
     const opts = ['<option value="">–</option>']
       .concat(POSITIONS.map((p) => `<option value="${p}"${st === p ? " selected" : ""}>${p}</option>`)).join("");
     return `<select class="prselect${readIsActive(id, st) ? " on" : ""}" data-posselect="${id}">${opts}</select>`;
   };
-  // Choice / position reads render as a labelled row that lines up with the
-  // F/T/R bubble rows above — one visual language for every graded read.
-  const structRow = (label, inner) => `<div class="readgroup"><span class="rglabel">${esc(label)}</span>${inner}</div>`;
-  const structFor = (id) => {
-    if (POS_PAIR_SECONDARY.has(id)) return "";                 // drawn with its V partner
-    if (isPositionRead(id)) {
-      const pair = POS_PAIR_BY_V[id];
-      if (pair) return structRow(pair.label,
-        `<div class="prpair"><label class="prtag${readIsActive(pair.v, reads[pair.v]) ? " on" : ""}">V${posSelect(pair.v)}</label>` +
-        `<label class="prtag${readIsActive(pair.b, reads[pair.b]) ? " on" : ""}">B${posSelect(pair.b)}</label></div>`);
-      return structRow(TAG_BY_ID[id].label, `<div class="prpair">${posSelect(id)}</div>`);
-    }
+  // the control column for a read that carries its own (seat, choice, tally, stat)
+  const ctlFor = (id) => {
+    const st = reads[id], pair = POS_PAIR_BY_V[id];
+    if (pair) return `<div class="prpair"><label class="prtag${readIsActive(pair.v, reads[pair.v]) ? " on" : ""}">V${posSelect(pair.v)}</label>` +
+      `<label class="prtag${readIsActive(pair.b, reads[pair.b]) ? " on" : ""}">B${posSelect(pair.b)}</label></div>`;
+    if (isPositionRead(id)) return `<div class="prpair">${posSelect(id)}</div>`;
     if (isTallyRead(id)) {
-      const counts = reads[id] || {};
-      const lead = tallyLeader(counts);
-      const opts = TALLY_READS[id].map((v) => {
+      const counts = st && typeof st === "object" ? st : {};
+      return `<div class="bubbles">${TALLY_READS[id].map((v) => {
         const n = counts[v] || 0;
         return `<button class="chip mini${n ? " on sscale" : ""}" data-tally="${id}" data-val="${esc(v)}">${esc(cap1(v))}${n ? `<span class="tallyn">${n}</span>` : ""}</button>`;
-      }).join("");
-      const clr = lead ? `<button class="chip mini scaleclr" data-tallyclear="${id}" title="Clear">✕</button>` : "";
-      return structRow(TAG_BY_ID[id].label, `<div class="bubbles">${opts}${clr}</div>`);
+      }).join("")}${tallyLeader(counts) ? `<button class="chip mini scaleclr" data-tallyclear="${id}" title="Clear">✕</button>` : ""}</div>`;
     }
-    const opts = CHOICE_READS[id].map((v) =>
-      `<button class="chip mini${reads[id] === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("");
-    return structRow(TAG_BY_ID[id].label, `<div class="bubbles">${opts}</div>`);
+    if (isChoiceRead(id)) return `<div class="bubbles">${CHOICE_READS[id].map((v) =>
+      `<button class="chip mini${st === v ? " on sscale" : ""}" data-choice="${id}" data-val="${esc(v)}">${esc(cap1(v))}</button>`).join("")}</div>`;
+    const k = SCALE_STAT[id], r = k && ST[k + "|all"];                // scale: off his logged hands, not a slider
+    return r && r[1] ? `<span class="scaleval stk" data-stk="${k}|all"><b>${Math.round((100 * r[0]) / r[1])}%</b> · ${r[0]}/${r[1]}</span>`
+      : `<span class="scaleval">–</span>`;
   };
   const live = (id) => { const t = TAG_BY_ID[id]; return t && !RETIRED_TAG_IDS.has(id) && !SIZING_GRID_IDS.has(id) ? t : null; };
-  const placed = new Set(READ_LAYOUT.flatMap((c) => c.subs.flatMap((sb) => sb.rows.flatMap((r) => r.ids))));
-  const rowHTML = (r) => {
-    // Graded reads (choice + position + tally + scale) drop to aligned "label + controls"
-    // rows so heavy dropdown boxes don't zig-zag between small chips.
-    const chipIds = [], rowIds = [];
-    r.ids.forEach((id) => {
-      if (!live(id)) return;
-      (isPositionRead(id) || isChoiceRead(id) || isTallyRead(id) || isScaleRead(id) ? rowIds : chipIds).push(id);
-    });
-    const chips = chipIds.map((id) => readBtn(id, TAG_BY_ID[id].label, false)).join("");
-    const rows = rowIds.map((id) => isScaleRead(id) ? readBtn(id, TAG_BY_ID[id].label, false) : structFor(id)).join("");
-    return `<div class="readsub">${r.label ? `<span class="rslabel">${esc(r.label)}</span>` : ""}` +
-      (chips ? `<div class="chiprow readwrap">${chips}</div>` : "") + rows +
-      (!chips && !rows ? `<div class="chiprow readwrap"><span class="chipnote">—</span></div>` : "") + `</div>`;
+  const idOf = (x) => (Array.isArray(x) ? x[0] : typeof x === "object" ? x.id : x);
+  const labelOf = (x) => (Array.isArray(x) ? x[1] : typeof x === "object" ? x.label || TAG_BY_ID[x.id].label
+    : POS_PAIR_BY_V[x]?.label || TAG_BY_ID[x].label);
+  const alsoOf = (x) => (x && !Array.isArray(x) && typeof x === "object" ? x.also || [] : []);
+  const idsOf = (x) => [idOf(x), ...alsoOf(x).map(idOf), ...(POS_PAIR_BY_V[idOf(x)] ? [POS_PAIR_BY_V[idOf(x)].b] : [])];
+  const laid = (id) => isPositionRead(id) || isChoiceRead(id) || isTallyRead(id) || isScaleRead(id);
+  const isSet = (id) => reads[id] !== undefined && readIsActive(id, reads[id]);
+  /* Four word chips sit 2×2 and five or more three across, on the full width
+     under their label — a strip that wraps wherever the width breaks reads ragged. */
+  const nWords = (x) => (x.chips ? [x, ...alsoOf(x)].filter((v) => live(idOf(v))).length : 0);
+  const gridCols = (x) => (nWords(x) >= 5 ? 3 : nWords(x) === 4 ? 2 : 0);
+  const wide = (x) => ((isTallyRead(idOf(x)) && TALLY_READS[idOf(x)].length >= 4) || gridCols(x) ? " rlwide" : "");
+  const lineHTML = (x, lbl = labelOf(x)) => {
+    const body = x.chips
+      ? [x, ...alsoOf(x)].filter((v) => live(idOf(v))).map((v) => readBtn(idOf(v), v === x ? x.chip : labelOf(v))).join("")
+      : laid(idOf(x)) ? ctlFor(idOf(x)) : readBtn(idOf(x), "Yes");
+    return `<span class="rllab${idsOf(x).some(isSet) ? " on" : ""}${wide(x)}">${esc(lbl)}</span>` +
+      `<div class="rlctl${wide(x)}${gridCols(x) ? " rlgrid" : ""}"${gridCols(x) ? ` style="--cols:${gridCols(x)}"` : ""}>${body}</div>`;
   };
-  $("od-tags").innerHTML = READ_LAYOUT.map((cat) => {
-    let subs = cat.subs;
-    if (cat.title === "Uncategorized") {
-      // reads not placed above, plus retired reads an opponent still carries (so they can be cleared)
-      const extra = TENDENCY_TAGS.filter((t) => live(t.id) && !placed.has(t.id)).map((t) => readBtn(t.id, t.label, false))
-        .concat(TENDENCY_TAGS.filter((t) => RETIRED_TAG_IDS.has(t.id) && readIsActive(t.id, reads[t.id]))
-          .map((t) => readBtn(t.id, t.label + " (retired)", false))).join("");
-      subs = [{ rows: subs[0].rows }];
-      var otherHTML = extra ? `<div class="readsub"><span class="rslabel">Other</span><div class="chiprow readwrap">${extra}</div></div>` : "";
-    }
-    return `<div class="tagcat">${esc(cat.title)}</div>` + subs.map((sb) =>
-      (sb.label ? `<div class="tagrole">${esc(sb.label)}</div>` : "") +
-      `<div class="${sb.label ? "roleblock" : ""}">${sb.rows.map(rowHTML).join("")}</div>`).join("") +
-      (cat.title === "Uncategorized" ? otherHTML : "");
-  }).join("");
+  /* Folded away, a section still carries its count — the streets with nothing
+     written on them get out of the way without hiding that they are empty. */
+  const section = (title, n, body) => {
+    const shut = readCatShut.has(title);
+    return `<section class="readcat${shut ? " shut" : ""}"><div class="rchead">` +
+      `<button class="rcfold" data-rcfold="${esc(title)}" aria-expanded="${!shut}" title="${shut ? "Show" : "Hide"} ${esc(title)}"></button>` +
+      `<span class="rctitle">${esc(title)}</span>${n ? `<span class="rcn">${n}</span>` : ""}</div>` +
+      (shut ? "" : body) + `</section>`;
+  };
+  const rowIds = (sb) => sb.rows.flatMap((r) => r.ids.flatMap(idsOf));
+  const placed = new Set(READ_LAYOUT.flatMap((c) => c.subs.flatMap(rowIds)));
+  // reads he holds that no line names (older reads, retired ones) — still here to change or clear
+  const other = TENDENCY_TAGS.filter((t) => !placed.has(t.id) && !SIZING_GRID_IDS.has(t.id) && !isScaleRead(t.id) && isSet(t.id));
+  const tagLbl = (t) => t.label + (RETIRED_TAG_IDS.has(t.id) ? " (retired)" : "");
+  const otherLines = other.filter((t) => laid(t.id)).map((t) => lineHTML(t.id, tagLbl(t))).join("");
+  const otherChips = other.filter((t) => !laid(t.id)).map((t) => readBtn(t.id, tagLbl(t))).join("");
+  $("od-tags").innerHTML = READ_LAYOUT.map((cat) => section(cat.title,
+    cat.subs.flatMap(rowIds).filter((id) => live(id) && isSet(id)).length,
+    cat.subs.map((sb) => `<div class="roleblk">${sb.label ? `<div class="rolehead">${esc(sb.label)}</div>` : ""}` +
+      sb.rows.map((r) => `<div class="readsub">${r.label ? `<span class="rslabel">${esc(r.label)}</span>` : ""}` +
+        `<div class="readlines">${r.ids.filter((x) => live(idOf(x))).map((x) => lineHTML(x)).join("")}</div></div>`).join("") +
+      `</div>`).join(""))).join("") +
+    (other.length ? section("Other reads", other.length, `<div class="roleblk"><div class="readsub">` +
+      (otherLines ? `<div class="readlines">${otherLines}</div>` : "") +
+      (otherChips ? `<div class="chiprow readwrap">${otherChips}</div>` : "") + `</div></div>`) : "");
 
   // FEATURE 1 — what this opponent's logged hands say. Three panels off one
   // registry: reads worth adding, the hands behind the reads already on the
@@ -5391,6 +5396,13 @@ function bindStatic() {
     renderOppDetail(curOppId);
   };
   $("od-tags").onclick = async (e) => {
+    const fd = e.target.closest("[data-rcfold]");
+    if (fd) {
+      const t = fd.dataset.rcfold;
+      readCatShut.has(t) ? readCatShut.delete(t) : readCatShut.add(t);
+      renderOppDetail(curOppId);
+      return;
+    }
     const sk = e.target.closest("[data-stk]");
     if (sk) { openStatSheet(sk); return; }
     const clr = e.target.closest("[data-scaleclear]");

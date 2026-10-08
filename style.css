@@ -980,6 +980,52 @@ textarea.noteedit { margin-bottom: 0; }
 .tagrole { font-size: 12px; font-weight: 600; color: var(--text); margin: 8px 0 4px; }
 .roleblock { margin-left: 8px; padding-left: 8px; border-left: 2px solid var(--line); }
 
+/* ---- Reads picker (v104, poker-journal's) ----
+   One card per street; label in a shared left column, controls in the right
+   one. The role block is the grid and the pieces inside fold into it
+   (display: contents), so the label column can't wander down the card. */
+.readcat { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: rgba(0, 0, 0, .16); overflow: hidden; }
+.rchead { display: flex; align-items: center; gap: 8px; padding: 7px 11px;
+  background: var(--panel2); border-bottom: 1px solid var(--line); }
+.rctitle { font-size: 12.5px; font-weight: 700; letter-spacing: .02em; }
+.rcfold { width: 16px; height: 16px; flex: none; margin: 0 -2px 0 -3px; padding: 0;
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-appearance: none; appearance: none; }
+.rcfold::before { content: ""; width: 0; height: 0; border-style: solid;
+  border-width: 4.5px 0 4.5px 6px; border-color: transparent transparent transparent currentColor;
+  transform: rotate(90deg); transition: transform .12s ease; }
+.readcat.shut .rcfold::before { transform: rotate(0deg); }
+.rcfold:active { color: var(--text); }
+.readcat.shut .rchead { border-bottom: 0; }
+.rcn { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--accent);
+  background: #1c2c47; border: 1px solid var(--accent); border-radius: 999px; padding: 0 7px; }
+/* SD labels run longer than NLHE's ("Protect Draw complete"): past 40% the
+   label wraps rather than squeezing the chips beside it onto two rows */
+.roleblk { display: grid; grid-template-columns: fit-content(40%) 1fr;
+  column-gap: 10px; align-items: center; padding: 7px 11px 9px; }
+.roleblk + .roleblk { border-top: 1px solid var(--line); }
+.readcat .readsub, .readlines { display: contents; }
+.rolehead, .readcat .rslabel, .roleblk .chiprow, .roleblk .chipnote { grid-column: 1 / -1; }
+.rolehead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--accent); margin: 0; padding: 2px 0 4px; }
+.readcat .rslabel { margin: 0; padding: 10px 0 3px; font-size: 11px; font-weight: 800;
+  letter-spacing: .09em; color: var(--text); opacity: .78; }
+.roleblk .chiprow { padding: 5px 0; }
+.readlines > :nth-child(n+3) { border-top: 1px solid var(--line); }
+.readlines + .chiprow { border-top: 1px solid var(--line); margin-top: 0; }
+.rllab { font-size: 13px; line-height: 1.25; color: var(--muted); padding: 6px 0; min-width: 74px; }
+.rllab.on { color: var(--text); font-weight: 600; }
+.rlctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 5px 0; }
+.rlctl .bubbles { gap: 6px; }
+.rllab.rlwide, .rlctl.rlwide { grid-column: 1 / -1; }
+.rllab.rlwide { padding-bottom: 0; }
+.rlctl.rlwide { padding-top: 4px; }
+.readlines > .rlctl.rlwide { border-top: 0; }
+/* four word chips sit 2×2, five or more three across */
+.rlctl.rlgrid { display: grid; grid-template-columns: repeat(var(--cols, 3), max-content); gap: 6px 8px; justify-items: start; }
+
 .stk { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .stk:hover { outline: 1px solid var(--accent); }
 #stpop { position: fixed; z-index: 60; width: min(360px, calc(100vw - 16px)); max-height: 85vh; overflow: hidden; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.5); padding: 6px 4px; pointer-events: none; }

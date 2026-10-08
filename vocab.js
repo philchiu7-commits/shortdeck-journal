@@ -10,10 +10,12 @@
                  | "choice" (pick one of `options`, e.g. ["tight","normal","wide"])
                  | "tally" (pick one of `options` repeatedly; each tap increments
                    that option's count, e.g. tracking which bet size he uses most).
-     2. Optionally list it in READ_LAYOUT (app.js) so it sits in a street/role row; unlisted reads land in Uncategorized > Other.
+     2. List it in READ_LAYOUT (app.js) — that is what puts it in the picker. An
+        unlisted read isn't offered; an opponent who already holds one sees it
+        under "Other reads" at the bottom, where it can still be changed or cleared.
      3. Optionally add EXPLOIT_RULES[id] = { yes: "…", no: "…" } for an
         auto-suggested exploit, and/or a PILL_READS entry for a felt pill.
-   Street/role placement lives in READ_LAYOUT in app.js. */
+   Street placement lives in READ_LAYOUT in app.js. */
 
 /* Short deck is ante-only: every seat antes, the button posts a double ante.
    No blinds. UTG (left of the button) acts first on EVERY street, BN last.
@@ -42,11 +44,11 @@ const SUITS = [
 const TENDENCY_TAGS = [
   // preflop — entering the pot
   { id: "limp-width",        cat: "preflop",  label: "Limp", kind: "choice", options: ["tight", "normal", "wide"] },
-  { id: "lc-width",          cat: "preflop",  label: "Lc",   kind: "choice", options: ["tight", "normal", "wide"] },  // limps then calls a raise over his limp: how wide — graded version of retired limp-caller
+  { id: "lc-width",          cat: "preflop",  label: "Lc (old)", kind: "choice", options: ["tight", "normal", "wide"] },  // limps then calls a raise over his limp: how wide — graded version of retired limp-caller
   { id: "lrr-bluff",         cat: "preflop",  label: "Has LRR bluff?" },        // yes = limp-reraises light too; no = LRR only AA/KK/AK
   { id: "can-ls-light",      cat: "preflop",  label: "Can limp-shove light" },  // limps then jams all-in over a raise light, not just AA/KK
-  { id: "lrr-latest-v",      cat: "preflop",  label: "Latest LRR value", kind: "position" },   // seat of his last value limp-reraise
-  { id: "lrr-latest-b",      cat: "preflop",  label: "Latest LRR bluff", kind: "position" },   // seat of his last bluff limp-reraise
+  { id: "lrr-latest-v",      cat: "preflop",  label: "Latest Limp Trap value", kind: "position" },   // seat of his last value limp-reraise
+  { id: "lrr-latest-b",      cat: "preflop",  label: "Latest Limp Trap bluff", kind: "position" },   // seat of his last bluff limp-reraise
   { id: "opens-premium",     cat: "preflop",  label: "Raises = premium" },      // yes = first-in raise is AA–JJ/AK; no = raises wide
   { id: "raise-earliest-v",  cat: "preflop",  label: "Earliest raise value", kind: "position" },  // earliest seat he open-raises for value
   { id: "raise-earliest-b",  cat: "preflop",  label: "Earliest raise bluff", kind: "position" },  // earliest seat he open-raises as a bluff (steal)
@@ -56,7 +58,7 @@ const TENDENCY_TAGS = [
   { id: "iso-earliest-b",    cat: "preflop",  label: "Earliest iso bluff", kind: "position" },  // earliest seat he iso-raises a limper as a bluff
   { id: "limp-caller",       cat: "preflop",  label: "Limps then calls" },      // limps, then calls any iso/raise
   { id: "lc-pp",             cat: "preflop",  label: "Limp-calls PP" },         // limps then calls a raise with pocket pairs → set-mining (SD flops a set ~17%)
-  { id: "cc-width",          cat: "preflop",  label: "CC", kind: "choice", options: ["tight", "normal", "wide"] },  // cold-calls a raise (facing an open): how wide
+  { id: "cc-width",          cat: "preflop",  label: "CC (old)", kind: "choice", options: ["tight", "normal", "wide"] },  // cold-calls a raise (facing an open): how wide
   { id: "calls-raises-wide", cat: "preflop",  label: "Calls raises wide" },     // RETIRED (kept for label) — superseded by cc-width's graded tight/normal/wide
   { id: "3bets-light",       cat: "preflop",  label: "3bets light" },
   { id: "over-folds-3bet",   cat: "preflop",  label: "Over-folds to 3bet" },
@@ -136,38 +138,100 @@ const TENDENCY_TAGS = [
   { id: "size-river-b",      cat: "sizing",   label: "River B", kind: "tally", options: ["B25", "B33", "B50", "B66", "B100", "B150"] },
   // live
   { id: "tilts",             cat: "live",     label: "Tilts after losses" },
-  /* Phil's postflop exploit tree, 2026-09-22 — one read per slot in the
-     Postflop General / Flop / Turn / River outline. Placement is READ_LAYOUT. */
+  /* Phil's postflop exploit tree, 2026-09-22. The 2026-10-08 outline below
+     replaced it in the picker; the ids stay for the reads already saved. */
   // postflop general — multiway limped pot
-  { id: "mwl-oop-probe",     cat: "postflop", label: "OOP probe" },
-  { id: "mwl-xr",            cat: "postflop", label: "xR", kind: "tally", options: ["strong", "bluff"] },
-  { id: "mwl-ip-stab",       cat: "postflop", label: "IP stab", kind: "choice", options: ["merge", "air"] },
+  { id: "mwl-oop-probe",     cat: "postflop", label: "MWP limp OOP probe" },
+  { id: "mwl-xr",            cat: "postflop", label: "MWP limp xR", kind: "tally", options: ["strong", "bluff"] },
+  { id: "mwl-ip-stab",       cat: "postflop", label: "MWP limp IP stab", kind: "choice", options: ["merge", "air"] },
   // flop
   { id: "f-cbet-freq",       cat: "postflop", label: "Cbet freq", kind: "scale" },
   { id: "f-fold-to-xr",      cat: "postflop", label: "Fold to xR", kind: "scale" },
   { id: "f-xr-freq-pfr",     cat: "postflop", label: "xR freq", kind: "scale" },
-  { id: "f-xr-freq-pfc",     cat: "postflop", label: "xR freq", kind: "choice", options: ["under", "over"] },
-  { id: "punchbag-f-pfc",    cat: "postflop", label: "Punch bag" },
+  { id: "f-xr-freq-pfc",     cat: "postflop", label: "F xR freq (PFC)", kind: "choice", options: ["under", "over"] },
+  { id: "punchbag-f-pfc",    cat: "postflop", label: "Punch bag F (PFC)" },
   // turn
   { id: "t-barrel2-freq",    cat: "postflop", label: "2nd barrel freq", kind: "scale" },
-  { id: "t-bluff-hands",     cat: "postflop", label: "Bluffs", kind: "tally", options: ["air", "equity", "SDV"] },
-  { id: "t-call-range",      cat: "postflop", label: "T call range", kind: "tally", options: ["2ndP", "SD", "weak FD", "<3rdP"] },
-  { id: "punchbag-t-pfr",    cat: "postflop", label: "Punch bag" },
-  { id: "t-bet-vol",         cat: "postflop", label: "Bet vol", kind: "choice", options: ["high", "low"] },
+  { id: "t-bluff-hands",     cat: "postflop", label: "T bluffs", kind: "tally", options: ["air", "equity", "SDV"] },
+  { id: "t-call-range",      cat: "postflop", label: "T call range (old tally)", kind: "tally", options: ["2ndP", "SD", "weak FD", "<3rdP"] },
+  { id: "punchbag-t-pfr",    cat: "postflop", label: "Punch bag T (PFR)" },
+  { id: "t-bet-vol",         cat: "postflop", label: "T bet vol (old)", kind: "choice", options: ["high", "low"] },
   { id: "t-call-style",      cat: "postflop", label: "Turn call", kind: "choice", options: ["abs value", "wide"] },
   // river
-  { id: "r-bluff-lines",     cat: "postflop", label: "Bluff lines (can?)", kind: "tally", options: ["BBB", "BXB", "XBB", "XXB"] },
-  { id: "r-bluff-hands",     cat: "postflop", label: "Bluff hands", kind: "tally", options: ["FD", "OESD", "Air", "A-high"] },
+  { id: "r-bluff-lines",     cat: "postflop", label: "R bluff lines (can?)", kind: "tally", options: ["BBB", "BXB", "XBB", "XXB"] },
+  { id: "r-bluff-hands",     cat: "postflop", label: "Bluff hands (old tally)", kind: "tally", options: ["FD", "OESD", "Air", "A-high"] },
   { id: "r-af",              cat: "postflop", label: "River agg %", kind: "scale" },
-  { id: "r-bluff-bal",       cat: "postflop", label: "Bluff balance", kind: "choice", options: ["overbluff", "underbluff"] },
-  { id: "r-traps",           cat: "postflop", label: "Have traps?" },
-  { id: "punchbag-r-pfr",    cat: "postflop", label: "Punch bag" },
-  { id: "r-fold-bal",        cat: "postflop", label: "Fold balance", kind: "choice", options: ["overfold", "underfold"] },
-  { id: "r-to-sizing",       cat: "postflop", label: "To sizing", kind: "choice", options: ["elastic", "inelastic"] },
-  { id: "r-bet-vol",         cat: "postflop", label: "Bet vol", kind: "choice", options: ["high", "low"] },
-  { id: "r-can-raise",       cat: "postflop", label: "Can raise?", kind: "tally", options: ["bluff", "thin"] },
-  { id: "r-call-range",      cat: "postflop", label: "Call range", kind: "choice", options: ["wide", "tight"] },
-  { id: "r-call-hands",      cat: "postflop", label: "Bluff catch", kind: "tally", options: ["2ndP", "SD", "weak FD", "<3rdP"] },
+  { id: "r-bluff-bal",       cat: "postflop", label: "R bluff balance", kind: "choice", options: ["overbluff", "underbluff"] },
+  { id: "r-traps",           cat: "postflop", label: "R traps?" },
+  { id: "punchbag-r-pfr",    cat: "postflop", label: "Punch bag R (PFR)" },
+  { id: "r-fold-bal",        cat: "postflop", label: "Fold balance (old)", kind: "choice", options: ["overfold", "underfold"] },
+  { id: "r-to-sizing",       cat: "postflop", label: "R to sizing", kind: "choice", options: ["elastic", "inelastic"] },
+  { id: "r-bet-vol",         cat: "postflop", label: "R bet vol (old)", kind: "choice", options: ["high", "low"] },
+  { id: "r-can-raise",       cat: "postflop", label: "R can raise?", kind: "tally", options: ["bluff", "thin"] },
+  { id: "r-call-range",      cat: "postflop", label: "R call range", kind: "choice", options: ["wide", "tight"] },
+  { id: "r-call-hands",      cat: "postflop", label: "R bluff catch", kind: "tally", options: ["2ndP", "SD", "weak FD", "<3rdP"] },
+
+  /* Phil's reads outline, 2026-10-08 — every word in it is its own yes/no
+     chip, laid out street by street in READ_LAYOUT (app.js). Ids NLHE already
+     has keep NLHE's id; where an older read here asked the same question the
+     layout reuses it instead (lc-pp, checks-range-oop, xr-value/bluff-f/t). */
+  // preflop
+  { id: "cc-loose",             cat: "preflop",  label: "CC Loose" },             // cold-calls a raise wide
+  { id: "cc-standard",          cat: "preflop",  label: "CC Standard" },
+  { id: "lc-loose",             cat: "preflop",  label: "Lc Loose" },             // limps, then calls a raise over it wide
+  { id: "lc-standard",          cat: "preflop",  label: "Lc Standard" },
+  // postflop
+  { id: "fastplay",             cat: "postflop", label: "Fastplay" },
+  // flop
+  { id: "f-oop-mergeprob",      cat: "postflop", label: "Flop OOP MergeProb" },
+  { id: "f-oop-strongdraw",     cat: "postflop", label: "Flop OOP StrongDraw" },
+  { id: "f-oop-strong",         cat: "postflop", label: "Flop OOP Strong" },
+  { id: "f-bet-vol-high",       cat: "postflop", label: "Bet vol F High" },
+  { id: "f-bet-vol-low",        cat: "postflop", label: "Bet vol F Low" },
+  { id: "f-adv-board-bxt",      cat: "postflop", label: "Adv. Board F BXT" },
+  { id: "f-disadv-board-bxt",   cat: "postflop", label: "Dis. Board F BXT" },
+  { id: "have-lead-f-draw",     cat: "postflop", label: "Lead F Draw" },
+  { id: "have-lead-f-bluff",    cat: "postflop", label: "Lead F Bluff" },
+  { id: "have-lead-f-strong",   cat: "postflop", label: "Lead F Strong" },
+  { id: "have-lead-f-merge",    cat: "postflop", label: "Lead F Merged" },
+  { id: "f-call-range-wide",    cat: "postflop", label: "F call range Wide" },
+  { id: "f-call-range-tpdraws", cat: "postflop", label: "F call range TP+/Draws" },
+  // turn
+  { id: "t-bet-vol-high",       cat: "postflop", label: "Bet vol T High" },
+  { id: "t-bet-vol-low",        cat: "postflop", label: "Bet vol T Low" },
+  { id: "t-adv-turn-bxt",       cat: "postflop", label: "Adv. Turn BXT" },
+  { id: "t-disadv-turn-bxt",    cat: "postflop", label: "Dis. Turn BXT" },
+  { id: "have-lead-t-draw",     cat: "postflop", label: "Lead T Draw" },
+  { id: "have-lead-t-bluff",    cat: "postflop", label: "Lead T Bluff" },
+  { id: "have-lead-t-strong",   cat: "postflop", label: "Lead T Strong" },
+  { id: "have-lead-t-merge",    cat: "postflop", label: "Lead T Merged" },
+  { id: "t-probe-tight",        cat: "postflop", label: "Probe T Tight" },
+  { id: "t-probe-normal",       cat: "postflop", label: "Probe T Normal" },
+  { id: "t-probe-wide",         cat: "postflop", label: "Probe T Wide" },
+  { id: "t-probe-merge",        cat: "postflop", label: "Probe T Merge" },
+  { id: "t-probe-polar",        cat: "postflop", label: "Probe T Polar" },
+  { id: "t-call-range-wide",    cat: "postflop", label: "T call range Wide" },
+  { id: "t-call-range-tpdraws", cat: "postflop", label: "T call range TP+/Draws" },
+  { id: "t-protect-draw-done",  cat: "postflop", label: "Protect Draw complete" },
+  // river
+  { id: "r-bet-vol-high",       cat: "postflop", label: "Bet vol R High" },
+  { id: "r-bet-vol-low",        cat: "postflop", label: "Bet vol R Low" },
+  { id: "r-bh-fd",              cat: "postflop", label: "Bluff hands FD" },
+  { id: "r-bh-sd",              cat: "postflop", label: "Bluff hands SD" },
+  { id: "r-bh-air",             cat: "postflop", label: "Bluff hands Air" },
+  { id: "r-bh-mwp",             cat: "postflop", label: "Bluff hands MWP" },
+  { id: "r-rcard-3str",         cat: "postflop", label: "Bluff Rivers 3Str" },
+  { id: "r-rcard-4str",         cat: "postflop", label: "Bluff Rivers 4Str" },
+  { id: "r-rcard-4flush",       cat: "postflop", label: "Bluff Rivers 4Flush" },
+  { id: "r-rcard-blank",        cat: "postflop", label: "Bluff Rivers Blanks" },
+  { id: "r-bluff-type-hit",     cat: "postflop", label: "Bluff Type DrawsHit" },
+  { id: "r-bluff-type-miss",    cat: "postflop", label: "Bluff Type DrawsMiss" },
+  { id: "have-lead-r-draw",     cat: "postflop", label: "Lead R Draw" },
+  { id: "have-lead-r-bluff",    cat: "postflop", label: "Lead R Bluff" },
+  { id: "have-lead-r-strong",   cat: "postflop", label: "Lead R Strong" },
+  { id: "have-lead-r-merge",    cat: "postflop", label: "Lead R Merged" },
+  { id: "r-fold-bal-overfold",  cat: "postflop", label: "Bluffcatch Overfold" },
+  { id: "r-fold-bal-underfold", cat: "postflop", label: "Bluffcatch Underfold" },
 
   { id: "timing-tells",      cat: "live",     label: "Timing tells" },
   { id: "snap-call-weak",    cat: "live",     label: "Snap-call = weak" },
@@ -206,6 +270,7 @@ const EXPLOIT_RULES = {
   "lc-pp":             { yes: "His limp-call range is pocket pairs set-mining — cbet flops freely to fold out the ~83% that whiffed a set, but shut down and fold to a check-raise on low/paired boards: that's the set." },
   "cc-width":          { wide:  "He cold-calls raises with a wide, capped range (suited/connected junk, weak broadways, small pairs — no premiums, those 3-bet). Size your opens up: he flats and pays off dominated. Postflop he's a value target, not a bluff target — bet bigger and thinner, but don't run big bluffs into a range this wide; it just calls.",
                          tight: "His cold-call range is tight and strong (pairs to set-mine, AK, big broadways) — steal more preflop (a narrow calling range over-folds to iso/3bet) but believe his postflop continues; don't stack off into a low/paired board that hits his set-miners." },
+  "cc-loose":          { yes: "He cold-calls raises with a wide, capped range (suited/connected junk, weak broadways, small pairs — no premiums, those 3-bet). Size your opens up: he flats and pays off dominated. Postflop he's a value target, not a bluff target — bet bigger and thinner, but don't run big bluffs into a range this wide; it just calls." },
   "3bets-light":       { yes: "4-bet or jam AK/QQ+ vs his 3-bet, flat with pairs to trap — his 3-bets are not the nuts.",
                          no:  "Fold to his 3-bet without AA/KK/AK — he only re-raises premiums." },
   "over-folds-3bet":   { yes: "3-bet his opens wider, especially with blockers (Ax, Kx) — he folds too much preflop." },
@@ -258,6 +323,7 @@ const PILL_READS = [
   { id: "station-t",         state: "yes", pill: "T station",     tone: "red"    },
   { id: "station-f",         state: "yes", pill: "F station",     tone: "red"    },
   { id: "chases-draws",      state: "yes", pill: "Chases draws",  tone: "red"    },
+  { id: "cc-loose",          state: "yes", pill: "Wide caller",   tone: "red"    },
   { id: "cc-width",          state: "wide", pill: "Wide caller",  tone: "red"    },
   { id: "lc-pp",             state: "yes", pill: "Set-miner",     tone: "purple" },
   { id: "limp-width",        state: "wide", pill: "Wide limper",  tone: "purple" },
