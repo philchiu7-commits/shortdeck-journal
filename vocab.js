@@ -189,6 +189,9 @@ const TENDENCY_TAGS = [
   { id: "limp-wide",            cat: "preflop",  label: "Limp Wide" },
   // postflop
   { id: "fastplay",             cat: "postflop", label: "Fastplay" },
+  { id: "nut-f",                cat: "postflop", label: "Nut F" },
+  { id: "nut-t",                cat: "postflop", label: "Nut T" },
+  { id: "nut-r",                cat: "postflop", label: "Nut R" },
   // flop
   { id: "f-oop-mergeprob",      cat: "postflop", label: "Flop OOP MergeProb" },
   { id: "f-oop-strongdraw",     cat: "postflop", label: "Flop OOP StrongDraw" },

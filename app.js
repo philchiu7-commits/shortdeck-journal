@@ -135,6 +135,7 @@ const READ_LAYOUT = [
   ] }] }] },
   { title: "Postflop", subs: [{ rows: [{ lines: true, ids: [
     words("Fastplay", ["fastplay", "Yes"]),
+    words("Nut", ["nut-f", "F"], ["nut-t", "T"], ["nut-r", "R"]),
   ] }] }] },
   { title: "MWP", subs: [{ rows: [{ lines: true, ids: [
     words("Probe", ["mwp-probe-strong", "Strong"], ["mwp-probe-draw", "Draw"], ["mwp-probe-merged", "Merged"], ["mwp-probe-rangex", "RangeX"], ["mwp-probe-strongdraw", "StrongDraw"]),
