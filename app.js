@@ -146,6 +146,7 @@ const READ_LAYOUT = [
     words("xR", ["xr-value-f", "Strong"], ["xr-bluff-f", "Bluff"]),
     words("Bluff raise", ["bluff-raise-f", "Yes"], ["br-f-small", "Small amount"], ["br-f-lowpaired", "Low Paired boards"]),
     words("Lead", ["have-lead-f-strongdraw", "StrongDraw"], ["have-lead-f-weakdraw", "WeakDraw"], ["have-lead-f-strong", "Strong"], ["have-lead-f-merge", "Merged"], ["have-lead-f-advs", "Adv.BrdS"], ["have-lead-f-advblf", "Adv.BrdBlf"]),
+    words("Protect OOP", ["f-protect-oop-disadv", "Dis.Adv.Board"], ["f-protect-oop-adv", "Adv.Board"], ["f-protect-oop-paired", "PairedBoard"]),
     words("Calling range", ["f-call-range-wide", "Wide"], ["f-call-range-tpdraws", "TP+/Draws"]),
   ] }] }] },
   { title: "Turn", subs: [{ rows: [{ lines: true, ids: [
