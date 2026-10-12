@@ -90,6 +90,8 @@ const TENDENCY_TAGS = [
   { id: "bluff-raise-r",     cat: "postflop", label: "Bluff raise R" },
   { id: "br-fdsd",           cat: "postflop", label: "Bluff raise FD/SD" },  // bluff-raises with a flush/straight draw (semi-bluff, has equity)
   { id: "br-worst",          cat: "postflop", label: "Bluff raise worst" },  // bluff-raises his worst hands / pure air (no equity)
+  { id: "br-f-small",        cat: "postflop", label: "Bluff raise F Small amount" },       // flop bluff-raises are small (min-raise-ish)
+  { id: "br-f-lowpaired",    cat: "postflop", label: "Bluff raise F Low paired boards" },  // bluff-raises low paired flops (66x–99x)
   { id: "bluff-xt-f",        cat: "postflop", label: "Bluff XT F" },
   { id: "bluff-xt-t",        cat: "postflop", label: "Bluff XT T" },
   { id: "bluff-xt-r",        cat: "postflop", label: "Bluff XT R" },

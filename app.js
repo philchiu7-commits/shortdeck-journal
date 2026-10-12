@@ -143,7 +143,7 @@ const READ_LAYOUT = [
     words("Bet Vol", ["f-bet-vol-high", "High"], ["f-bet-vol-low", "Low"]),
     words("BXT", ["f-adv-board-bxt", "Adv. Board"], ["f-disadv-board-bxt", "Dis. Board"], ["f-bxt-light", "Light"]),
     words("xR", ["xr-value-f", "Strong"], ["xr-bluff-f", "Bluff"]),
-    words("Bluff raise", ["bluff-raise-f", "Yes"]),
+    words("Bluff raise", ["bluff-raise-f", "Yes"], ["br-f-small", "Small amount"], ["br-f-lowpaired", "Low Paired boards"]),
     words("Lead", ["have-lead-f-draw", "Draw"], ["have-lead-f-bluff", "Bluff"], ["have-lead-f-strong", "Strong"], ["have-lead-f-merge", "Merged"]),
     words("Calling range", ["f-call-range-wide", "Wide"], ["f-call-range-tpdraws", "TP+/Draws"]),
   ] }] }] },
@@ -430,6 +430,7 @@ const mdStrong = (m) => !!m && m.tier >= 4;            // two pair or better: th
 const mdAir = (m) => !!m && !m.ownPair;                // no pair of his own: the bottom end
 const fMade = (f, st) => f.md[st];
 const fBluffed = (f, st) => mdBluff(f.md[st]);
+const fLowPairedFlop = (f) => { const r = f.board.slice(0, 3).map((c) => RVAL[String(c)[0]]); return r.length === 3 && r.some((v, j) => v <= 9 && r.indexOf(v) !== j); };
 const fValue = (f, st) => mdValue(f.md[st]);
 /* Raised that street with a hand that isn't a bluff (value, or cards unknown): not evidence of bluff-raising either way. */
 const fRaisedValue = (f, st) => fDid(f, st, "raise", "jam") && !fBluffed(f, st);
@@ -496,6 +497,10 @@ const READ_EVIDENCE = [
     chance: (f) => f.faced.flop && !fRaisedValue(f, "flop"), did: (f) => fDid(f, "flop", "raise", "jam") && fBluffed(f, "flop") },
   { id: "br-worst", yes: "Bluff-raised a flop bet", no: "Faced a flop bet, didn't bluff-raise",
     chance: (f) => f.faced.flop && !fRaisedValue(f, "flop"), did: (f) => fDid(f, "flop", "raise", "jam") && fBluffed(f, "flop") },
+  { id: "br-f-small", yes: "Bluff-raised a flop bet", no: "Faced a flop bet, didn't bluff-raise",
+    chance: (f) => f.faced.flop && !fRaisedValue(f, "flop"), did: (f) => fDid(f, "flop", "raise", "jam") && fBluffed(f, "flop") },
+  { id: "br-f-lowpaired", yes: "Bluff-raised a low paired flop", no: "Faced a bet on a low paired flop, didn't bluff-raise",
+    chance: (f) => f.faced.flop && fLowPairedFlop(f) && !fRaisedValue(f, "flop"), did: (f) => fDid(f, "flop", "raise", "jam") && fBluffed(f, "flop") },
   { id: "call-nut-ip-f", yes: "Called the flop", no: "Faced a flop bet, didn't call", chance: (f) => f.faced.flop, did: (f) => fDid(f, "flop", "call") },
   { id: "call-nut-ip-t", yes: "Called the turn", no: "Faced a turn bet, didn't call", chance: (f) => f.faced.turn, did: (f) => fDid(f, "turn", "call") },
   { id: "call-nut-ip-r", yes: "Called the river", no: "Faced a river bet, didn't call", chance: (f) => f.faced.river, did: (f) => fDid(f, "river", "call") },
