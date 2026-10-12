@@ -202,6 +202,8 @@ const TENDENCY_TAGS = [
   { id: "have-lead-f-bluff",    cat: "postflop", label: "Lead F Bluff" },
   { id: "have-lead-f-strong",   cat: "postflop", label: "Lead F Strong" },
   { id: "have-lead-f-merge",    cat: "postflop", label: "Lead F Merged" },
+  { id: "have-lead-f-strongdraw", cat: "postflop", label: "Lead F StrongDraw" },
+  { id: "have-lead-f-weakdraw",   cat: "postflop", label: "Lead F WeakDraw" },
   { id: "f-call-range-wide",    cat: "postflop", label: "F call range Wide" },
   { id: "f-call-range-tpdraws", cat: "postflop", label: "F call range TP+/Draws" },
   // turn
@@ -276,7 +278,7 @@ const PLAYER_TYPES = [
 const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]));
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
-const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light", "checks-range-oop", "f-oop-mergeprob", "f-oop-strongdraw", "f-oop-strong"]);   // too general / cluttered picker
+const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light", "checks-range-oop", "f-oop-mergeprob", "f-oop-strongdraw", "f-oop-strong", "have-lead-f-draw", "have-lead-f-bluff"]);   // too general / cluttered picker
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 
 /* Auto-suggested exploits: tag id → { yes, no }. "yes" = tendency present,
