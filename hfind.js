@@ -102,8 +102,10 @@ const HQ_PHRASES = [
   [/\bover[\s-]?bet(?:s|ting)?\b/g, " ob "],
   [/\bpre[\s-]?flop\s+(?:raiser|aggressor)\b|\bpfa\b/g, " pfr "],
   [/\bpre[\s-]?flop\s+caller\b/g, " pfc "],
-  /* BXT: "bet when checked to", "PFR checks to him and he bets". */
-  [/\bbet(?:s|ting)?\s+when\s+(?:its\s+|it\s+is\s+|(?:the\s+)?pfr\s+)?check(?:s|ed)?(?:\s+to(?:\s+(?:him|them|her))?)?\b|\b(?:(?:the\s+)?pfr\s+)?check(?:s|ed)?\s+to\s+(?:him|them|her)\s+and\s+(?:he\s+|they\s+|she\s+)?bets?\b|\bchecked\s+to\s+and\s+bets?\b/g, " bxt "],
+  /* BXT: "bet when checked to", "stabs after the PFR checks", "PFR checks to him and he bets",
+     "checked to, he bets". "PFR checks and bets" stays his own check then bet. */
+  [/\b(?:bet|stab)(?:s|ting|bed|bing)?\s+(?:when|after|once|if)\s+(?:its\s+|it\s+is\s+|(?:the\s+)?(?:pfr|aggressor|raiser)\s+)?check(?:s|ed)?(?:\s+to(?:\s+(?:him|them|her))?)?\b/g, " bxt "],
+  [/\b(?:(?:when|if|once|after)\s+)?(?:(?:the\s+)?(?:pfr|aggressor|raiser)\s+check(?:s|ed)?(?:\s+to\s+(?:him|them|her))?(?:\s+(?:and|then))?\s+(?:he|they|she)|(?:(?:the\s+)?(?:pfr|aggressor|raiser)\s+|its\s+|it\s+is\s+|hes\s+|he\s+is\s+|gets\s+)?check(?:s|ed)\s+to(?:\s+(?:him|them|her))?(?:\s+(?:and|then))?(?:\s+(?:he|they|she))?)\s+(?:bet|stab)s?\b/g, " bxt "],
   [/\bpre[\s-]?flop\b/g, " pre "],
   [/\bpost[\s-]flop\b/g, " postflop "],
   /* Board by its top flop card: "A-high", "Thigh", "T high or lower", "Q-high+".
@@ -130,7 +132,7 @@ const HQ_WORDS = {
   jam: "a:jam", jams: "a:jam", jammed: "a:jam", jamming: "a:jam", shove: "a:jam", shoves: "a:jam",
   shoved: "a:jam", shoving: "a:jam", allin: "a:jam",
   cbet: "a:cbet", cbets: "a:cbet", donk: "a:donk", donks: "a:donk", donked: "a:donk", donking: "a:donk",
-  lead: "a:donk", leads: "a:donk", led: "a:donk", leading: "a:donk", bxt: "a:bxt", bxts: "a:bxt", bxting: "a:bxt",
+  lead: "a:donk", leads: "a:donk", led: "a:donk", leading: "a:donk", bxt: "a:bxt", bxts: "a:bxt", bxting: "a:bxt", stab: "a:bxt", stabs: "a:bxt", stabbed: "a:bxt", stabbing: "a:bxt",
   open: "a:open", opens: "a:open", opened: "a:open", opening: "a:open", rfi: "a:open",
   iso: "a:iso", isos: "a:iso",
   agg: "a:agg", aggressor: "a:agg", aggressors: "a:agg", aggressive: "a:agg", aggro: "a:agg",
@@ -248,7 +250,7 @@ function hqParse(text) {
     delete c.facingOpen;
     if (c.kind === "seen" && !c.st) c.st = "flop";
     // a bare raise is a postflop one: preflop raises have their own words (open, iso, 3bet…)
-    if (!c.st && (c.kind === "raise" && !HQ_PRE_ONLY.has(c.facing) || c.facing === "raise")) c.st = "post";
+    if (!c.st && (c.kind === "raise" && !HQ_PRE_ONLY.has(c.facing) && !HQ_POST_ONLY.has(c.facing) || c.facing === "raise")) c.st = "post";
     if (HQ_PRE_ONLY.has(c.kind) && c.st && c.st !== "pre") c.bad = `${c.kind} is preflop only`;
     if (HQ_POST_ONLY.has(c.kind) && c.st === "pre") c.bad = `${c.kind} is postflop only`;
   }
@@ -362,7 +364,8 @@ function hqRungs(h) {
 /* One pass over the hand, tagging every action with what it was: a lead or a
    raise by where it sits in the street (the tokens can't be trusted to say),
    the preflop level it took the pot to, c-bets and donks against the last
-   street's aggressor, a BXT once the preflop raiser has checked to him, and its rung off the Sizings pricing. */
+   street's aggressor, a BXT once the last street's aggressor (the PFR on the flop) has checked to
+   him, and its rung off the Sizings pricing. */
 function hqInfo(h) {
   const acts = h.actions || [];
   let info = hqCache.get(h);
@@ -399,8 +402,9 @@ function hqInfo(h) {
           k.add("bet");
           if (prevAgg && a.actor === prevAgg) k.add("cbet");
           else if (prevAgg && !acted.has(prevAgg)) k.add("donk");
-          // checked to him: the PFR checked first (any check, in a limped pot); the PFR's own bet is a c-bet
-          if (acted.size && a.actor !== pfr && (!pfr || acted.has(pfr))) k.add("bxt");
+          // checked to him: the last street's aggressor checked first — the PFR on the flop, and after a street checked through
+          const ini = prevAgg || pfr;
+          if (ini && a.actor !== ini && acted.has(ini)) k.add("bxt");
         } else k.add("raise");
         open = true; lastAgg = a.actor;
       }
