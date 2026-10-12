@@ -195,6 +195,7 @@ const TENDENCY_TAGS = [
   { id: "f-bet-vol-low",        cat: "postflop", label: "Bet vol F Low" },
   { id: "f-adv-board-bxt",      cat: "postflop", label: "Adv. Board F BXT" },
   { id: "f-disadv-board-bxt",   cat: "postflop", label: "Dis. Board F BXT" },
+  { id: "f-bxt-light",          cat: "postflop", label: "BXT F Light" },
   { id: "have-lead-f-draw",     cat: "postflop", label: "Lead F Draw" },
   { id: "have-lead-f-bluff",    cat: "postflop", label: "Lead F Bluff" },
   { id: "have-lead-f-strong",   cat: "postflop", label: "Lead F Strong" },
@@ -228,6 +229,7 @@ const TENDENCY_TAGS = [
   { id: "r-bh-sd",              cat: "postflop", label: "Bluff hands SD" },
   { id: "r-bh-air",             cat: "postflop", label: "Bluff hands Air" },
   { id: "r-bh-mwp",             cat: "postflop", label: "Bluff hands MWP" },
+  { id: "r-bh-thtb",            cat: "postflop", label: "Bluff hands THTB" },     // turns a made hand into a river bluff
   { id: "r-rcard-3str",         cat: "postflop", label: "Bluff Rivers 3Str" },
   { id: "r-rcard-4str",         cat: "postflop", label: "Bluff Rivers 4Str" },
   { id: "r-rcard-4flush",       cat: "postflop", label: "Bluff Rivers 4Flush" },
@@ -244,6 +246,8 @@ const TENDENCY_TAGS = [
   { id: "mwp-probe-strong",     cat: "postflop", label: "MWP Probe Strong" },
   { id: "mwp-probe-draw",       cat: "postflop", label: "MWP Probe Draw" },
   { id: "mwp-probe-merged",     cat: "postflop", label: "MWP Probe Merged" },
+  { id: "mwp-probe-rangex",     cat: "postflop", label: "MWP Probe RangeX" },
+  { id: "mwp-probe-strongdraw", cat: "postflop", label: "MWP Probe StrongDraw" },
 
   { id: "timing-tells",      cat: "live",     label: "Timing tells" },
   { id: "snap-call-weak",    cat: "live",     label: "Snap-call = weak" },
@@ -270,7 +274,7 @@ const PLAYER_TYPES = [
 const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]));
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
-const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light"]);   // too general / cluttered picker
+const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light", "checks-range-oop", "f-oop-mergeprob", "f-oop-strongdraw", "f-oop-strong"]);   // too general / cluttered picker
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 
 /* Auto-suggested exploits: tag id → { yes, no }. "yes" = tendency present,

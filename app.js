@@ -137,12 +137,11 @@ const READ_LAYOUT = [
     words("Fastplay", ["fastplay", "Yes"]),
   ] }] }] },
   { title: "MWP", subs: [{ rows: [{ lines: true, ids: [
-    words("Probe", ["mwp-probe-strong", "Strong"], ["mwp-probe-draw", "Draw"], ["mwp-probe-merged", "Merged"]),
+    words("Probe", ["mwp-probe-strong", "Strong"], ["mwp-probe-draw", "Draw"], ["mwp-probe-merged", "Merged"], ["mwp-probe-rangex", "RangeX"], ["mwp-probe-strongdraw", "StrongDraw"]),
   ] }] }] },
   { title: "Flop", subs: [{ rows: [{ lines: true, ids: [
-    words("OOP", ["checks-range-oop", "RangeX"], ["f-oop-mergeprob", "MergeProb"], ["f-oop-strongdraw", "StrongDraw"], ["f-oop-strong", "Strong"]),
     words("Bet Vol", ["f-bet-vol-high", "High"], ["f-bet-vol-low", "Low"]),
-    words("BXT", ["f-adv-board-bxt", "Adv. Board"], ["f-disadv-board-bxt", "Dis. Board"]),
+    words("BXT", ["f-adv-board-bxt", "Adv. Board"], ["f-disadv-board-bxt", "Dis. Board"], ["f-bxt-light", "Light"]),
     words("xR", ["xr-value-f", "Strong"], ["xr-bluff-f", "Bluff"]),
     words("Bluff raise", ["bluff-raise-f", "Yes"]),
     words("Lead", ["have-lead-f-draw", "Draw"], ["have-lead-f-bluff", "Bluff"], ["have-lead-f-strong", "Strong"], ["have-lead-f-merge", "Merged"]),
@@ -159,7 +158,7 @@ const READ_LAYOUT = [
   ] }] }] },
   { title: "River", subs: [{ rows: [{ lines: true, ids: [
     words("Bet Vol", ["r-bet-vol-high", "High"], ["r-bet-vol-low", "Low"]),
-    words("Bluff hands", ["r-bh-fd", "FD"], ["r-bh-sd", "SD"], ["r-bh-air", "Air"], ["r-bh-mwp", "MWP"]),
+    words("Bluff hands", ["r-bh-fd", "FD"], ["r-bh-sd", "SD"], ["r-bh-air", "Air"], ["r-bh-mwp", "MWP"], ["r-bh-thtb", "THTB"]),
     words("Bluff Rivers", ["r-rcard-3str", "3Str"], ["r-rcard-4str", "4Str"], ["r-rcard-4flush", "4Flush"], ["r-rcard-blank", "Blanks"]),
     words("Bluff Type", ["r-bluff-type-hit", "DrawsHit"], ["r-bluff-type-miss", "DrawsMiss"]),
     words("Lead", ["have-lead-r-draw", "Draw"], ["have-lead-r-bluff", "Bluff"], ["have-lead-r-strong", "Strong"], ["have-lead-r-merge", "Merged"]),
