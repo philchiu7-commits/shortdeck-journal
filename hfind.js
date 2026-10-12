@@ -102,6 +102,8 @@ const HQ_PHRASES = [
   [/\bover[\s-]?bet(?:s|ting)?\b/g, " ob "],
   [/\bpre[\s-]?flop\s+(?:raiser|aggressor)\b|\bpfa\b/g, " pfr "],
   [/\bpre[\s-]?flop\s+caller\b/g, " pfc "],
+  /* BXT: "bet when checked to", "PFR checks to him and he bets". */
+  [/\bbet(?:s|ting)?\s+when\s+(?:its\s+|it\s+is\s+|(?:the\s+)?pfr\s+)?check(?:s|ed)?(?:\s+to(?:\s+(?:him|them|her))?)?\b|\b(?:(?:the\s+)?pfr\s+)?check(?:s|ed)?\s+to\s+(?:him|them|her)\s+and\s+(?:he\s+|they\s+|she\s+)?bets?\b|\bchecked\s+to\s+and\s+bets?\b/g, " bxt "],
   [/\bpre[\s-]?flop\b/g, " pre "],
   [/\bpost[\s-]flop\b/g, " postflop "],
   /* Board by its top flop card: "A-high", "Thigh", "T high or lower", "Q-high+".
@@ -128,7 +130,7 @@ const HQ_WORDS = {
   jam: "a:jam", jams: "a:jam", jammed: "a:jam", jamming: "a:jam", shove: "a:jam", shoves: "a:jam",
   shoved: "a:jam", shoving: "a:jam", allin: "a:jam",
   cbet: "a:cbet", cbets: "a:cbet", donk: "a:donk", donks: "a:donk", donked: "a:donk", donking: "a:donk",
-  lead: "a:donk", leads: "a:donk", led: "a:donk", leading: "a:donk",
+  lead: "a:donk", leads: "a:donk", led: "a:donk", leading: "a:donk", bxt: "a:bxt", bxts: "a:bxt", bxting: "a:bxt",
   open: "a:open", opens: "a:open", opened: "a:open", opening: "a:open", rfi: "a:open",
   iso: "a:iso", isos: "a:iso",
   agg: "a:agg", aggressor: "a:agg", aggressors: "a:agg", aggressive: "a:agg", aggro: "a:agg",
@@ -169,9 +171,9 @@ const HQ_STOP = new Set(("a an the and he him his hes she they villain player op
 /* Default street per action: preflop words live preflop, postflop words
    anywhere after it; plain verbs anywhere. */
 const HQ_PRE_ONLY = new Set(["open", "iso", "3bet", "4bet", "5bet", "limp", "lrr", "flat"]);
-const HQ_POST_ONLY = new Set(["cbet", "donk", "xr", "xc", "xf", "xb", "bf", "bc"]);
-const HQ_SIZED = new Set(["bet", "raise", "cbet", "donk", "jam", "3bet", "4bet", "5bet", "open", "iso", "xr", "agg"]);
-const HQ_FACEABLE = new Set(["cbet", "bet", "raise", "3bet", "4bet", "5bet", "jam", "donk", "iso"]);
+const HQ_POST_ONLY = new Set(["cbet", "donk", "bxt", "xr", "xc", "xf", "xb", "bf", "bc"]);
+const HQ_SIZED = new Set(["bet", "raise", "cbet", "donk", "bxt", "jam", "3bet", "4bet", "5bet", "open", "iso", "xr", "agg"]);
+const HQ_FACEABLE = new Set(["cbet", "bet", "raise", "3bet", "4bet", "5bet", "jam", "donk", "bxt", "iso"]);
 const HQ_FACERS = new Set(["fold", "call", "raise", "jam", "3bet", "4bet", "5bet"]);
 
 function hqParse(text) {
@@ -266,7 +268,7 @@ function hqParse(text) {
 
 const HQ_NAME = {
   bet: "bets", check: "checks", call: "calls", raise: "raises", fold: "folds", limp: "limps", jam: "jams",
-  cbet: "c-bets", donk: "donks / leads", open: "opens", iso: "isolates", flat: "cold-calls", "3bet": "3-bets",
+  cbet: "c-bets", donk: "donks / leads", bxt: "bets when checked to (BXT)", open: "opens", iso: "isolates", flat: "cold-calls", "3bet": "3-bets",
   "4bet": "4-bets", "5bet": "5-bets", lrr: "limp-reraises", xr: "check-raises", xc: "check-calls", xf: "check-folds",
   xb: "checks back", bf: "bet-folds", bc: "bet-calls", barrel2: "double-barrels (flop + turn)",
   barrel3: "triple-barrels (flop + turn + river)", agg: "bets or raises", seen: "plays",
@@ -292,7 +294,7 @@ function hqLines(s) {
   });
 }
 const HQ_FACE_NAME = { cbet: "a c-bet", bet: "a bet", raise: "a raise", "3bet": "a 3-bet", "4bet": "a 4-bet",
-  "5bet": "a 5-bet", jam: "a jam", donk: "a donk", iso: "an isolation raise" };
+  "5bet": "a 5-bet", jam: "a jam", donk: "a donk", bxt: "a bet when checked to (BXT)", iso: "an isolation raise" };
 const HQ_POS_NAME = { BTN: "on the button", CO: "in the CO", HJ: "in the HJ", MP: "in middle position",
   EP: "in early position" };
 /* Each piece as a short phrase with him as the subject, so the readout says
@@ -327,7 +329,7 @@ function hqLabel(c) {
   } else {
     const verb = HQ_NAME[c.kind] || c.kind;
     t = verb + (c.facing ? (c.kind === "fold" ? " to " : " ") + HQ_FACE_NAME[c.facing] : "")
-      + (c.st ? (c.kind === "seen" && c.st !== "post" ? " the " : " ") + (c.st === "pre" ? "preflop" : c.st === "post" ? "postflop" : c.st) : "")
+      + (c.st ? (c.st !== "post" && (c.kind === "seen" || c.kind === "bxt" || c.facing === "bxt") ? (c.kind === "seen" ? " the " : " on the ") : " ") + (c.st === "pre" ? "preflop" : c.st === "post" ? "postflop" : c.st) : "")
       + (c.sz ? " at " + (c.sz === "ob" ? "an overbet" : "B" + c.sz) : "");
   }
   return (c.neg ? "never " : "") + t;
@@ -358,7 +360,7 @@ function hqRungs(h) {
 /* One pass over the hand, tagging every action with what it was: a lead or a
    raise by where it sits in the street (the tokens can't be trusted to say),
    the preflop level it took the pot to, c-bets and donks against the last
-   street's aggressor, and its rung off the Sizings pricing. */
+   street's aggressor, a BXT once the preflop raiser has checked to him, and its rung off the Sizings pricing. */
 function hqInfo(h) {
   const acts = h.actions || [];
   let info = hqCache.get(h);
@@ -395,6 +397,8 @@ function hqInfo(h) {
           k.add("bet");
           if (prevAgg && a.actor === prevAgg) k.add("cbet");
           else if (prevAgg && !acted.has(prevAgg)) k.add("donk");
+          // checked to him: the PFR checked first (any check, in a limped pot); the PFR's own bet is a c-bet
+          if (acted.size && a.actor !== pfr && (!pfr || acted.has(pfr))) k.add("bxt");
         } else k.add("raise");
         open = true; lastAgg = a.actor;
       }
