@@ -247,6 +247,8 @@ function hqParse(text) {
   for (const c of clauses) {
     delete c.facingOpen;
     if (c.kind === "seen" && !c.st) c.st = "flop";
+    // a bare raise is a postflop one: preflop raises have their own words (open, iso, 3bet…)
+    if (!c.st && (c.kind === "raise" && !HQ_PRE_ONLY.has(c.facing) || c.facing === "raise")) c.st = "post";
     if (HQ_PRE_ONLY.has(c.kind) && c.st && c.st !== "pre") c.bad = `${c.kind} is preflop only`;
     if (HQ_POST_ONLY.has(c.kind) && c.st === "pre") c.bad = `${c.kind} is postflop only`;
   }
