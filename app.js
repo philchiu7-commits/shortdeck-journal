@@ -131,11 +131,13 @@ const READ_LAYOUT = [
     words("CC", ["cc-loose", "Loose"], ["cc-standard", "Standard"]),
     words("Limp", ["limp-tight", "Tight"], ["limp-normal", "Normal"], ["limp-wide", "Wide"]),
     words("Lc", ["lc-loose", "Loose"], ["lc-standard", "Standard"], ["lc-pp", "Low Pockets"]),
-    words("Can Iso light", ["iso-light", "Yes"]),
     words("Iso fold", ["iso-fold", "Yes"]),
   ] }] }] },
   { title: "Postflop", subs: [{ rows: [{ lines: true, ids: [
     words("Fastplay", ["fastplay", "Yes"]),
+  ] }] }] },
+  { title: "MWP", subs: [{ rows: [{ lines: true, ids: [
+    words("Probe", ["mwp-probe-strong", "Strong"], ["mwp-probe-draw", "Draw"], ["mwp-probe-merged", "Merged"]),
   ] }] }] },
   { title: "Flop", subs: [{ rows: [{ lines: true, ids: [
     words("OOP", ["checks-range-oop", "RangeX"], ["f-oop-mergeprob", "MergeProb"], ["f-oop-strongdraw", "StrongDraw"], ["f-oop-strong", "Strong"]),
@@ -162,9 +164,6 @@ const READ_LAYOUT = [
     words("Bluff Type", ["r-bluff-type-hit", "DrawsHit"], ["r-bluff-type-miss", "DrawsMiss"]),
     words("Lead", ["have-lead-r-draw", "Draw"], ["have-lead-r-bluff", "Bluff"], ["have-lead-r-strong", "Strong"], ["have-lead-r-merge", "Merged"]),
     words("Bluffcatch", ["r-fold-bal-overfold", "Overfold"], ["r-fold-bal-underfold", "Underfold"]),
-  ] }] }] },
-  { title: "MWP", subs: [{ rows: [{ lines: true, ids: [
-    words("Probe", ["mwp-probe-strong", "Strong"], ["mwp-probe-draw", "Draw"], ["mwp-probe-merged", "Merged"]),
   ] }] }] },
   { title: "Live tells", subs: [{ rows: [{ lines: true, ids: [
     words("Timing tells", ["timing-tells", "Yes"]),
@@ -478,8 +477,6 @@ const READ_EVIDENCE = [
   { id: "cc-width", yes: "Cold-called a raise", no: "Faced a raise, didn't call",
     chance: (f) => f.faced.pre && !f.limpedFirst, did: (f) => f.s.pre.some((x) => x.act === "call" && x.facing) },
   { id: "iso-width", yes: "Raised over the limps", no: "Limps in front, didn't raise",
-    chance: (f) => f.isoSpot, did: (f) => f.s.pre[0] && isAgg(f.s.pre[0].act) },
-  { id: "iso-light", yes: "Raised over the limps", no: "Limps in front, didn't raise",
     chance: (f) => f.isoSpot, did: (f) => f.s.pre[0] && isAgg(f.s.pre[0].act) },
   { id: "opens-premium", yes: "Opened and showed", no: "Opened, never showed",
     chance: fOpened, did: (f) => f.cards.length === 2 },
