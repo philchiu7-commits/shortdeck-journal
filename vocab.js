@@ -204,6 +204,8 @@ const TENDENCY_TAGS = [
   { id: "have-lead-f-merge",    cat: "postflop", label: "Lead F Merged" },
   { id: "have-lead-f-strongdraw", cat: "postflop", label: "Lead F StrongDraw" },
   { id: "have-lead-f-weakdraw",   cat: "postflop", label: "Lead F WeakDraw" },
+  { id: "have-lead-f-advs",     cat: "postflop", label: "Lead F Adv. board strong" },   // leads boards that favour their range, with strong hands
+  { id: "have-lead-f-advblf",   cat: "postflop", label: "Lead F Adv. board bluff" },    // …and as a bluff
   { id: "f-call-range-wide",    cat: "postflop", label: "F call range Wide" },
   { id: "f-call-range-tpdraws", cat: "postflop", label: "F call range TP+/Draws" },
   // turn
