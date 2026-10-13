@@ -263,6 +263,11 @@ const TENDENCY_TAGS = [
   { id: "r-fold-bal-overfold",  cat: "postflop", label: "Bluffcatch Overfold" },
   { id: "r-fold-bal-underfold", cat: "postflop", label: "Bluffcatch Underfold" },
   { id: "r-fold-bal-valuehands", cat: "postflop", label: "Bluffcatch ValueHands" },   // calls river bets only with value hands
+  // Phil's river "NoThin on" row: nothing thin on these boards
+  { id: "r-nothin-flush",    cat: "postflop", label: "NoThin on Flush" },
+  { id: "r-nothin-paired",   cat: "postflop", label: "NoThin on Paired" },
+  { id: "r-nothin-straight", cat: "postflop", label: "NoThin on Straight" },
+  { id: "r-nothin-all",      cat: "postflop", label: "NoThin on All" },
   // multiway pots
   { id: "mwp-probe-strong",     cat: "postflop", label: "MWP Probe Strong" },
   { id: "mwp-probe-draw",       cat: "postflop", label: "MWP Probe Draw" },

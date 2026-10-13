@@ -168,6 +168,7 @@ const READ_LAYOUT = [
     words("Bluff Type", ["r-bluff-type-hit", "DrawsHit"], ["r-bluff-type-miss", "DrawsMiss"]),
     words("Lead", ["have-lead-r-have", "Have"], ["have-lead-r-draw", "Draw"], ["have-lead-r-bluff", "Bluff"], ["have-lead-r-strong", "Strong"], ["have-lead-r-merge", "Merged"]),
     words("Bluffcatch", ["r-fold-bal-overfold", "Overfold"], ["r-fold-bal-underfold", "Underfold"], ["r-fold-bal-valuehands", "ValueHands"]),
+    words("NoThin on", ["r-nothin-flush", "Flush"], ["r-nothin-paired", "Paired"], ["r-nothin-straight", "Straight"], ["r-nothin-all", "All"]),
   ] }] }] },
   { title: "Live tells", subs: [{ rows: [{ lines: true, ids: [
     words("Timing tells", ["timing-tells", "Yes"]),
