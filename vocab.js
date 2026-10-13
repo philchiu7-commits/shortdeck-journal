@@ -231,6 +231,7 @@ const TENDENCY_TAGS = [
   { id: "t-probe-wide",         cat: "postflop", label: "Probe T Wide" },
   { id: "t-probe-merge",        cat: "postflop", label: "Probe T Merge" },
   { id: "t-probe-polar",        cat: "postflop", label: "Probe T Polar" },
+  { id: "t-probe-bluff",        cat: "postflop", label: "Probe T Bluff" },
   { id: "t-call-range-wide",    cat: "postflop", label: "T call range Wide" },
   { id: "t-call-range-tpdraws", cat: "postflop", label: "T call range TP+/Draws" },
   { id: "t-protect-draw-done",  cat: "postflop", label: "Protect Draw complete" },

@@ -24,6 +24,7 @@ let oppEditMode = false;          // opponents list: reorder / regroup mode
 let vSearch = "";                 // hand-entry villain search query
 let collapsedGroups = new Set();  // opponents list: which group sections are collapsed
 let pinnedGroup = null;           // opponents list: group name that always sorts first (null = auto by recency)
+let oppSortHands = false;         // opponents list: most hands first inside each group, over the drag order
 let tableLineup = [];             // today's seat ring, ordered: ("hero" | oppId)[] — anchors positions
 let lineupSeats = 9;              // table size (6–9); picks which subset of the seat ring is in play
 let openSizeStats = {};           // adaptive open-raise sizes: { [bb]: { [bbSize]: count } }
@@ -154,7 +155,7 @@ const READ_LAYOUT = [
     words("BXT", ["t-adv-turn-bxt", "Adv. Turn"], ["t-disadv-turn-bxt", "Dis. Turn"], ["t-bxt-merged", "Merge"], ["t-bxt-light", "Light"], ["t-bxt-tight", "Tight"]),
     words("xR", ["xr-value-t", "Strong"], ["xr-bluff-t", "Bluff"]),
     words("Lead", ["have-lead-t-draw", "Draw"], ["have-lead-t-bluff", "Bluff"], ["have-lead-t-strong", "Strong"], ["have-lead-t-merge", "Merged"]),
-    words("Turn Probing", ["t-probe-tight", "Tight"], ["t-probe-normal", "Normal"], ["t-probe-wide", "Wide"], ["t-probe-merge", "Merge"], ["t-probe-polar", "Polar"]),
+    words("Turn Probing", ["t-probe-tight", "Tight"], ["t-probe-normal", "Normal"], ["t-probe-wide", "Wide"], ["t-probe-merge", "Merge"], ["t-probe-polar", "Polar"], ["t-probe-bluff", "Bluff"]),
     words("Calling range", ["t-call-range-wide", "Wide"], ["t-call-range-tpdraws", "TP+/Draws"]),
     words("Protect Draw complete", ["t-protect-draw-done", "Yes"]),
   ] }] }] },
@@ -1890,7 +1891,7 @@ function oppRowHTML(o, st) {
   // The list row is just type + name (+ looks-like); reads and exploits live on the detail page.
   const chips = "";
   const showChips = !oppEditMode && chips;
-  const handle = oppEditMode ? `<span class="draghandle" data-drag="${o.id}">⠿</span>` : "";
+  const handle = oppEditMode && !oppSortHands ? `<span class="draghandle" data-drag="${o.id}">⠿</span>` : "";
   const move = oppEditMode ? `<button class="movebtn" data-move="${o.id}">Group ▾</button>` : "";
   const badge = st ? `<span class="handbadge">${st.count}</span>` : "";
   const physLine = !oppEditMode && !chips && o.physical ? `<div class="s">${esc(o.physical)}</div>` : "";
@@ -1952,7 +1953,7 @@ function renderOpponents() {
   const stats = oppStats();
   let list = OPP.filter((o) => !o.archived);
   if (nq) list = list.filter((o) => oppMatches(o, nq));
-  list.sort(oppOrderCmp(stats));
+  list.sort(oppSortHands ? (a, b) => (stats[b.id]?.count || 0) - (stats[a.id]?.count || 0) || oppOrderCmp(stats)(a, b) : oppOrderCmp(stats));
   // section by group — most-recently-touched group first (ungrouped ranks by its own recency)
   const groupRecency = {};
   for (const o of list) {
@@ -1970,6 +1971,7 @@ function renderOpponents() {
       return (groupRecency[b] || 0) - (groupRecency[a] || 0);
     });
   $("opp-edit").classList.toggle("on", oppEditMode);
+  $("opp-sort-hands").classList.toggle("on", oppSortHands);
   $("opp-edit").textContent = oppEditMode ? "Done" : "Edit";
   const byGroup = {};
   for (const o of list) (byGroup[o.group || ""] ||= []).push(o);
@@ -5293,6 +5295,9 @@ function bindStatic() {
   // opponents list
   $("opp-search").oninput = renderOpponents;
   $("opp-edit").onclick = () => { oppEditMode = !oppEditMode; renderOpponents(); };
+  $("opp-sort-hands").onclick = () => { oppSortHands = !oppSortHands; metaSet("oppSortHands", oppSortHands); renderOpponents(); };
+  // iOS ignores user-scalable=no, so pinch-zoom is blocked here; double-tap zoom goes via touch-action
+  for (const t of ["gesturestart", "gesturechange"]) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
   $("opp-add").onclick = () => { $("opp-new").classList.toggle("hidden"); $("opp-new-name").focus(); };
   $("opp-new-save").onclick = async () => {
     const name = $("opp-new-name").value.trim();
@@ -5908,6 +5913,7 @@ async function boot() {
   metaGet("hvSplitH").then((h) => { if (h) document.documentElement.style.setProperty("--hvsplit-h", h); });
   collapsedGroups = new Set((await metaGet("collapsedGroups")) || []);
   pinnedGroup = (await metaGet("pinnedGroup")) ?? null;
+  oppSortHands = !!(await metaGet("oppSortHands"));
   tableLineup = (await metaGet("tableLineup")) || [];
   lineupSeats = (await metaGet("lineupSeats")) || 9;
   openSizeStats = (await metaGet("openSizeStats")) || {};
