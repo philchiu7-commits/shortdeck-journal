@@ -223,6 +223,7 @@ const TENDENCY_TAGS = [
   { id: "t-bxt-merged",         cat: "postflop", label: "BXT T Merged" },
   { id: "t-bxt-light",          cat: "postflop", label: "BXT T Light" },
   { id: "t-bxt-tight",          cat: "postflop", label: "BXT T Tight" },
+  { id: "t-bxt-bluff",          cat: "postflop", label: "BXT T Bluff" },
   { id: "have-lead-t-have",     cat: "postflop", label: "Lead T Have" },        // leads this street at all
   { id: "have-lead-t-draw",     cat: "postflop", label: "Lead T Draw" },
   { id: "have-lead-t-bluff",    cat: "postflop", label: "Lead T Bluff" },
