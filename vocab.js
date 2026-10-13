@@ -301,6 +301,7 @@ const PLAYER_TYPES = [
   { id: "tight-fish", label: "Tight fish", icon: "🎣", color: "#c5c33a" },
   { id: "passive-fish", label: "Passive fish", icon: "🐡", color: "#e06fa6" },
   { id: "station",    label: "Station",    icon: "📞", color: "#b36ad6" },
+  { id: "plain-reg",  label: "Reg",        icon: "👤", color: "#d7dce5" },
   { id: "reg",        label: "Loose reg",  icon: "🃏", color: "#4f7fdf" },
   { id: "good-reg",   label: "Good reg",   icon: "🦈", color: "#d64848" },
   { id: "tight-reg",  label: "Tight reg",  icon: "🔒", color: "#7a8496" },
