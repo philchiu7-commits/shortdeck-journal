@@ -182,7 +182,7 @@ let sdMinHide = localStorage.getItem("sd-minhide") === "1";   // MinO/Iso and Mi
 const SD_HUD_PRE = [["VPIP", "vpip"], ["Limp", "limp"], ["Limp-call", "limpCall"], ["Iso", "iso"], ["MinO/Iso", "minOpen"], ["CC", "cc"], ["3bet", "3bet"], ["Min 3bet", "min3bet"], ["Fold 3bet", "f3bet"]];
 const SD_HUD_POST = [["Cbet HU", "cbetF", "hu"], ["Cbet MW", "cbetF", "mw"], ["Cbet turn", "cbetT"], ["Fold cbet HU", "fcb", "hu"], ["Fold cbet MW", "fcb", "mw"], ["Fold T-cbet", "fcbT"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk flop", "donk"], ["Donk turn", "donkT"], ["Donk river", "donkR"], ["Agg %", "afq"], ["WTSD", "wtsd"], ["W$SD", "wsd"]];
 const SD_HUD = [...SD_HUD_PRE, ...SD_HUD_POST];
-const SD_PRE_ROWS = [["VPIP", "vpip"], ["Iso", "iso"], ["Iso fold", "isoFold"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
+const SD_PRE_ROWS = [["VPIP", "vpip"], ["Open", "open"], ["Iso", "iso"], ["Iso fold", "isoFold"], ["MinO/Iso", "minOpen"], ["Limp", "limp"], ["CC", "cc"], ["LRR", "limpRR"], ["Limp-call", "limpCall"], ["3bet", "3bet"], ["Min 3bet", "min3bet"]];
 const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet river", "cbetR"], ["Fold to cbet", "fcb"], ["Fold to turn cbet", "fcbT"], ["Fold to river cbet", "fcbR"], ["Raise flop", "rcb"], ["Raise turn", "rT"], ["Raise river", "rR"], ["Check-raise", "cr"], ["Donk flop", "donk"], ["Donk turn", "donkT"], ["Donk river", "donkR"]];
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
@@ -210,6 +210,7 @@ const SD_DEFS = [
 
 let sdStatT = {};                                // the tallies behind the stats now on screen
 let sdSzT = {};                                  // same for the sizing grid: "sz|flop-v|B50" → [n, n, handIds, []]
+  ["Open", "Open-raised first in — no limpers and no raise in front — out of the hands where it was folded to them. A min raise (at most 2× the ante) doesn't count — it goes to MinO/Iso."],
 const SD_EXTRA_ROWS = [["Fold to flop raise", "fxr"], ["River agg %", "afR"]];
 const SD_COL_LBL = { all: "", hu: "heads-up", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
 
