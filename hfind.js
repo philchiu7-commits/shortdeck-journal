@@ -62,9 +62,12 @@ const HQ_HS = [
 ]);
 const HQ_PHRASES = [
   ...HQ_HS,
-  [/\b([345])[\s-]?bet(?:s|ted|ting)?\s+pots?\b|\b([345])[\s-]?bps?\b/g, (m, a, b) => ` ${a || b}bp `],
+  [/\b(three|four|five)[\s-]?bet/g, (m, w) => ({ three: 3, four: 4, five: 5 })[w] + "bet"],
+  [/\b(?:second|2nd)[\s-]barrel(?:s|ed|led|ing|ling)?\b/g, " barrel2 "],
+  [/\b(?:third|3rd)[\s-]barrel(?:s|ed|led|ing|ling)?\b/g, " barrel3 "],
+  [/\b([345])[\s-]?b(?:et(?:s|ted|ting)?)?\s+pots?\b|\b([345])[\s-]?bps?\b/g, (m, a, b) => ` ${a || b}bp `],
   [/\bsingle[\s-]?raised(?:\s+pots?)?\b|\bsrps?\b/g, " srp "],
-  [/\blimped\s+pots?\b|\blimp\s+pots?\b/g, " limpedpot "],
+  [/\blimped\s+pots?\b|\blimp\s+pots?\b|\bunraised\s+pots?\b/g, " limpedpot "],
   [/(\b(?:folds?|calls?|raises?|jams?|[345]bets?)\s+)?\bfac(?:ed|es)\s+(?:an?\s+)?raises?\b/g, (m, verb) => verb ? m : " facedraise "],   // "folds faced a raise" stays an answer
   [/\bheads[\s-]?up(?:\s+pots?)?\b|\bhups?\b/g, " hu "],                 // HUP = heads-up pot
   [/\bmulti[\s-]?way(?:\s+pots?)?\b|\bmwps?\b/g, " mw "],             // MWP = multiway pot
@@ -74,6 +77,8 @@ const HQ_PHRASES = [
   [/\bout\s+of\s+position\b/g, " oop "],
   [/\bcut[\s-]?off\b/g, " co "],
   [/\bhi[\s-]?jack\b/g, " hj "],
+  [/\blo[\s-]?jack\b/g, " lj "],
+  [/\blate(?:\s+position)?\b|\blp\b/g, " co btn "],
   [/\bunder\s+the\s+gun\b/g, " utg "],
   [/\bmiddle\s+position\b/g, " mp "],
   [/\bearly\s+position\b/g, " ep "],
@@ -85,12 +90,27 @@ const HQ_PHRASES = [
   [/\btwo\s+squids?\b|\b2\s+squids?\b|\btwo[\s-]?plus\s+squids?\b/g, " squid2 "],
   [/\bwith\s+(?:a\s+)?squids?\b|\bhas\s+(?:a\s+)?squids?\b/g, " squid1 "],
   [/\bcontinuation[\s-]?bet(?:s|ting)?\b|\bc[\s-]bet(?:s|ting)?\b/g, " cbet "],
+  [/\bdelay(?:ed|s)?\s+cbets?\b/g, " dcbet "],
   [/\blimp[\s-]?re[\s-]?raise[sd]?\b|\blimp[\s-]?raise[sd]?\b/g, " lrr "],
+  [/\bre[\s-]?rais(?:e|es|ed|ing)\b/g, " reraise "],
+  [/\bopen[\s-]?limp(?:s|ed|ing|ers?)?\b|\blimp(?:s|ed)?\s+first\s+in\b/g, " olimp "],
+  [/\bover[\s-]?limp(?:s|ed|ing|ers?)?\b|\blimp(?:s|ed|ing)?\s+behind\b/g, " overlimp "],
+  [/\blimp[\s-]?call(?:s|ed|ing)?\b/g, " limpc "],
+  [/\blimp[\s-]?fold(?:s|ed|ing)?\b/g, " limpf "],
   [/\bcold[\s-]?call(?:s|ed|ing)?\b/g, " flat "],
-  [/\bisolat(?:e|es|ed|ing)\b|\bisos?\b/g, " iso "],
-  [/\bopen[\s-]?raise[sd]?\b/g, " open "],
+  [/\bover[\s-]?call(?:s|ed|ing)?\b/g, " overcall "],
+  [/\bisolat(?:e|es|ed|ing|ion)\b(?:[\s-]raise[sd]?\b)?|\bisos?(?:[\s-]raise[sd]?)?\b/g, " iso "],
+  [/\bopen[\s-]?raise[sd]?\b|\brais(?:e|es|ed)\s+first\s+in\b/g, " open "],
+  [/\bdonk[\s-]?bet(?:s|ted|ting)?\b|\b(?:lead(?:s|ing)?|led)\s+out\b/g, " donk "],
+  [/\bprob(?:e|es|ed|ing)[\s-]?bet(?:s|ting)?\b/g, " probe "],
+  [/\bfloat(?:s|ed|ing)?[\s-]bet(?:s|ting)?\b/g, " floatbet "],
+  [/\bcall(?:s|ed|ing)?\s+down\b/g, " ln3_3_3 "],
+  [/\b(?:give|gives|gave|giving)\s+up\b/g, " giveup "],
+  [/\bcheck(?:s|ed)?\s+(?:it\s+)?(?:through|thru|around)\b|\bcheck[\s-]check\b/g, " xthru "],
+  [/\b(?:check(?:s|ed|ing)?|x)[\s-]*(?:shove|jam|push)(?:s|es|ed|ing)?\b/g, " xr szjam "],
   [/\b(?:check(?:s|ed)?|x)[\s-]+(?:back|behind)\b/g, " xb "],
   [/\b(?:check(?:s|ed|ing)?|x)\s*[-\/]?\s*(raise|call|fold|r|c|f)(?:s|d|ed|ing)?\b/g, (m, b) => ` x${b[0]} `],
+  [/\b([34])[\s-]?b(?:et(?:s|ted|ting)?)?\s*[-\/]\s*(fold|call|f|c)(?:s|ed|ing)?\b/g, (m, n, b) => ` ${n}b${b[0]} `],
   [/\bbet(?:s|ting)?\s*[-\/]?\s*(call|fold)(?:s|ed|ing)?\b/g, (m, b) => ` b${b[0]} `],
   [/\bdouble[\s-]?barrel(?:s|ed|led|ing|ling)?\b/g, " barrel2 "],
   [/\btriple[\s-]?barrel(?:s|ed|led|ing|ling)?\b/g, " barrel3 "],
@@ -120,6 +140,7 @@ const HQ_PHRASES = [
   [new RegExp(`\\b(${HQ_BT_KIND})(?:[\\s-]+(?:completing|completes|comes|coming|card))?\\s+(?:on\\s+)?(?:the\\s+)?(turn|river)\\b`, "g"),
     (m, k, st) => ` bt${st[0]}${hqBtKind(k)} `],
   [/\b([345])[\s-]bet/g, "$1bet"],
+  [/\b(xr|[345]bet|open|iso|squeeze|raise)\s+(?:shoves?|jams?|push(?:es)?)\b/g, "$1 szjam"],   // "3bet jam": the 3bet, all-in
 ];
 /* Single words → what they are. Street and size words attach to the action
    next to them; everything else stands on its own. */
@@ -135,27 +156,37 @@ const HQ_WORDS = {
   lead: "a:donk", leads: "a:donk", led: "a:donk", leading: "a:donk", bxt: "a:bxt", bxts: "a:bxt", bxting: "a:bxt", stab: "a:bxt", stabs: "a:bxt", stabbed: "a:bxt", stabbing: "a:bxt",
   open: "a:open", opens: "a:open", opened: "a:open", opening: "a:open", rfi: "a:open",
   iso: "a:iso", isos: "a:iso",
+  probe: "a:probe", probes: "a:probe", probed: "a:probe", probing: "a:probe",
+  float: "a:float", floats: "a:float", floated: "a:float", floating: "a:float", floatbet: "a:floatbet",
+  dcbet: "a:dcbet", dcbets: "a:dcbet", dcb: "a:dcbet",
+  squeeze: "a:squeeze", squeezes: "a:squeeze", squeezed: "a:squeeze", squeezing: "a:squeeze", sqz: "a:squeeze",
+  overcall: "a:overcall", overcalls: "a:overcall", olimp: "a:olimp", overlimp: "a:overlimp",
+  reraise: "a:rr", reraises: "a:rr", reraised: "a:rr", reraising: "a:rr",
+  limpc: "a:limpc", limpf: "a:limpf", "3bf": "a:3bf", "3bc": "a:3bc", "4bf": "a:4bf", "4bc": "a:4bc",
+  giveup: "a:giveup", xthru: "a:xthru",
+  steal: "a:steal", steals: "a:steal", stole: "a:steal", stealing: "a:steal",
+  push: "a:jam", pushes: "a:jam", pushed: "a:jam", pushing: "a:jam",
   agg: "a:agg", aggressor: "a:agg", aggressors: "a:agg", aggressive: "a:agg", aggro: "a:agg",
   flat: "a:flat", flats: "a:flat", flatted: "a:flat", flatting: "a:flat",
   "3bet": "a:3bet", "3bets": "a:3bet", "3betting": "a:3bet", "4bet": "a:4bet", "4bets": "a:4bet",
-  "5bet": "a:5bet", "5bets": "a:5bet", lrr: "a:lrr",
+  "5bet": "a:5bet", "5bets": "a:5bet", lrr: "a:lrr", "3b": "a:3bet", "4b": "a:4bet", "5b": "a:5bet",
   xr: "a:xr", xc: "a:xc", xf: "a:xf", xb: "a:xb", bf: "a:bf", bc: "a:bc",
   barrel: "a:barrel2", barrels: "a:barrel2", barreled: "a:barrel2", barrelled: "a:barrel2",
   barrel2: "a:barrel2", barrel3: "a:barrel3",
   pre: "st:pre", pf: "st:pre", flop: "st:flop", flops: "st:flop", turn: "st:turn", turns: "st:turn",
   river: "st:river", rivers: "st:river", postflop: "st:post",
   s33: "sz:33", s50: "sz:50", s66: "sz:66", s75: "sz:75", s100: "sz:100", s150: "sz:150", ob: "sz:ob",
-  b33: "sz:33", b50: "sz:50", b66: "sz:66", b75: "sz:75", b100: "sz:100", b150: "sz:150",
+  b33: "sz:33", b50: "sz:50", b66: "sz:66", b75: "sz:75", b100: "sz:100", b150: "sz:150", szjam: "sz:jam",
   button: "f:pos:BTN", btn: "f:pos:BTN", bn: "f:pos:BTN", bu: "f:pos:BTN", dealer: "f:pos:BTN",
   co: "f:pos:CO", hj: "f:pos:HJ", hijack: "f:pos:HJ",
-  mp: "f:pos:MP", u4: "f:pos:MP", u5: "f:pos:MP",
+  mp: "f:pos:MP", lj: "f:pos:MP", lojack: "f:pos:MP", u4: "f:pos:MP", u5: "f:pos:MP",
   ep: "f:pos:EP", utg: "f:pos:EP", early: "f:pos:EP", u6: "f:pos:EP", u7: "f:pos:EP", u8: "f:pos:EP", u9: "f:pos:EP",
   "3bp": "f:pot:3BP", "4bp": "f:pot:4BP+", "5bp": "f:pot:4BP+", srp: "f:pot:SRP", limpedpot: "f:pot:Limped",
   nosquid: "f:squid:nS", ns: "f:squid:nS", squid1: "f:squid:w1S", w1s: "f:squid:w1S",
   squid2: "f:squid:w2S+", w2s: "f:squid:w2S+",
   pfr: "f:pfr", pfc: "f:pfc",
   preallin: "f:preallin", facedraise: "f:facedr",
-  hu: "f:hu", mw: "f:mw", multiway: "f:mw", sd: "f:sd", cards: "f:cards", shown: "f:cards", showed: "f:cards",
+  hu: "f:hu", mw: "f:mw", multiway: "f:mw", sd: "f:sd", wtsd: "f:sd", cards: "f:cards", shown: "f:cards", showed: "f:cards",
   ip: "f:ip", oop: "f:oop",
   no: "neg", not: "neg", never: "neg", didnt: "neg", doesnt: "neg", dont: "neg", without: "neg",
   except: "neg", excluding: "neg", exclude: "neg", excludes: "neg", hide: "neg", isnt: "neg", wasnt: "neg",
@@ -172,10 +203,12 @@ const HQ_STOP = new Set(("a an the and he him his hes she they villain player op
 
 /* Default street per action: preflop words live preflop, postflop words
    anywhere after it; plain verbs anywhere. */
-const HQ_PRE_ONLY = new Set(["open", "iso", "3bet", "4bet", "5bet", "limp", "lrr", "flat"]);
-const HQ_POST_ONLY = new Set(["cbet", "donk", "bxt", "xr", "xc", "xf", "xb", "bf", "bc"]);
-const HQ_SIZED = new Set(["bet", "raise", "cbet", "donk", "bxt", "jam", "3bet", "4bet", "5bet", "open", "iso", "xr", "agg"]);
-const HQ_FACEABLE = new Set(["cbet", "bet", "raise", "3bet", "4bet", "5bet", "jam", "donk", "bxt", "iso"]);
+const HQ_PRE_ONLY = new Set(["open", "iso", "3bet", "4bet", "5bet", "limp", "lrr", "flat", "squeeze", "steal", "olimp", "overlimp",
+  "limpc", "limpf", "3bf", "3bc", "4bf", "4bc"]);
+const HQ_POST_ONLY = new Set(["cbet", "donk", "bxt", "xr", "xc", "xf", "xb", "bf", "bc", "probe", "float", "floatbet", "dcbet", "giveup", "xthru"]);
+const HQ_SIZED = new Set(["bet", "raise", "cbet", "donk", "bxt", "jam", "3bet", "4bet", "5bet", "open", "iso", "xr", "agg",
+  "probe", "floatbet", "dcbet", "squeeze", "steal", "rr"]);
+const HQ_FACEABLE = new Set(["cbet", "bet", "raise", "3bet", "4bet", "5bet", "jam", "donk", "bxt", "iso", "probe", "dcbet", "squeeze", "steal", "floatbet", "rr"]);
 const HQ_FACERS = new Set(["fold", "call", "raise", "jam", "3bet", "4bet", "5bet"]);
 
 function hqParse(text) {
@@ -276,7 +309,19 @@ const HQ_NAME = {
   "4bet": "4-bets", "5bet": "5-bets", lrr: "limp-reraises", xr: "check-raises", xc: "check-calls", xf: "check-folds",
   xb: "checks back", bf: "bet-folds", bc: "bet-calls", barrel2: "double-barrels (flop + turn)",
   barrel3: "triple-barrels (flop + turn + river)", agg: "bets or raises", seen: "plays",
+  probe: "probes (bets out of position after nobody bet the street before)",
+  float: "floats (calls a bet, then bets the next street when it's checked to)",
+  floatbet: "bets after floating (called the last street, now checked to)",
+  dcbet: "delayed c-bets (bets as the PFR after the flop checked through)",
+  squeeze: "squeezes (3-bets over an open and a caller)", steal: "steals (opens from the CO or button when it's folded to)",
+  overcall: "overcalls (calls after someone else already called)", rr: "re-raises (raises over a raise)",
+  olimp: "open-limps (limps first in)", overlimp: "over-limps (limps behind a limper)",
+  limpc: "limp-calls (limps, then calls a raise)", limpf: "limp-folds (limps, then folds to a raise)",
+  "3bf": "3-bet-folds (3-bets, then folds)", "3bc": "3-bet-calls (3-bets, then calls)",
+  "4bf": "4-bet-folds (4-bets, then folds)", "4bc": "4-bet-calls (4-bets, then calls)",
+  giveup: "gives up (the last street's aggressor checks and doesn't bet or call)", xthru: "checks it through (everyone checks)",
 };
+const HQ_ON = new Set(["bxt", "probe", "float", "floatbet", "dcbet", "giveup", "xthru", "overcall", "rr"]);   // "… on the turn"
 const HQ_LINE_ACT = { b: "bet", x: "check", c: "call", r: "raise", f: "fold" };
 /* Lines: one letter per street from the flop — "bxb", "bb" (flop + turn,
    river anything), "-bb" (turn + river, flop anything), a dash anywhere is
@@ -298,7 +343,8 @@ function hqLines(s) {
   });
 }
 const HQ_FACE_NAME = { cbet: "a c-bet", bet: "a bet", raise: "a raise", "3bet": "a 3-bet", "4bet": "a 4-bet",
-  "5bet": "a 5-bet", jam: "a jam", donk: "a donk", bxt: "a bet when checked to (BXT)", iso: "an isolation raise" };
+  "5bet": "a 5-bet", jam: "a jam", donk: "a donk", bxt: "a bet when checked to (BXT)", iso: "an isolation raise",
+  probe: "a probe bet", dcbet: "a delayed c-bet", squeeze: "a squeeze", steal: "a steal", floatbet: "a float bet", rr: "a re-raise" };
 const HQ_POS_NAME = { BTN: "on the button", CO: "in the CO", HJ: "in the HJ", MP: "in middle position",
   EP: "in early position" };
 /* Each piece as a short phrase with him as the subject, so the readout says
@@ -333,8 +379,8 @@ function hqLabel(c) {
   } else {
     const verb = HQ_NAME[c.kind] || c.kind;
     t = verb + (c.facing ? (c.kind === "fold" ? " to " : " ") + HQ_FACE_NAME[c.facing] : "")
-      + (c.st ? (c.st !== "post" && (c.kind === "seen" || c.kind === "bxt" || c.facing === "bxt") ? (c.kind === "seen" ? " the " : " on the ") : " ") + (c.st === "pre" ? "preflop" : c.st === "post" ? "postflop" : c.st) : "")
-      + (c.sz ? " at " + (c.sz === "ob" ? "an overbet" : "B" + c.sz) : "");
+      + (c.st ? (c.st !== "post" && (c.kind === "seen" || c.st !== "pre" && (HQ_ON.has(c.kind) || HQ_ON.has(c.facing))) ? (c.kind === "seen" ? " the " : " on the ") : " ") + (c.st === "pre" ? "preflop" : c.st === "post" ? "postflop" : c.st) : "")
+      + (c.sz ? c.sz === "jam" ? " all-in" : " at " + (c.sz === "ob" ? "an overbet" : "B" + c.sz) : "");
   }
   return (c.neg ? "never " : "") + t;
 }
@@ -373,9 +419,11 @@ function hqInfo(h) {
   let rungs = null;
   try { rungs = hqRungs(h); } catch (e) { rungs = null; }
   const tagged = [];
-  let lv = 0, prevAgg = null, pfr = null;
+  let lv = 0, prevAgg = null, pfr = null, lastAny = null, betPost = false, prevSt = null;
+  const agg = {}, out = new Set();
+  const seat = (x) => { try { return posBucket(x === "hero" ? h.heroPos : (h.villains || [])[+String(x).slice(1)]?.pos); } catch (e) { return null; } };
   for (const st of ["pre", "flop", "turn", "river"]) {
-    let open = false, lastAgg = null, limps = 0;
+    let open = false, lastAgg = null, limps = 0, calls = 0, nAgg = 0;
     const acted = new Set();
     for (let i = 0; i < acts.length; i++) {
       const a = acts[i];
@@ -390,11 +438,12 @@ function hqInfo(h) {
         if (a.act === "jam" || HQ_LEVEL[a.act]) {
           k.add("raise"); k.add("agg");
           /* The first raise in: an open with nobody limping, an iso over limpers. */
-          if (!open) { k.add("open"); if (limps > 0) k.add("iso"); }
-          if (lv > was) { if (lv === 2) k.add("3bet"); else if (lv === 3) k.add("4bet"); else if (lv >= 4) k.add("5bet"); }
-          open = true; lastAgg = a.actor;
+          if (!open) { k.add("open"); if (limps > 0) k.add("iso"); else if (["CO", "BTN"].includes(seat(a.actor))) k.add("steal"); }
+          else k.add("rr");
+          if (lv > was) { if (lv === 2) { k.add("3bet"); if (calls > 0) k.add("squeeze"); } else if (lv === 3) k.add("4bet"); else if (lv >= 4) k.add("5bet"); }
+          open = true; lastAgg = a.actor; calls = 0;
         }
-        if (a.act === "limp") limps++;
+        if (a.act === "limp" && !open) { k.add(limps ? "overlimp" : "olimp"); limps++; }
         if (a.act === "call" && was >= 1 && !tagged.some((x) => x.st === "pre" && x.a.actor === a.actor && x.k.has("agg"))) k.add("flat");
       } else if (AGG_ACTS.includes(a.act)) {
         k.add("agg");
@@ -404,18 +453,34 @@ function hqInfo(h) {
           else if (prevAgg && !acted.has(prevAgg)) k.add("donk");
           // checked to him: the last street's aggressor checked first — the PFR on the flop, and after a street checked through
           const ini = prevAgg || pfr;
-          if (ini && a.actor !== ini && acted.has(ini)) k.add("bxt");
-        } else k.add("raise");
-        open = true; lastAgg = a.actor;
+          if (ini && a.actor !== ini && acted.has(ini)) {
+            k.add("bxt");
+            /* A float: called the last street's bet without raising it, and bets now that it's checked to them. */
+            const was = tagged.filter((t) => t.st === prevSt && t.a.actor === a.actor);
+            if (prevAgg && prevSt !== "pre" && was.length && was[was.length - 1].a.act === "call" && !was.some((t) => t.k.has("agg"))) {
+              was[was.length - 1].k.add("float"); k.add("floatbet"); }
+          }
+          /* A probe: nobody bet the street before, and this bet goes in ahead of the
+             player who was last to bet or raise (the PFR who checked back the flop).
+             No raise all hand — a limped pot — it's a bet with players still to act behind. */
+          if (!prevAgg && (lastAny ? a.actor !== lastAny && !acted.has(lastAny) && !out.has(lastAny)
+            : acts.some((b, j) => j > i && b.street === st && b.actor !== a.actor && !acted.has(b.actor)))) k.add("probe");
+          if (st !== "flop" && pfr && a.actor === pfr && !betPost) k.add("dcbet");
+        } else { k.add("raise"); if (nAgg >= 2) k.add("rr"); }
+        open = true; lastAgg = a.actor; calls = 0; nAgg++;
       }
+      if (a.act === "call") { if (open && calls > 0) k.add("overcall"); calls++; }
+      if (a.act === "fold") out.add(a.actor);
       const rg = rungs && rungs.get(i);
       tagged.push({ a, st, k, step: rg ? rg.step : null, ratio: rg ? rg.ratio : null });
       acted.add(a.actor);
     }
     if (st === "pre") pfr = lastAgg;
-    prevAgg = lastAgg;
+    else if (lastAgg) betPost = true;
+    prevAgg = lastAgg; agg[st] = lastAgg; prevSt = st;
+    if (lastAgg) lastAny = lastAgg;
   }
-  info = { tagged, pfr, acts, n: acts.length };
+  info = { tagged, pfr, agg, acts, n: acts.length };
   hqCache.set(h, info);
   return info;
 }
@@ -445,7 +510,7 @@ function hqPreAllIn(h) {
 }
 const hqSaw = (h, me, st) => (h.actions || []).some((a) => a.actor === me && a.street === st);
 const hqSD = (h, me) => handSD(h) && !(h.actions || []).some((a) => a.actor === me && a.act === "fold");
-const hqSize = (t, sz) => sz === "ob" ? t.ratio !== null && t.ratio > 1.001 : t.step === sz;
+const hqSize = (t, sz) => sz === "jam" ? t.k.has("jam") || t.step === "jam" || /^jam$/i.test(String(t.a.size || "")) : sz === "ob" ? t.ratio !== null && t.ratio > 1.001 : t.step === sz;
 const hqFoldedPre = (h, me) => (h.actions || []).some((a) => a.actor === me && a.street === "pre" && a.act === "fold");
 function hqClause(h, oppId, c) {
   const i = (h.villains || []).findIndex((v) => v.opponentId === oppId);
@@ -498,7 +563,7 @@ function hqClause(h, oppId, c) {
     }
     return false;
   }
-  const { tagged } = hqInfo(h);
+  const { tagged, agg } = hqInfo(h);
   const mine = (st) => tagged.filter((t) => t.a.actor === me && (!st || t.st === st));
   /* "postflop" is any street after the flop is dealt: flop, turn or river. */
   const streets = c.st === "post" ? ["flop", "turn", "river"] : c.st ? [c.st] : HQ_PRE_ONLY.has(c.kind) ? ["pre"]
@@ -517,6 +582,11 @@ function hqClause(h, oppId, c) {
       case "bc": return seq("bet", "call");
       case "xb": return all.every((t) => t.a.act === "check") && all[all.length - 1].a.actor === me;
       case "lrr": return seq("limp", "raise");
+      case "limpc": return seq("limp", "call");
+      case "limpf": return seq("limp", "fold");
+      case "3bf": case "3bc": case "4bf": case "4bc": return seq(c.kind[0] + "bet", c.kind[2] === "f" ? "fold" : "call");
+      case "giveup": return agg[{ flop: "pre", turn: "flop", river: "turn" }[st]] === me && my[0].a.act === "check" && !my.some((t) => t.k.has("agg") || t.a.act === "call");
+      case "xthru": return all.every((t) => t.a.act === "check");
     }
     return my.some((t) => {
       if (!t.k.has(c.kind)) return false;
