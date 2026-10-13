@@ -152,7 +152,7 @@ const READ_LAYOUT = [
   ] }] }] },
   { title: "Turn", subs: [{ rows: [{ lines: true, ids: [
     words("Bet Vol", ["t-bet-vol-high", "High"], ["t-bet-vol-low", "Low"]),
-    words("BXT", ["t-adv-turn-bxt", "Adv. Turn"], ["t-disadv-turn-bxt", "Dis. Turn"], ["t-bxt-merged", "Merge"], ["t-bxt-light", "Light"], ["t-bxt-tight", "Tight"], ["t-bxt-bluff", "Bluff"]),
+    words("BXT", ["t-adv-turn-bxt", "Adv. Turn"], ["t-disadv-turn-bxt", "Dis. Turn"], ["t-bxt-merged", "Merge"], ["t-bxt-light", "Light"], ["t-bxt-tight", "Tight"], ["t-bxt-bluff", "Bluff"], ["t-bxt-draw", "Draw"]),
     words("xR", ["xr-value-t", "Strong"], ["xr-bluff-t", "Bluff"]),
     words("Lead", ["have-lead-t-have", "Have"], ["have-lead-t-draw", "Draw"], ["have-lead-t-bluff", "Bluff"], ["have-lead-t-strong", "Strong"], ["have-lead-t-merge", "Merged"], ["have-lead-t-nonadv", "NonAdv"]),
     words("Turn Probing", ["t-probe-tight", "Tight"], ["t-probe-normal", "Normal"], ["t-probe-wide", "Wide"], ["t-probe-merge", "Merge"], ["t-probe-polar", "Polar"], ["t-probe-bluff", "Bluff"]),
