@@ -213,6 +213,7 @@ const TENDENCY_TAGS = [
   { id: "f-protect-oop-disadv", cat: "postflop", label: "Protect OOP F Dis. adv. board" },   // bets OOP to protect a made hand on a board that favours the other range
   { id: "f-protect-oop-adv",    cat: "postflop", label: "Protect OOP F Adv. board" },
   { id: "f-protect-oop-paired", cat: "postflop", label: "Protect OOP F Paired board" },
+  { id: "f-protect-oop-cancheckstrong", cat: "postflop", label: "Protect OOP F Can check strong" },
   { id: "f-call-range-wide",    cat: "postflop", label: "F call range Wide" },
   { id: "f-call-range-tpdraws", cat: "postflop", label: "F call range TP+/Draws" },
   // turn
