@@ -8,7 +8,7 @@ const SD_MINR = new Set(["minOpen", "min3bet"]);
 const SD_VOL = new Set(["limp", "call", "raise", "3bet", "4bet", "5bet", "jam", "bet"]);
 
 /* One villain's hand → tallies. put(key, cols, hit) adds a chance (and a hit) to each column. */
-function sdHandEvents(h, idx, put) {
+function sdHandEvents(h, idx, put, preOnly, perAct) {
   const me = "v" + idx;
   const parts = (h.villains || []).map((_, i) => "v" + i);
   if (h.hero !== false) parts.unshift("hero");
@@ -20,7 +20,7 @@ function sdHandEvents(h, idx, put) {
   const cnt = { pre: { agg: 0, last: null, limps: 0 }, flop: { agg: 0, last: null, limps: 0 }, turn: { agg: 0, last: null, limps: 0 }, river: { agg: 0, last: null, limps: 0 } };
   const foldSt = {};
   const ante = Number(h.blinds?.ante) || 0;
-  const to = estimatePot(h, h.actions).perAct;   // resolved raise-to amounts, one per action
+  const to = perAct || estimatePot(h, h.actions).perAct;   // resolved raise-to amounts, one per action
   let lastTo = ante;                             // the preflop bet a raise is raising: one ante until someone raises
   for (const [ai, a] of (h.actions || []).entries()) {
     const s = seq[a.street];
@@ -62,6 +62,8 @@ function sdHandEvents(h, idx, put) {
       }
     }
   }
+
+  if (preOnly) return;
 
   // ---- postflop ----
   const liveAt = (si) => parts.filter((p) => !(p in foldSt) || foldSt[p] >= si);     // still in when street `si` begins
@@ -171,6 +173,27 @@ function sdStats(oppId, hands) {
   return { T, n };
 }
 
+/* The opponents list's VPIP / Iso / CC, off the same counting as the Stats panel. One pass over
+   every hand, redone only when the hands change (oppStats() is rebuilt then). */
+let sdListMemo = null, sdListKey = null;
+function sdListStats() {
+  const key = oppStats();
+  if (sdListKey === key) return sdListMemo;
+  const m = {};
+  for (const h of HANDS) {
+    if (!(h.villains || []).some((v) => v.opponentId)) continue;
+    let to;
+    try { to = estimatePot(h, h.actions).perAct; } catch (e) { continue; }
+    (h.villains || []).forEach((v, i) => {
+      if (!v.opponentId) return;
+      const T = m[v.opponentId] || (m[v.opponentId] = {});
+      try { sdHandEvents(h, i, (k, cols, hit) => { if (!cols.includes("all")) return; const r = T[k] || (T[k] = [0, 0]); r[1]++; if (hit) r[0]++; }, true, to); } catch (e) {}
+    });
+  }
+  sdListKey = key; return (sdListMemo = m);
+}
+const SD_LIST_STATS = [["VPIP", "vpip"], ["Iso", "iso"], ["CC", "cc"]];
+
 /* ---------- rendering ---------- */
 
 let statsTab = "pre";
@@ -187,6 +210,7 @@ const SD_POST_ROWS = [["Cbet flop", "cbetF"], ["Cbet turn", "cbetT"], ["Cbet riv
 const SD_POST_COLS = [["all", "All"], ["ip", "HU IP"], ["oop", "HU OOP"], ["mw", "MW"]];
 const SD_DEFS = [
   ["VPIP", "VPIP: put chips in at any point preflop, out of the hands where he acted preflop."],
+  ["Open", "Open-raised first in — no limpers and no raise in front — out of the hands where it was folded to them. A min raise (at most 2× the ante) doesn't count — it goes to MinO/Iso."],
   ["Limp", "First action was a limp, out of hands where no raise was out before he acted. Not counted on the button: his double ante is already in, so he can only check or raise."],
   ["CC", "Cold call: his first action was flat-calling a single raise, out of hands where exactly one raise was in front of him. Calls of a 3bet or squeeze don't count."],
   ["MinO/Iso", "A raise of at most 2× the ante when no one had raised yet — first in, or over limpers. Out of every hand where he acted with no raise in front of him. These never count in Open or Iso."],
@@ -210,7 +234,6 @@ const SD_DEFS = [
 
 let sdStatT = {};                                // the tallies behind the stats now on screen
 let sdSzT = {};                                  // same for the sizing grid: "sz|flop-v|B50" → [n, n, handIds, []]
-  ["Open", "Open-raised first in — no limpers and no raise in front — out of the hands where it was folded to them. A min raise (at most 2× the ante) doesn't count — it goes to MinO/Iso."],
 const SD_EXTRA_ROWS = [["Fold to flop raise", "fxr"], ["River agg %", "afR"]];
 const SD_COL_LBL = { all: "", hu: "heads-up", mw: "multiway", ip: "HU IP", oop: "HU OOP" };
 

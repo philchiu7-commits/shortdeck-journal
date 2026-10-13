@@ -1896,6 +1896,9 @@ function oppRowHTML(o, st) {
   const move = oppEditMode ? `<button class="movebtn" data-move="${o.id}">Group ▾</button>` : "";
   const badge = st ? `<span class="handbadge">${st.count}</span>` : "";
   const physLine = !oppEditMode && !chips && o.physical ? `<div class="s">${esc(o.physical)}</div>` : "";
+  const T = st && !oppEditMode && sdListStats()[o.id];
+  const hud = T ? `<div class="opphud">${SD_LIST_STATS.map(([l, k]) => { const r = T[k];
+    return `<span${!r || r[1] < 5 ? ' class="thin"' : ""}>${l} <b>${r && r[1] ? Math.round((100 * r[0]) / r[1]) : "–"}</b></span>`; }).join("")}</div>` : "";
   const type = PLAYER_TYPE_BY_ID[o.type];
   const typeCls = type ? ` ptype-${type.id}` : "";
   const typeStyle = type ? ` style="--player-color:${type.color}"` : "";
@@ -1908,7 +1911,7 @@ function oppRowHTML(o, st) {
     ${handle}
     <div class="opprow-body">
       <div class="t">${typePill}${esc(o.name)}</div>
-      ${physLine}
+      ${hud}${physLine}
       ${showChips ? `<div class="chiprow cardchips">${chips}</div>` : ""}
     </div>
     ${move}${badge}

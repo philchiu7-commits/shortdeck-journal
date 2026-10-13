@@ -115,6 +115,9 @@ button.danger {
 /* ---- opponent rows: hand-count badge, pinned exploit, edit/drag ---- */
 .opprow { position: relative; display: flex; align-items: center; gap: 10px; }
 .opprow-body { flex: 1; min-width: 0; }
+.opphud { display: flex; gap: 10px; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.opphud b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.opphud .thin b { color: var(--muted); font-weight: 600; }
 .opprow .handbadge {
   position: absolute; right: 10px; bottom: 8px; flex: none;
   min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
