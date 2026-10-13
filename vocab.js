@@ -201,6 +201,7 @@ const TENDENCY_TAGS = [
   { id: "f-adv-board-bxt",      cat: "postflop", label: "Adv. Board F BXT" },
   { id: "f-disadv-board-bxt",   cat: "postflop", label: "Dis. Board F BXT" },
   { id: "f-bxt-light",          cat: "postflop", label: "BXT F Light" },
+  { id: "have-lead-f-have",     cat: "postflop", label: "Lead F Have" },        // leads this street at all
   { id: "have-lead-f-draw",     cat: "postflop", label: "Lead F Draw" },
   { id: "have-lead-f-bluff",    cat: "postflop", label: "Lead F Bluff" },
   { id: "have-lead-f-strong",   cat: "postflop", label: "Lead F Strong" },
@@ -222,10 +223,12 @@ const TENDENCY_TAGS = [
   { id: "t-bxt-merged",         cat: "postflop", label: "BXT T Merged" },
   { id: "t-bxt-light",          cat: "postflop", label: "BXT T Light" },
   { id: "t-bxt-tight",          cat: "postflop", label: "BXT T Tight" },
+  { id: "have-lead-t-have",     cat: "postflop", label: "Lead T Have" },        // leads this street at all
   { id: "have-lead-t-draw",     cat: "postflop", label: "Lead T Draw" },
   { id: "have-lead-t-bluff",    cat: "postflop", label: "Lead T Bluff" },
   { id: "have-lead-t-strong",   cat: "postflop", label: "Lead T Strong" },
   { id: "have-lead-t-merge",    cat: "postflop", label: "Lead T Merged" },
+  { id: "have-lead-t-nonadv",   cat: "postflop", label: "Lead T Non-adv. turn" },   // leads turns that don't favour their range
   { id: "t-probe-tight",        cat: "postflop", label: "Probe T Tight" },
   { id: "t-probe-normal",       cat: "postflop", label: "Probe T Normal" },
   { id: "t-probe-wide",         cat: "postflop", label: "Probe T Wide" },
@@ -249,6 +252,7 @@ const TENDENCY_TAGS = [
   { id: "r-rcard-blank",        cat: "postflop", label: "Bluff Rivers Blanks" },
   { id: "r-bluff-type-hit",     cat: "postflop", label: "Bluff Type DrawsHit" },
   { id: "r-bluff-type-miss",    cat: "postflop", label: "Bluff Type DrawsMiss" },
+  { id: "have-lead-r-have",     cat: "postflop", label: "Lead R Have" },        // leads this street at all
   { id: "have-lead-r-draw",     cat: "postflop", label: "Lead R Draw" },
   { id: "have-lead-r-bluff",    cat: "postflop", label: "Lead R Bluff" },
   { id: "have-lead-r-strong",   cat: "postflop", label: "Lead R Strong" },
