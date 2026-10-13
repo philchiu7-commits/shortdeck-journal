@@ -156,7 +156,7 @@ const READ_LAYOUT = [
     words("xR", ["xr-value-t", "Strong"], ["xr-bluff-t", "Bluff"]),
     words("Lead", ["have-lead-t-have", "Have"], ["have-lead-t-draw", "Draw"], ["have-lead-t-bluff", "Bluff"], ["have-lead-t-strong", "Strong"], ["have-lead-t-merge", "Merged"], ["have-lead-t-nonadv", "NonAdv"]),
     words("Turn Probing", ["t-probe-tight", "Tight"], ["t-probe-normal", "Normal"], ["t-probe-wide", "Wide"], ["t-probe-merge", "Merge"], ["t-probe-polar", "Polar"], ["t-probe-bluff", "Bluff"]),
-    words("Calling range", ["t-call-range-wide", "Wide"], ["t-call-range-tpdraws", "TP+/Draws"]),
+    words("Calling range", ["t-call-range-wide", "Wide"], ["t-call-range-tpdraws", "TP+/Draws"], ["t-call-range-havenut", "HaveNut"]),
     words("Protect Draw complete", ["t-protect-draw-done", "Yes"]),
     words("Barrel", ["t-barrel-mergy", "Merged"], ["t-barrel-strong", "Strong"], ["t-barrel-strongdraw", "StrongDraw"], ["t-barrel-air", "Air"]),
     words("One and Done", ["t-barrel-one-done", "Yes"]),

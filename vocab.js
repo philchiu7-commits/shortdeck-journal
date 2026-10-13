@@ -240,6 +240,7 @@ const TENDENCY_TAGS = [
   { id: "t-probe-bluff",        cat: "postflop", label: "Probe T Bluff" },
   { id: "t-call-range-wide",    cat: "postflop", label: "T call range Wide" },
   { id: "t-call-range-tpdraws", cat: "postflop", label: "T call range TP+/Draws" },
+  { id: "t-call-range-havenut", cat: "postflop", label: "T call range HaveNut" },
   { id: "t-protect-draw-done",  cat: "postflop", label: "Protect Draw complete" },
   // What he fires the turn with (ids shared with NLHE where it has the same read)
   { id: "t-barrel-mergy",       cat: "postflop", label: "Barrel T Merged" },
