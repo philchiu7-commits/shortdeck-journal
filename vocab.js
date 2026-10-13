@@ -262,6 +262,7 @@ const TENDENCY_TAGS = [
   { id: "have-lead-r-merge",    cat: "postflop", label: "Lead R Merged" },
   { id: "r-fold-bal-overfold",  cat: "postflop", label: "Bluffcatch Overfold" },
   { id: "r-fold-bal-underfold", cat: "postflop", label: "Bluffcatch Underfold" },
+  { id: "r-fold-bal-valuehands", cat: "postflop", label: "Bluffcatch ValueHands" },   // calls river bets only with value hands
   // multiway pots
   { id: "mwp-probe-strong",     cat: "postflop", label: "MWP Probe Strong" },
   { id: "mwp-probe-draw",       cat: "postflop", label: "MWP Probe Draw" },
