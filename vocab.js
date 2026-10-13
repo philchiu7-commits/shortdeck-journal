@@ -240,6 +240,11 @@ const TENDENCY_TAGS = [
   { id: "t-call-range-wide",    cat: "postflop", label: "T call range Wide" },
   { id: "t-call-range-tpdraws", cat: "postflop", label: "T call range TP+/Draws" },
   { id: "t-protect-draw-done",  cat: "postflop", label: "Protect Draw complete" },
+  // What he fires the turn with (ids shared with NLHE where it has the same read)
+  { id: "t-barrel-mergy",       cat: "postflop", label: "Barrel T Merged" },
+  { id: "t-barrel-strong",      cat: "postflop", label: "Barrel T Strong" },
+  { id: "t-barrel-strongdraw",  cat: "postflop", label: "Barrel T StrongDraw" },
+  { id: "t-barrel-air",         cat: "postflop", label: "Barrel T Air" },
   { id: "t-barrel-one-done",    cat: "postflop", label: "One and Done T" },   // cbets the flop as PFR, then gives up the turn (same id as NLHE)
   // river
   { id: "r-bet-vol-high",       cat: "postflop", label: "Bet vol R High" },
