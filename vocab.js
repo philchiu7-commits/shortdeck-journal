@@ -240,6 +240,7 @@ const TENDENCY_TAGS = [
   { id: "t-call-range-wide",    cat: "postflop", label: "T call range Wide" },
   { id: "t-call-range-tpdraws", cat: "postflop", label: "T call range TP+/Draws" },
   { id: "t-protect-draw-done",  cat: "postflop", label: "Protect Draw complete" },
+  { id: "t-barrel-one-done",    cat: "postflop", label: "One and Done T" },   // cbets the flop as PFR, then gives up the turn (same id as NLHE)
   // river
   { id: "r-bet-vol-high",       cat: "postflop", label: "Bet vol R High" },
   { id: "r-bet-vol-low",        cat: "postflop", label: "Bet vol R Low" },

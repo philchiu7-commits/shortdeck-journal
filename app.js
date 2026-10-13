@@ -158,6 +158,7 @@ const READ_LAYOUT = [
     words("Turn Probing", ["t-probe-tight", "Tight"], ["t-probe-normal", "Normal"], ["t-probe-wide", "Wide"], ["t-probe-merge", "Merge"], ["t-probe-polar", "Polar"], ["t-probe-bluff", "Bluff"]),
     words("Calling range", ["t-call-range-wide", "Wide"], ["t-call-range-tpdraws", "TP+/Draws"]),
     words("Protect Draw complete", ["t-protect-draw-done", "Yes"]),
+    words("One and Done", ["t-barrel-one-done", "Yes"]),
   ] }] }] },
   { title: "River", subs: [{ rows: [{ lines: true, ids: [
     words("Bet Vol", ["r-bet-vol-high", "High"], ["r-bet-vol-low", "Low"]),
