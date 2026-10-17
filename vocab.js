@@ -281,6 +281,7 @@ const TENDENCY_TAGS = [
   { id: "mwp-probe-merged",     cat: "postflop", label: "MWP Probe Merged" },
   { id: "mwp-probe-rangex",     cat: "postflop", label: "MWP Probe RangeX" },
   { id: "mwp-probe-strongdraw", cat: "postflop", label: "MWP Probe StrongDraw" },
+  { id: "mwp-probe-air",        cat: "postflop", label: "MWP Probe Air" },
 
   { id: "timing-tells",      cat: "live",     label: "Timing tells" },
   { id: "snap-call-weak",    cat: "live",     label: "Snap-call = weak" },
