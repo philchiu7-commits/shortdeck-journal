@@ -210,6 +210,7 @@ const HQ_SIZED = new Set(["bet", "raise", "cbet", "donk", "bxt", "jam", "3bet", 
   "probe", "floatbet", "dcbet", "squeeze", "steal", "rr"]);
 const HQ_FACEABLE = new Set(["cbet", "bet", "raise", "3bet", "4bet", "5bet", "jam", "donk", "bxt", "iso", "probe", "dcbet", "squeeze", "steal", "floatbet", "rr"]);
 const HQ_FACERS = new Set(["fold", "call", "raise", "jam", "3bet", "4bet", "5bet"]);
+const HQ_F_ST = new Set(["facedr", "high", "bcard", "hs"]);   // the only features a street word means anything to
 
 function hqParse(text) {
   let s = " " + String(text || "").replace(/[’']/g, "").replace(/[,.;:!?()"]/g, " ") + " ";
@@ -242,7 +243,12 @@ function hqParse(text) {
     if (t === "seen") { cur = push({ kind: "seen", st: null }); continue; }
     if (t.startsWith("st:")) {
       const st = t.slice(3);
-      if (cur && (!cur.st || cur.stInh) && cur.kind !== "pos") { cur.st = st; cur.stInh = false; continue; }
+      /* "check as pfr on the flop": pfr / oop / a pot type have no street, so it
+         belongs to the action they hang off — else the check reads as any street. */
+      let to = cur;
+      for (let j = clauses.length - 1; j >= 0 && clauses[j].kind === "f" && !HQ_F_ST.has(clauses[j].f); j--) to = clauses[j - 1];
+      if (!to || to.kind === "line" || to.kind === "seen" || HQ_PRE_ONLY.has(to.kind) || to.st && !to.stInh) to = cur;
+      if (to && (!to.st || to.stInh) && to.kind !== "pos") { to.st = st; to.stInh = false; continue; }
       pend.st = st; continue;
     }
     if (t.startsWith("sz:")) {

@@ -92,6 +92,7 @@ const TENDENCY_TAGS = [
   { id: "br-worst",          cat: "postflop", label: "Bluff raise worst" },  // bluff-raises his worst hands / pure air (no equity)
   { id: "br-f-small",        cat: "postflop", label: "Bluff raise F Small amount" },       // flop bluff-raises are small (min-raise-ish)
   { id: "br-f-lowpaired",    cat: "postflop", label: "Bluff raise F Low paired boards" },  // bluff-raises low paired flops (66x–99x)
+  { id: "br-f-highequity",   cat: "postflop", label: "Bluff raise F High equity" },        // flop bluff-raises are big draws (combo, pair + draw), not air
   { id: "bluff-xt-f",        cat: "postflop", label: "Bluff XT F" },
   { id: "bluff-xt-t",        cat: "postflop", label: "Bluff XT T" },
   { id: "bluff-xt-r",        cat: "postflop", label: "Bluff XT R" },
@@ -201,6 +202,7 @@ const TENDENCY_TAGS = [
   { id: "f-adv-board-bxt",      cat: "postflop", label: "Adv. Board F BXT" },
   { id: "f-disadv-board-bxt",   cat: "postflop", label: "Dis. Board F BXT" },
   { id: "f-bxt-light",          cat: "postflop", label: "BXT F Light" },
+  { id: "f-cbet-light",         cat: "postflop", label: "Cbet F Light" },       // cbets the flop as PFR with weak hands / air
   { id: "have-lead-f-have",     cat: "postflop", label: "Lead F Have" },        // leads this street at all
   { id: "have-lead-f-draw",     cat: "postflop", label: "Lead F Draw" },
   { id: "have-lead-f-bluff",    cat: "postflop", label: "Lead F Bluff" },
