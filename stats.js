@@ -8,7 +8,7 @@ const SD_MINR = new Set(["minOpen", "min3bet"]);
 const SD_VOL = new Set(["limp", "call", "raise", "3bet", "4bet", "5bet", "jam", "bet"]);
 
 /* One villain's hand → tallies. put(key, cols, hit) adds a chance (and a hit) to each column. */
-function sdHandEvents(h, idx, put, preOnly, perAct) {
+function sdHandEvents(h, idx, put, preOnly, ep) {
   const me = "v" + idx;
   const parts = (h.villains || []).map((_, i) => "v" + i);
   if (h.hero !== false) parts.unshift("hero");
@@ -20,13 +20,16 @@ function sdHandEvents(h, idx, put, preOnly, perAct) {
   const cnt = { pre: { agg: 0, last: null, limps: 0 }, flop: { agg: 0, last: null, limps: 0 }, turn: { agg: 0, last: null, limps: 0 }, river: { agg: 0, last: null, limps: 0 } };
   const foldSt = {};
   const ante = Number(h.blinds?.ante) || 0;
-  const to = perAct || estimatePot(h, h.actions).perAct;   // resolved raise-to amounts, one per action
+  ep = ep || estimatePot(h, h.actions);
+  const to = ep.perAct;                          // resolved raise-to amounts, one per action
   let lastTo = ante;                             // the preflop bet a raise is raising: one ante until someone raises
   for (const [ai, a] of (h.actions || []).entries()) {
     const s = seq[a.street];
     if (!s) continue;
     const c = cnt[a.street];
-    const min = a.street === "pre" && isAgg(a.act) && !!a.size && lastTo > 0 && to[ai] > 0 && to[ai] <= SD_MINR_X * lastTo + 1e-9;
+    // all in is the most he could raise, never a min-raise however short he was
+    const min = a.street === "pre" && isAgg(a.act) && !!a.size && lastTo > 0 && to[ai] > 0 && to[ai] <= SD_MINR_X * lastTo + 1e-9
+      && !(a.act === "jam" || /^jam$/i.test(String(a.size)) || ep.allIn[ai]);
     s.push({ actor: a.actor, act: a.act, aggBefore: c.agg, aggBy: c.last, limpsBefore: c.limps, i: s.length, min });
     if (a.street === "pre" && isAgg(a.act) && to[ai] > 0) lastTo = to[ai];
     if (isAgg(a.act)) { c.agg++; c.last = a.actor; }
@@ -182,12 +185,12 @@ function sdListStats() {
   const m = {};
   for (const h of HANDS) {
     if (!(h.villains || []).some((v) => v.opponentId)) continue;
-    let to;
-    try { to = estimatePot(h, h.actions).perAct; } catch (e) { continue; }
+    let ep;
+    try { ep = estimatePot(h, h.actions); } catch (e) { continue; }
     (h.villains || []).forEach((v, i) => {
       if (!v.opponentId) return;
       const T = m[v.opponentId] || (m[v.opponentId] = {});
-      try { sdHandEvents(h, i, (k, cols, hit) => { if (!cols.includes("all")) return; const r = T[k] || (T[k] = [0, 0]); r[1]++; if (hit) r[0]++; }, true, to); } catch (e) {}
+      try { sdHandEvents(h, i, (k, cols, hit) => { if (!cols.includes("all")) return; const r = T[k] || (T[k] = [0, 0]); r[1]++; if (hit) r[0]++; }, true, ep); } catch (e) {}
     });
   }
   sdListKey = key; return (sdListMemo = m);
@@ -214,10 +217,10 @@ const SD_DEFS = [
   ["Limp", "First action was a limp, out of hands where no raise was out before he acted. Not counted on the button: his double ante is already in, so he can only check or raise."],
   ["CC", "Cold call: his first action was flat-calling a single raise, out of hands where exactly one raise was in front of him. Calls of a 3bet or squeeze don't count."],
   ["MinO/Iso", "A raise of at most 2× the ante when no one had raised yet — first in, or over limpers. Out of every hand where he acted with no raise in front of him. These never count in Open or Iso."],
-  ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged counts as a normal raise."],
+  ["3bet · Min 3bet", "Re-raised a single open, out of hands where he faced one. A min 3bet is at most double the open; those are counted only in Min 3bet, never in 3bet. A raise with no size logged, or an all-in, counts as a normal raise."],
   ["Iso", "Raised over one or more limpers, out of hands with limpers and no raise yet. A min raise doesn't count — it goes to MinO/Iso."],
   ["Iso fold", "He isolated and someone re-raised behind him: folded, out of the isos that got re-raised. Any re-raise counts — a min 3bet or a jam the same as a normal one. The base is the Iso row's raises, so a min iso isn't in it."],
-  ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged). A min re-raise (at most double the raise he faced) doesn't count as an LRR."],
+  ["LRR · Limp-call", "After he limped and a raise came behind: re-raised / called, out of limps that faced a raise (his answer must be logged). A min re-raise (at most double the raise he faced) doesn't count as an LRR; an all-in always does."],
   ["Fold 3bet", "After he raised first and got 3bet: folded. Min-opens and min isos are left out — he defends those far more."],
   ["Cbet flop", "The last preflop raiser bet the flop when nobody had bet before him."],
   ["Cbet turn / river", "Kept barrelling after his own cbet, out of the streets where nobody had bet before him and his last bet wasn't raised. Cbet river counts only hands he cbet the flop and the turn."],

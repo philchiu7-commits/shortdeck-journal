@@ -444,7 +444,7 @@ function hqInfo(h) {
           open = true; lastAgg = a.actor; calls = 0;
         }
         if (a.act === "limp" && !open) { k.add(limps ? "overlimp" : "olimp"); limps++; }
-        if (a.act === "call" && was >= 1 && !tagged.some((x) => x.st === "pre" && x.a.actor === a.actor && x.k.has("agg"))) k.add("flat");
+        if (a.act === "call" && was >= 1 && !tagged.some((x) => x.st === "pre" && x.a.actor === a.actor)) k.add("flat");   // cold: his first move, no limp or raise of his in yet
       } else if (AGG_ACTS.includes(a.act)) {
         k.add("agg");
         if (!open) {
@@ -627,7 +627,8 @@ function hqClause(h, oppId, c) {
    11 straight flush — a flush beats a boat here, so "boat+" takes in flushes.
    His own cards have to make it (a pair on the board is no pair of his).
    Value / bluff are the Sizings grid's own verdict via madeTier, which is the
-   street-by-street bar: top pair is value on the flop, two pair from the turn.
+   street-by-street bar: top pair is value on the flop, two pair from the turn —
+   and only on a street he bet or raised: a hand he checked or called down is neither.
    With no street named it is the last street he was still in on — and still
    had chips on: all in on the turn, the river is a runout that doesn't count;
    draws, any street before the river. No cards on record: the hand is left out either way,
@@ -694,7 +695,7 @@ function sdHsRank(hole, board) {
 function hqHsLabel(c) {
   const draw = !!HQ_HS_DRAW[c.val];
   if (c.val === "value" || c.val === "bluff") return "shows " + HQ_HS_NAME[c.val]
-    + (c.st && c.st !== "pre" && c.st !== "post" ? " on the " + c.st : " on the street he bet");
+    + (c.st && c.st !== "pre" && c.st !== "post" ? " when he bets or raises the " + c.st : " on a street he bet or raised");
   return "shows " + HQ_HS_NAME[c.val] + (!draw && c.op !== "eq" && HQ_HS_R[c.val] != null ? (c.op === "ge" ? " or better" : " or worse") : "")
     + (c.st && c.st !== "pre" && c.st !== "post" ? " on the " + c.st : draw ? " on the flop or turn" : " by the last street he played");
 }
@@ -720,9 +721,10 @@ function hqHs(h, i, c) {
   const reached = ["flop", "turn", "river"].filter((st) => board.length >= N[st] && (!fold || ORD.indexOf(fold.street) >= ORD.indexOf(st))
     && (!shut || ORD.indexOf(shut) >= ORD.indexOf(st)));
   if (!reached.length) return null;
-  const draw = HQ_HS_DRAW[c.val];
-  const sts = ["flop", "turn", "river"].includes(c.st) ? (reached.includes(c.st) ? [c.st] : [])
-    : draw || c.st === "post" ? reached.filter((st) => st !== "river") : [reached[reached.length - 1]];
+  const draw = HQ_HS_DRAW[c.val], vb = c.val === "value" || c.val === "bluff";
+  let sts = ["flop", "turn", "river"].includes(c.st) ? (reached.includes(c.st) ? [c.st] : [])
+    : vb ? reached : draw || c.st === "post" ? reached.filter((st) => st !== "river") : [reached[reached.length - 1]];
+  if (vb) sts = sts.filter((st) => (h.actions || []).some((a) => a.actor === "v" + i && a.street === st && AGG_ACTS.includes(a.act)));
   if (!sts.length) return null;
   return sts.some((st) => {
     const b = board.slice(0, N[st]);
