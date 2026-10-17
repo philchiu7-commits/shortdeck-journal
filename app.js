@@ -139,7 +139,8 @@ const READ_LAYOUT = [
     words("Nut", ["nut-f", "F"], ["nut-t", "T"], ["nut-r", "R"]),
   ] }] }] },
   { title: "MWP", subs: [{ rows: [{ lines: true, ids: [
-    words("Probe", ["mwp-probe-strong", "Strong"], ["mwp-probe-draw", "Draw"], ["mwp-probe-merged", "Merged"], ["mwp-probe-rangex", "RangeX"], ["mwp-probe-strongdraw", "StrongDraw"], ["mwp-probe-air", "Air"]),
+    words("Probe", ["mwp-probe-strong", "Strong"], ["mwp-probe-draw", "Draw"], ["mwp-probe-merged", "Merged"], ["mwp-probe-strongdraw", "StrongDraw"], ["mwp-probe-air", "Air"]),
+    words("RangeX", ["mwp-probe-rangex", "Yes"]),
   ] }] }] },
   { title: "Flop", subs: [{ rows: [{ lines: true, ids: [
     words("Bet Vol", ["f-bet-vol-high", "High"], ["f-bet-vol-low", "Low"]),

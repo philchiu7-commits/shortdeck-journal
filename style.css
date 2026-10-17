@@ -1026,8 +1026,9 @@ textarea.noteedit { margin-bottom: 0; }
 .rllab.rlwide { padding-bottom: 0; }
 .rlctl.rlwide { padding-top: 4px; }
 .readlines > .rlctl.rlwide { border-top: 0; }
-/* four word chips sit 2×2, five or more three across */
-.rlctl.rlgrid { display: grid; grid-template-columns: repeat(var(--cols, 3), max-content); gap: 6px 8px; justify-items: start; }
+/* four word chips sit 2×2, five or more three across; equal columns, each chip
+   filling its cell, so a long word in one row can't open a gap in the row above */
+.rlctl.rlgrid { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 6px 8px; justify-self: start; max-width: 100%; }
 
 .stk { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .stk:hover { outline: 1px solid var(--accent); }
