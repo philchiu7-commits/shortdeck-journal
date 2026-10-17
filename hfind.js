@@ -460,7 +460,7 @@ function hqInfo(h) {
           // checked to him: the last street's aggressor checked first — the PFR on the flop, and after a street checked through
           const ini = prevAgg || pfr;
           if (ini && a.actor !== ini && acted.has(ini)) {
-            k.add("bxt");
+            if (a.actor !== pfr) k.add("bxt");   // the PFR's own bet is never BXT, even once someone else took the lead
             /* A float: called the last street's bet without raising it, and bets now that it's checked to them. */
             const was = tagged.filter((t) => t.st === prevSt && t.a.actor === a.actor);
             if (prevAgg && prevSt !== "pre" && was.length && was[was.length - 1].a.act === "call" && !was.some((t) => t.k.has("agg"))) {
