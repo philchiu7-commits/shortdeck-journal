@@ -162,6 +162,7 @@ const READ_LAYOUT = [
     words("Protect Draw complete", ["t-protect-draw-done", "Yes"]),
     words("Barrel", ["t-barrel-mergy", "Merged"], ["t-barrel-strong", "Strong"], ["t-barrel-strongdraw", "StrongDraw"], ["t-barrel-air", "Air"]),
     words("One and Done", ["t-barrel-one-done", "Yes"]),
+    words("Bluff cards", ["t-bcard-3str", "3Str"], ["t-bcard-4str", "4Str"], ["t-bcard-4flush", "4Flush"], ["t-bcard-blank", "Blanks"], ["t-bcard-paired", "PairedBoard"]),
   ] }] }] },
   { title: "River", subs: [{ rows: [{ lines: true, ids: [
     words("Bet Vol", ["r-bet-vol-high", "High"], ["r-bet-vol-low", "Low"]),

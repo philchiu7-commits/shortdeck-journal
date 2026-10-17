@@ -250,6 +250,12 @@ const TENDENCY_TAGS = [
   { id: "t-barrel-strongdraw",  cat: "postflop", label: "Barrel T StrongDraw" },
   { id: "t-barrel-air",         cat: "postflop", label: "Barrel T Air" },
   { id: "t-barrel-one-done",    cat: "postflop", label: "One and Done T" },   // cbets the flop as PFR, then gives up the turn (same id as NLHE)
+  // turn cards he bluffs on (4Str/4Flush/Blank ids shared with NLHE)
+  { id: "t-bcard-3str",         cat: "postflop", label: "Bluff cards T 3Str" },
+  { id: "t-bcard-4str",         cat: "postflop", label: "Bluff cards T 4Str" },
+  { id: "t-bcard-4flush",       cat: "postflop", label: "Bluff cards T 4Flush" },
+  { id: "t-bcard-blank",        cat: "postflop", label: "Bluff cards T Blanks" },
+  { id: "t-bcard-paired",       cat: "postflop", label: "Bluff cards T Paired board" },
   // river
   { id: "r-bet-vol-high",       cat: "postflop", label: "Bet vol R High" },
   { id: "r-bet-vol-low",        cat: "postflop", label: "Bet vol R Low" },
