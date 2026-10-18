@@ -246,7 +246,9 @@ const TENDENCY_TAGS = [
   { id: "t-probe-polar",        cat: "postflop", label: "Probe T Polar" },
   { id: "t-probe-bluff",        cat: "postflop", label: "Probe T Bluff" },
   { id: "t-call-range-wide",    cat: "postflop", label: "T call range Wide" },
-  { id: "t-call-range-tpdraws", cat: "postflop", label: "T call range TP+/Draws" },
+  { id: "t-call-range-tpdraws", cat: "postflop", label: "T call range TP+/Draws" },   // retired v141, split into the two below
+  { id: "t-call-range-tp",      cat: "postflop", label: "T call range TP+" },
+  { id: "t-call-range-draws",   cat: "postflop", label: "T call range Draws" },
   { id: "t-call-range-havenut", cat: "postflop", label: "T call range HaveNut" },
   { id: "t-protect-draw-done",  cat: "postflop", label: "Protect Draw complete" },
   // What he fires the turn with (ids shared with NLHE where it has the same read)
@@ -329,7 +331,7 @@ const PLAYER_TYPES = [
 const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]));
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
-const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light", "checks-range-oop", "f-oop-mergeprob", "f-oop-strongdraw", "f-oop-strong", "have-lead-f-draw", "have-lead-f-bluff", "t-barrel-strongdraw", "f-call-range-tpdraws"]);   // too general / cluttered picker
+const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light", "checks-range-oop", "f-oop-mergeprob", "f-oop-strongdraw", "f-oop-strong", "have-lead-f-draw", "have-lead-f-bluff", "t-barrel-strongdraw", "f-call-range-tpdraws", "t-call-range-tpdraws"]);   // too general / cluttered picker
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 
 /* Auto-suggested exploits: tag id → { yes, no }. "yes" = tendency present,
