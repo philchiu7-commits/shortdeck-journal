@@ -61,6 +61,7 @@ const HQ_HS = [
   [/\b(flush|straight)\s*\+/g, (m, k) => ` hs_${k}_ge `],
 ]);
 const HQ_PHRASES = [
+  [/\bbluff[\s-]?(?:catch(?:es|ing|ers?)?|caught)\b/g, " bluffcatch "],   // ahead of HQ_HS, whose "bluff" would take it
   ...HQ_HS,
   [/\b(three|four|five)[\s-]?bet/g, (m, w) => ({ three: 3, four: 4, five: 5 })[w] + "bet"],
   [/\b(?:second|2nd)[\s-]barrel(?:s|ed|led|ing|ling)?\b/g, " barrel2 "],
@@ -163,7 +164,7 @@ const HQ_WORDS = {
   overcall: "a:overcall", overcalls: "a:overcall", olimp: "a:olimp", overlimp: "a:overlimp",
   reraise: "a:rr", reraises: "a:rr", reraised: "a:rr", reraising: "a:rr",
   limpc: "a:limpc", limpf: "a:limpf", "3bf": "a:3bf", "3bc": "a:3bc", "4bf": "a:4bf", "4bc": "a:4bc",
-  giveup: "a:giveup", xthru: "a:xthru",
+  giveup: "a:giveup", xthru: "a:xthru", bluffcatch: "a:bluffcatch",
   steal: "a:steal", steals: "a:steal", stole: "a:steal", stealing: "a:steal",
   push: "a:jam", pushes: "a:jam", pushed: "a:jam", pushing: "a:jam",
   agg: "a:agg", aggressor: "a:agg", aggressors: "a:agg", aggressive: "a:agg", aggro: "a:agg",
@@ -205,11 +206,11 @@ const HQ_STOP = new Set(("a an the and he him his hes she they villain player op
    anywhere after it; plain verbs anywhere. */
 const HQ_PRE_ONLY = new Set(["open", "iso", "3bet", "4bet", "5bet", "limp", "lrr", "flat", "squeeze", "steal", "olimp", "overlimp",
   "limpc", "limpf", "3bf", "3bc", "4bf", "4bc"]);
-const HQ_POST_ONLY = new Set(["cbet", "donk", "bxt", "xr", "xc", "xf", "xb", "bf", "bc", "probe", "float", "floatbet", "dcbet", "giveup", "xthru"]);
+const HQ_POST_ONLY = new Set(["cbet", "donk", "bxt", "xr", "xc", "xf", "xb", "bf", "bc", "probe", "float", "floatbet", "dcbet", "giveup", "xthru", "bluffcatch"]);
 const HQ_SIZED = new Set(["bet", "raise", "cbet", "donk", "bxt", "jam", "3bet", "4bet", "5bet", "open", "iso", "xr", "agg",
   "probe", "floatbet", "dcbet", "squeeze", "steal", "rr"]);
 const HQ_FACEABLE = new Set(["cbet", "bet", "raise", "3bet", "4bet", "5bet", "jam", "donk", "bxt", "iso", "probe", "dcbet", "squeeze", "steal", "floatbet", "rr"]);
-const HQ_FACERS = new Set(["fold", "call", "raise", "jam", "3bet", "4bet", "5bet"]);
+const HQ_FACERS = new Set(["fold", "call", "raise", "jam", "3bet", "4bet", "5bet", "bluffcatch"]);
 const HQ_F_ST = new Set(["facedr", "high", "bcard", "hs"]);   // the only features a street word means anything to
 
 function hqParse(text) {
@@ -288,6 +289,7 @@ function hqParse(text) {
   for (const c of clauses) {
     delete c.facingOpen;
     if (c.kind === "seen" && !c.st) c.st = "flop";
+    if (c.kind === "bluffcatch" && !c.st) c.st = "river";
     // a bare raise is a postflop one: preflop raises have their own words (open, iso, 3bet…)
     if (!c.st && (c.kind === "raise" && !HQ_PRE_ONLY.has(c.facing) && !HQ_POST_ONLY.has(c.facing) || c.facing === "raise")) c.st = "post";
     if (HQ_PRE_ONLY.has(c.kind) && c.st && c.st !== "pre") c.bad = `${c.kind} is preflop only`;
@@ -326,8 +328,9 @@ const HQ_NAME = {
   "3bf": "3-bet-folds (3-bets, then folds)", "3bc": "3-bet-calls (3-bets, then calls)",
   "4bf": "4-bet-folds (4-bets, then folds)", "4bc": "4-bet-calls (4-bets, then calls)",
   giveup: "gives up (the last street's aggressor checks and doesn't bet or call)", xthru: "checks it through (everyone checks)",
+  bluffcatch: "bluff-catches",
 };
-const HQ_ON = new Set(["bxt", "probe", "float", "floatbet", "dcbet", "giveup", "xthru", "overcall", "rr"]);   // "… on the turn"
+const HQ_ON = new Set(["bxt", "probe", "float", "floatbet", "dcbet", "giveup", "xthru", "overcall", "rr", "bluffcatch"]);   // "… on the turn"
 const HQ_LINE_ACT = { b: "bet", x: "check", c: "call", r: "raise", f: "fold" };
 /* Lines: one letter per street from the flop — "bxb", "bb" (flop + turn,
    river anything), "-bb" (turn + river, flop anything), a dash anywhere is
@@ -386,7 +389,8 @@ function hqLabel(c) {
     const verb = HQ_NAME[c.kind] || c.kind;
     t = verb + (c.facing ? (c.kind === "fold" ? " to " : " ") + HQ_FACE_NAME[c.facing] : "")
       + (c.st ? (c.st !== "post" && (c.kind === "seen" || c.st !== "pre" && (HQ_ON.has(c.kind) || HQ_ON.has(c.facing))) ? (c.kind === "seen" ? " the " : " on the ") : " ") + (c.st === "pre" ? "preflop" : c.st === "post" ? "postflop" : c.st) : "")
-      + (c.sz ? c.sz === "jam" ? " all-in" : " at " + (c.sz === "ob" ? "an overbet" : "B" + c.sz) : "");
+      + (c.sz ? c.sz === "jam" ? " all-in" : " at " + (c.sz === "ob" ? "an overbet" : "B" + c.sz) : "")
+      + (c.kind === "bluffcatch" ? " (calls holding less than value for that street)" : "");
   }
   return (c.neg ? "never " : "") + t;
 }
@@ -625,6 +629,21 @@ function hqClause(h, oppId, c) {
     return my.length > 0 && (L === "x" ? my.every((t) => t.a.act === "check") : my.some((t) => t.k.has(HQ_LINE_ACT[L])));
   });
   if (c.kind === "agg") return streets.some((st) => mine(st).some((t) => t.k.has("agg") && (!c.sz || hqSize(t, c.sz))));
+  /* A bluff-catch: a call while holding less than that street's value bar (madeTier — two pair
+     from the turn, trips on four to a straight or flush) and, before the river, no draw.
+     No cards on record, or a street it can't grade: left out either way. */
+  if (c.kind === "bluffcatch") {
+    const hole = (h.villains[i].cards || []).filter(Boolean), board = (h.board || []).filter(Boolean);
+    if (hole.length !== 2 || ![...hole, ...board].every((x) => SD_CARDRE.test(String(x)))) return null;
+    let unsure = false;
+    const hit = streets.some((st) => {
+      if (!hqClause(h, oppId, { ...c, kind: "call", st, neg: false })) return false;
+      const n = { flop: 3, turn: 4, river: 5 }[st], b = board.slice(0, n), m = b.length === n && madeTier(hole, b);
+      if (!m) { unsure = true; return false; }
+      return !m.value && (st === "river" || !HQ_HS_DRAW.draw(sdDraws(hole, b)));
+    });
+    return hit || (unsure ? null : false);
+  }
   return streets.some(onStreet);
 }
 /* Hand strength off his shown cards, on the short-deck ladder: 0 no pair ·
@@ -651,7 +670,9 @@ const HQ_HS_DRAW = { fd: (d) => d.fd, nfd: (d) => d.nutFd, oesd: (d) => d.oesd, 
   sdraw: (d) => d.oesd || d.gut, combo: (d) => d.fd && (d.oesd || d.gut), draw: (d) => d.fd || d.oesd || d.gut };
 /* Short-deck draws off the 36-card deck: a flush draw needs one of his own
    cards in it, and straight outs are counted against SD_RUNS so A-6-7-8-9
-   counts and 2-3-4-5 can't. Two or more outs is an open-ender, one a gutshot. */
+   counts and 2-3-4-5 can't. A straight out must need one of his cards — four to
+   a straight on board is everyone's draw, not his. Two or more outs is an
+   open-ender, one a gutshot. */
 function sdDraws(hole, board) {
   const all = hole.concat(board), su = {};
   for (const c of all) su[c[1]] = (su[c[1]] || 0) + 1;
@@ -660,13 +681,13 @@ function sdDraws(hole, board) {
   const mySu = fdSuit ? hole.filter((c) => c[1] === fdSuit).map((c) => RVAL[c[0]]) : [];
   let nutFd = !!fdSuit;                                   // nut draw = nothing better than his best suited card is still out
   if (fdSuit) for (let v = 14; v > Math.max(...mySu); v--) if (!boardSu.includes(v)) { nutFd = false; break; }
-  const have = new Set(all.map((c) => RVAL[c[0]])), hs = new Set(hole.map((c) => RVAL[c[0]]));
+  const have = new Set(all.map((c) => RVAL[c[0]])), bd = new Set(board.map((c) => RVAL[c[0]]));
   let outs = 0;
   if (!SD_RUNS.some((w) => w.every((x) => have.has(x)))) {
     for (let v = 6; v <= 14; v++) {
       if (have.has(v)) continue;
       const now = new Set([...have, v]);
-      if (SD_RUNS.some((w) => w.includes(v) && w.every((x) => now.has(x)) && w.some((x) => hs.has(x)))) outs++;
+      if (SD_RUNS.some((w) => w.includes(v) && w.every((x) => now.has(x)) && w.some((x) => x !== v && !bd.has(x)))) outs++;
     }
   }
   return { fd: !!fdSuit, nutFd, oesd: outs >= 2, gut: outs === 1 };
