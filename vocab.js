@@ -259,6 +259,7 @@ const TENDENCY_TAGS = [
   // turn cards he bluffs on (4Str/4Flush/Blank ids shared with NLHE)
   { id: "t-bcard-3str",         cat: "postflop", label: "Bluff cards T 3Str" },
   { id: "t-bcard-4str",         cat: "postflop", label: "Bluff cards T 4Str" },
+  { id: "t-bcard-3flush",       cat: "postflop", label: "Bluff cards T 3Flush" },   // same id as NLHE
   { id: "t-bcard-4flush",       cat: "postflop", label: "Bluff cards T 4Flush" },
   { id: "t-bcard-blank",        cat: "postflop", label: "Bluff cards T Blanks" },
   { id: "t-bcard-paired",       cat: "postflop", label: "Bluff cards T Paired board" },
