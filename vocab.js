@@ -212,6 +212,8 @@ const TENDENCY_TAGS = [
   { id: "have-lead-f-weakdraw",   cat: "postflop", label: "Lead F WeakDraw" },
   { id: "have-lead-f-advs",     cat: "postflop", label: "Lead F Adv. board strong" },   // leads boards that favour their range, with strong hands
   { id: "have-lead-f-advblf",   cat: "postflop", label: "Lead F Adv. board bluff" },    // …and as a bluff
+  { id: "have-lead-f-disadvs",  cat: "postflop", label: "Lead F Dis. board strong" },   // leads boards that favour the other range, with strong hands
+  { id: "have-lead-f-disadvblf", cat: "postflop", label: "Lead F Dis. board bluff" },   // …and as a bluff
   { id: "f-protect-oop-disadv", cat: "postflop", label: "Protect OOP F Dis. adv. board" },   // bets OOP to protect a made hand on a board that favours the other range
   { id: "f-protect-oop-adv",    cat: "postflop", label: "Protect OOP F Adv. board" },
   { id: "f-protect-oop-paired", cat: "postflop", label: "Protect OOP F Paired board" },
