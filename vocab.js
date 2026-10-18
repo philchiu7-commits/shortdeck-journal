@@ -247,7 +247,10 @@ const TENDENCY_TAGS = [
   // What he fires the turn with (ids shared with NLHE where it has the same read)
   { id: "t-barrel-mergy",       cat: "postflop", label: "Barrel T Merged" },
   { id: "t-barrel-strong",      cat: "postflop", label: "Barrel T Strong" },
-  { id: "t-barrel-strongdraw",  cat: "postflop", label: "Barrel T StrongDraw" },
+  { id: "t-barrel-strongdraw",  cat: "postflop", label: "Barrel T StrongDraw" },   // retired v136 for the three draws below
+  { id: "t-barrel-gutshot",     cat: "postflop", label: "Barrel T GutShot" },
+  { id: "t-barrel-fd",          cat: "postflop", label: "Barrel T Flush Draw" },
+  { id: "t-barrel-sd",          cat: "postflop", label: "Barrel T SD" },   // straight draw, as in Bluff hands SD
   { id: "t-barrel-air",         cat: "postflop", label: "Barrel T Air" },
   { id: "t-barrel-one-done",    cat: "postflop", label: "One and Done T" },   // cbets the flop as PFR, then gives up the turn (same id as NLHE)
   // turn cards he bluffs on (4Str/4Flush/Blank ids shared with NLHE)
@@ -320,7 +323,7 @@ const PLAYER_TYPES = [
 const PLAYER_TYPE_BY_ID = Object.fromEntries(PLAYER_TYPES.map((t) => [t.id, t]));
 /* Retired reads: no longer offered, but an opponent who still holds one sees
    it under "Other" as "(retired)" so it can be cleared — never silently dropped. */
-const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light", "checks-range-oop", "f-oop-mergeprob", "f-oop-strongdraw", "f-oop-strong", "have-lead-f-draw", "have-lead-f-bluff"]);   // too general / cluttered picker
+const RETIRED_TAG_IDS = new Set(["limp-caller", "calls-raises-wide", "lrr-bluff", "iso-raises-limps", "iso-earliest-v", "iso-earliest-b", "over-folds-3bet", "tilts", "iso-light", "checks-range-oop", "f-oop-mergeprob", "f-oop-strongdraw", "f-oop-strong", "have-lead-f-draw", "have-lead-f-bluff", "t-barrel-strongdraw"]);   // too general / cluttered picker
 const TAG_BY_ID = Object.fromEntries(TENDENCY_TAGS.map((t) => [t.id, t]));
 
 /* Auto-suggested exploits: tag id → { yes, no }. "yes" = tendency present,

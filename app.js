@@ -160,7 +160,7 @@ const READ_LAYOUT = [
     words("Turn Probing", ["t-probe-tight", "Tight"], ["t-probe-normal", "Normal"], ["t-probe-wide", "Wide"], ["t-probe-merge", "Merge"], ["t-probe-polar", "Polar"], ["t-probe-bluff", "Bluff"]),
     words("Calling range", ["t-call-range-wide", "Wide"], ["t-call-range-tpdraws", "TP+/Draws"], ["t-call-range-havenut", "HaveNut"]),
     words("Protect Draw complete", ["t-protect-draw-done", "Yes"]),
-    words("Barrel", ["t-barrel-mergy", "Merged"], ["t-barrel-strong", "Strong"], ["t-barrel-strongdraw", "StrongDraw"], ["t-barrel-air", "Air"]),
+    words("Barrel", ["t-barrel-mergy", "Merged"], ["t-barrel-strong", "Strong"], ["t-barrel-gutshot", "GutShot"], ["t-barrel-fd", "Flush Draw"], ["t-barrel-sd", "SD"], ["t-barrel-air", "Air"]),
     words("One and Done", ["t-barrel-one-done", "Yes"]),
     words("Bluff cards", ["t-bcard-3str", "3Str"], ["t-bcard-4str", "4Str"], ["t-bcard-4flush", "4Flush"], ["t-bcard-blank", "Blanks"], ["t-bcard-paired", "PairedBoard"]),
   ] }] }] },
