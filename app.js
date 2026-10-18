@@ -168,7 +168,7 @@ const READ_LAYOUT = [
     words("Bet Vol", ["r-bet-vol-high", "High"], ["r-bet-vol-low", "Low"]),
     words("xR", ["xr-value-r", "Strong"], ["xr-bluff-r", "Bluff"]),
     words("Bluff hands", ["r-bh-fd", "FD"], ["r-bh-sd", "SD"], ["r-bh-air", "Air"], ["r-bh-mwp", "MWP"], ["r-bh-thtb", "THTB"]),
-    words("Bluff Rivers", ["r-rcard-3str", "3Str"], ["r-rcard-4str", "4Str"], ["r-rcard-4flush", "4Flush"], ["r-rcard-blank", "Blanks"]),
+    words("Bluff Rivers", ["r-rcard-3str", "3Str"], ["r-rcard-4str", "4Str"], ["r-rcard-3flush", "3Flush"], ["r-rcard-4flush", "4Flush"], ["r-rcard-blank", "Blanks"], ["r-rcard-paired", "Paired"]),
     words("Bluff Type", ["r-bluff-type-hit", "DrawsHit"], ["r-bluff-type-miss", "DrawsMiss"]),
     words("Lead", ["have-lead-r-have", "Have"], ["have-lead-r-draw", "Draw"], ["have-lead-r-bluff", "Bluff"], ["have-lead-r-strong", "Strong"], ["have-lead-r-merge", "Merged"]),
     words("Bluffcatch", ["r-fold-bal-overfold", "Overfold"], ["r-fold-bal-underfold", "Underfold"], ["r-fold-bal-valuehands", "ValueHands"]),

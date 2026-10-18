@@ -266,8 +266,10 @@ const TENDENCY_TAGS = [
   { id: "r-bh-thtb",            cat: "postflop", label: "Bluff hands THTB" },     // turns a made hand into a river bluff
   { id: "r-rcard-3str",         cat: "postflop", label: "Bluff Rivers 3Str" },
   { id: "r-rcard-4str",         cat: "postflop", label: "Bluff Rivers 4Str" },
+  { id: "r-rcard-3flush",       cat: "postflop", label: "Bluff Rivers 3Flush" },   // same id as NLHE
   { id: "r-rcard-4flush",       cat: "postflop", label: "Bluff Rivers 4Flush" },
   { id: "r-rcard-blank",        cat: "postflop", label: "Bluff Rivers Blanks" },
+  { id: "r-rcard-paired",       cat: "postflop", label: "Bluff Rivers Paired" },
   { id: "r-bluff-type-hit",     cat: "postflop", label: "Bluff Type DrawsHit" },
   { id: "r-bluff-type-miss",    cat: "postflop", label: "Bluff Type DrawsMiss" },
   { id: "have-lead-r-have",     cat: "postflop", label: "Lead R Have" },        // leads this street at all
