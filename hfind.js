@@ -5,7 +5,7 @@
    read here, always from this player's side of the hand. What it understood
    is spelled back and any word it didn't is named, never guessed at, so the
    list can't quietly mean something other than what was typed.
-   Short-deck fork of poker-journal/hfind.js: 36-card deck, the U9…BN ring with
+   Short-deck fork of poker-journal/hfind.js: 36-card deck, the U8…BN ring with
    no blinds, the squid chips, and short-deck hand ranking (flush over a full
    house, A-6-7-8-9 the low straight). */
 
@@ -180,7 +180,7 @@ const HQ_WORDS = {
   button: "f:pos:BTN", btn: "f:pos:BTN", bn: "f:pos:BTN", bu: "f:pos:BTN", dealer: "f:pos:BTN",
   co: "f:pos:CO", hj: "f:pos:HJ", hijack: "f:pos:HJ",
   mp: "f:pos:MP", lj: "f:pos:MP", lojack: "f:pos:MP", u4: "f:pos:MP", u5: "f:pos:MP",
-  ep: "f:pos:EP", utg: "f:pos:EP", early: "f:pos:EP", u6: "f:pos:EP", u7: "f:pos:EP", u8: "f:pos:EP", u9: "f:pos:EP",
+  ep: "f:pos:EP", utg: "f:pos:EP", early: "f:pos:EP", u6: "f:pos:EP", u7: "f:pos:EP", u8: "f:pos:EP",
   "3bp": "f:pot:3BP", "4bp": "f:pot:4BP+", "5bp": "f:pot:4BP+", srp: "f:pot:SRP", limpedpot: "f:pot:Limped",
   nosquid: "f:squid:nS", ns: "f:squid:nS", squid1: "f:squid:w1S", w1s: "f:squid:w1S",
   squid2: "f:squid:w2S+", w2s: "f:squid:w2S+",

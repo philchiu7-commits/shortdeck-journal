@@ -19,8 +19,8 @@
 
 /* Short deck is ante-only: every seat antes, the button posts a double ante.
    No blinds. UTG (left of the button) acts first on EVERY street, BN last.
-   Ring labels: U9…U4 = UTG seats numbered from table size, then HJ/CO/BN. */
-const POSITIONS = ["U9", "U8", "U7", "U6", "U5", "U4", "HJ", "CO", "BN"];
+   Ring labels: U8…U4 = UTG seats numbered from table size, then HJ/CO/BN. */
+const POSITIONS = ["U8", "U7", "U6", "U5", "U4", "HJ", "CO", "BN"];
 const STREETS = ["pre", "flop", "turn", "river"];
 const ACTS = ["fold", "check", "call", "bet", "raise", "3bet", "limp", "jam"];
 const ACTS_POST = ["fold", "check", "call", "bet", "raise"];

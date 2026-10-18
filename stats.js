@@ -538,7 +538,7 @@ function renderStats(oppId, hands) {
       ${hasMin ? `<button class="ghostbtn" data-minr>${sdMinHide ? "show" : "hide"} min raises</button>` : ""}
     </div>
     <div class="sttable${statsTab === "post" ? " wlbl" : ""}">${body}</div>
-    <div class="stnote">Counted only from hands you logged, so read these as tendencies, not true frequencies. Faded = under 5 chances. U8/U9 count as U7.</div>
+    <div class="stnote">Counted only from hands you logged, so read these as tendencies, not true frequencies. Faded = under 5 chances. U8 counts as U7.</div>
     <details class="stdefs"><summary>How these are counted</summary>${SD_DEFS.map(([a, b]) => `<p><b>${esc(a)}</b> — ${esc(b)}</p>`).join("")}</details>`;
 }
 

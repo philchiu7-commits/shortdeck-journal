@@ -26,7 +26,7 @@ let collapsedGroups = new Set();  // opponents list: which group sections are co
 let pinnedGroup = null;           // opponents list: group name that always sorts first (null = auto by recency)
 let oppSortHands = false;         // opponents list: most hands first inside each group, over the drag order
 let tableLineup = [];             // today's seat ring, ordered: ("hero" | oppId)[] — anchors positions
-let lineupSeats = 9;              // table size (6–9); picks which subset of the seat ring is in play
+let lineupSeats = 8;              // table size (4–8, short deck never runs 9-handed); picks which subset of the seat ring is in play
 let openSizeStats = {};           // adaptive open-raise sizes: { [bb]: { [bbSize]: count } }
 const DEFAULT_OPEN_A = [3, 4, 5, 6];   // standard short-deck open sizes, in antes
 let blindsDefault = { ante: "" };   // 2/4 default; sticky once you change it
@@ -1333,7 +1333,7 @@ function handClass(cards) {
 const combosOf = (cls) => cls.length === 2 ? 6 : cls.endsWith("s") ? 4 : 12;
 const RANGE_TOTAL_COMBOS = 630;                 // 36-card deck
 const RANGE_BUCKETS = ["U7", "U6", "U5", "U4", "HJ", "CO", "BN"];
-/* Seat → range bucket: each seat is its own bucket; U9/U8 fold into U7 (the earliest bucket). */
+/* Seat → range bucket: each seat is its own bucket; U8 folds into U7 (the earliest bucket). */
 const rangeBucketOf = (pos) => RANGE_BUCKETS.includes(pos) ? pos : /^U\d$/.test(pos || "") && +pos[1] > 7 ? "U7" : null;
 const RANGE_SITS = [
   { id: "open",    label: "First in", acts: [["limp", "Limp"], ["raise", "Raise"], ["fold", "Fold"]] },
@@ -2227,7 +2227,7 @@ function renderLineupSheet() {
     return `<div class="lineup-group" data-group="${esc(g)}"><div class="glabel sub">${label}</div><div class="chiprow">${chips}</div></div>`;
   }).join("");
   const heroAdd = inLineup.has("hero") ? "" : `<div class="chiprow" style="margin-bottom:8px"><button class="chip" data-ladd="hero">＋ You</button></div>`;
-  const sizes = [4, 5, 6, 7, 8, 9].map((n) =>
+  const sizes = [4, 5, 6, 7, 8].map((n) =>
     `<button class="chip mini${lineupSeats === n ? " on" : ""}" data-lsize="${n}">${n}</button>`).join("");
   const overCap = tableLineup.length > lineupSeats
     ? `<div class="sheetnote warn">⚠︎ ${tableLineup.length} players seated but table is ${lineupSeats}-handed. Increase table size or remove players.</div>` : "";
@@ -2272,8 +2272,8 @@ function renderLineupSheet() {
     });
   sheet.querySelectorAll("[data-ladd]").forEach((b) =>
     b.onclick = () => {
-      if (tableLineup.length >= 9) {
-        toast("Table is 9-handed max.", 3200);
+      if (tableLineup.length >= 8) {
+        toast("Table is 8-handed max.", 3200);
         return;
       }
       tableLineup.push(b.dataset.ladd);
@@ -3013,8 +3013,8 @@ function replaySeats(h, focus) {
   (h.villains || []).forEach((v, i) => {
     if (v.pos) parts.push({ p: "v" + i, pos: v.pos, opp: v.opponentId, name: oppById(v.opponentId)?.name || `V${i + 1}`, cards: v.cards, chips: v.chips });
   });
-  let n = Math.max(4, Math.min(9, Number(h.seats) || parts.length));
-  while (n < 9 && parts.some((x) => !ringFor(n).includes(x.pos))) n++;
+  let n = Math.max(4, Math.min(8, Number(h.seats) || parts.length));
+  while (n < 8 && parts.some((x) => !ringFor(n).includes(x.pos))) n++;
   // Slot 0 is bottom centre. The player being reviewed sits there so his seat
   // is in the same place in every hand of the reel — hero anchors it otherwise.
   const anchor = (focus && parts.find((x) => x.opp === focus)) || parts[0] || {};
@@ -3577,7 +3577,7 @@ function actorForPos(pos) {
   return o.type === "hero" ? "hero" : o.type === "villain" ? "v" + o.idx : null;
 }
 /* Evenly-spaced slot positions around the felt oval for n seats.
-   Slot 0 = bottom-centre; walks clockwise so the ring [U9…U4, HJ, CO, BN]
+   Slot 0 = bottom-centre; walks clockwise so the ring [U8…U4, HJ, CO, BN]
    places BN to the first UTG seat's right (viewer POV) — deal order. */
 function slotsFor(n) {
   const cx = 50, cy = 50, rx = 39, ry = 44;
@@ -3793,7 +3793,7 @@ function nextActorChips(actor) {
    Extracts what's reliable from Phil's rough notes: position, holding, board,
    squid state, and the villain's headline preflop action. Anything ambiguous
    is left for manual entry (the raw note stays as draft.note). */
-const POS_RX = /\b(U9|U8|U7|U6|U5|U4|HJ|CO|BN|EP|MP)\b/;
+const POS_RX = /\b(U8|U7|U6|U5|U4|HJ|CO|BN|EP|MP)\b/;
 const HOLDING_RX = /\b([AKQJT6-9])([AKQJT6-9])([so])?\b/g;    // A9o, A9s, 66
 /* Squid patterns:
    - nS = 0 squids (nobody)
@@ -3848,7 +3848,7 @@ function parseNoteToDraft(text, opponentId) {
     }
   }
   // position — first token from a "AvB" (subject is first)
-  const m = text.match(/\b(U9|U8|U7|U6|U5|U4|HJ|CO|BN)v(U9|U8|U7|U6|U5|U4|HJ|CO|BN)\b/);
+  const m = text.match(/\b(U8|U7|U6|U5|U4|HJ|CO|BN)v(U8|U7|U6|U5|U4|HJ|CO|BN)\b/);
   if (m) d.villains[0].pos = parsePosToken(m[1]);
   else {
     const pm = text.match(POS_RX);
@@ -4099,19 +4099,19 @@ function firstToAct(street) {
    everyone else's follows by their offset along the ORDER_POST seat ring. */
 const lineupId = (actor) => actor === "hero" ? "hero" : draft.villains[Number(actor.slice(1))]?.opponentId;
 const lineupActive = () => tableLineup.length >= 2;
-/* Seat ring for n seats (4..9), clockwise from the first seat left of the
+/* Seat ring for n seats (4..8), clockwise from the first seat left of the
    button (UTG). No blinds in short deck: UTG labels numbered from the table
-   size (U9, U8, …) then HJ/CO/BN. 4-max = U4/HJ/CO/BN. */
+   size (U8, U7, …) then HJ/CO/BN. 4-max = U4/HJ/CO/BN. */
 const ringFor = (n) => {
   const tail = ["HJ", "CO", "BN"];
   const k = n - tail.length;
   const utg = Array.from({ length: k }, (_, i) => "U" + (n - i));
   return utg.concat(tail);
 };
-/* Seat count = lineup array length (clamped 4..9), falling back to lineupSeats
-   or 9 when no lineup is set. Lineup is the source of truth for table size. */
+/* Seat count = lineup array length (clamped 4..8), falling back to lineupSeats
+   or 8 when no lineup is set. Lineup is the source of truth for table size. */
 const effectiveSeats = () =>
-  Math.max(4, Math.min(9, tableLineup.length || lineupSeats || 9));
+  Math.max(4, Math.min(8, tableLineup.length || lineupSeats || 8));
 const baseSeatRing = () => ringFor(effectiveSeats());
 /* Rotate a ring right by `rot` (each label shifts to the next slot CW).
    BTN rotation reassigns which position label sits at each physical slot
@@ -4500,7 +4500,7 @@ function renderHandEntry() {
   $("he-lineup-btn").textContent = lineupActive() ? `Lineup · ${tableLineup.length}` : "Lineup";
   $("he-lineup-btn").classList.toggle("on", lineupActive());
 
-  // position rows — chips reflect today's table size (4–9-handed).
+  // position rows — chips reflect today's table size (4–8-handed).
   // Preserve any position already saved on the draft so it's not hidden.
   const ring = seatRing();
   const extras = new Set([d.heroPos, ...d.villains.map((v) => v.pos)].filter((p) => p && !ring.includes(p)));
@@ -5927,7 +5927,7 @@ async function boot() {
   pinnedGroup = (await metaGet("pinnedGroup")) ?? null;
   oppSortHands = !!(await metaGet("oppSortHands"));
   tableLineup = (await metaGet("tableLineup")) || [];
-  lineupSeats = (await metaGet("lineupSeats")) || 9;
+  lineupSeats = Math.min(8, (await metaGet("lineupSeats")) || 8);
   openSizeStats = (await metaGet("openSizeStats")) || {};
   // migrate old {bb:{size:count}} → recency picks {bb:[{size,ts}]}
   for (const bb of Object.keys(openSizeStats)) {
