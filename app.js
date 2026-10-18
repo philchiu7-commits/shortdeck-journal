@@ -149,7 +149,7 @@ const READ_LAYOUT = [
     words("Bluff raise", ["bluff-raise-f", "Yes"], ["br-f-small", "Small amount"], ["br-f-lowpaired", "Low Paired boards"], ["br-f-highequity", "HighEquity"]),
     words("Lead", ["have-lead-f-have", "Have"], ["have-lead-f-strongdraw", "StrongDraw"], ["have-lead-f-weakdraw", "WeakDraw"], ["have-lead-f-strong", "Strong"], ["have-lead-f-merge", "Merged"], ["have-lead-f-advs", "Adv.BrdS"], ["have-lead-f-advblf", "Adv.BrdBlf"]),
     words("Protect OOP", ["f-protect-oop-disadv", "Dis.Adv.Board"], ["f-protect-oop-adv", "Adv.Board"], ["f-protect-oop-paired", "PairedBoard"], ["f-protect-oop-cancheckstrong", "CanCheckStrong"]),
-    words("Calling range", ["f-call-range-wide", "Wide"], ["f-call-range-tpdraws", "TP+/Draws"]),
+    words("Calling range", ["f-call-range-wide", "Wide"], ["f-call-range-tight", "Tight"], ["f-call-range-ltp", "<TP"], ["f-call-range-nut", "Nut"]),
     words("Cbet", ["f-cbet-light", "Light"]),
   ] }] }] },
   { title: "Turn", subs: [{ rows: [{ lines: true, ids: [
