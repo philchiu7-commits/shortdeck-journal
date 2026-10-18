@@ -164,7 +164,7 @@ const TENDENCY_TAGS = [
   { id: "r-bluff-lines",     cat: "postflop", label: "R bluff lines (can?)", kind: "tally", options: ["BBB", "BXB", "XBB", "XXB"] },
   { id: "r-bluff-hands",     cat: "postflop", label: "Bluff hands (old tally)", kind: "tally", options: ["FD", "OESD", "Air", "A-high"] },
   { id: "r-af",              cat: "postflop", label: "River agg %", kind: "scale" },
-  { id: "r-bluff-bal",       cat: "postflop", label: "R bluff balance", kind: "choice", options: ["overbluff", "underbluff"] },
+  { id: "r-bluff-bal",       cat: "postflop", label: "R bluff balance (old)", kind: "choice", options: ["overbluff", "underbluff"] },
   { id: "r-traps",           cat: "postflop", label: "R traps?" },
   { id: "punchbag-r-pfr",    cat: "postflop", label: "Punch bag R (PFR)" },
   { id: "r-fold-bal",        cat: "postflop", label: "Fold balance (old)", kind: "choice", options: ["overfold", "underfold"] },
@@ -220,6 +220,8 @@ const TENDENCY_TAGS = [
   { id: "f-protect-oop-cancheckstrong", cat: "postflop", label: "Protect OOP F Can check strong" },
   { id: "f-call-range-wide",    cat: "postflop", label: "F call range Wide" },
   { id: "f-call-range-tpdraws", cat: "postflop", label: "F call range TP+/Draws" },   // retired v138
+  { id: "f-call-range-tp",      cat: "postflop", label: "F call range TP+" },   // TP+/Draws split in two, as on the turn
+  { id: "f-call-range-draws",   cat: "postflop", label: "F call range Draws" },
   { id: "f-call-range-tight",   cat: "postflop", label: "F call range Tight" },
   { id: "f-call-range-ltp",     cat: "postflop", label: "F call range <TP" },   // calls with less than top pair
   { id: "f-call-range-nut",     cat: "postflop", label: "F call range Nut" },
@@ -288,6 +290,8 @@ const TENDENCY_TAGS = [
   { id: "have-lead-r-bluff",    cat: "postflop", label: "Lead R Bluff" },
   { id: "have-lead-r-strong",   cat: "postflop", label: "Lead R Strong" },
   { id: "have-lead-r-merge",    cat: "postflop", label: "Lead R Merged" },
+  { id: "r-bluff-bal-overbluff",  cat: "postflop", label: "R bluff Overbluff" },   // same ids as NLHE
+  { id: "r-bluff-bal-underbluff", cat: "postflop", label: "R bluff Underbluff" },
   { id: "r-fold-bal-overfold",  cat: "postflop", label: "Bluffcatch Overfold" },
   { id: "r-fold-bal-underfold", cat: "postflop", label: "Bluffcatch Underfold" },
   { id: "r-fold-bal-valuehands", cat: "postflop", label: "Bluffcatch ValueHands" },   // calls river bets only with value hands

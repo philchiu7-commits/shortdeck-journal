@@ -149,7 +149,7 @@ const READ_LAYOUT = [
     words("Bluff raise", ["bluff-raise-f", "Yes"], ["br-f-small", "Small amount"], ["br-f-lowpaired", "Low Paired boards"], ["br-f-highequity", "HighEquity"]),
     words("Lead", ["have-lead-f-have", "Have"], ["have-lead-f-strongdraw", "StrongDraw"], ["have-lead-f-weakdraw", "WeakDraw"], ["have-lead-f-strong", "Strong"], ["have-lead-f-merge", "Merged"], ["have-lead-f-advs", "Adv.BrdS"], ["have-lead-f-advblf", "Adv.BrdBlf"], ["have-lead-f-disadvs", "Dis.BrdS"], ["have-lead-f-disadvblf", "Dis.BrdBlf"]),
     words("Protect OOP", ["f-protect-oop-disadv", "Dis.Adv.Board"], ["f-protect-oop-adv", "Adv.Board"], ["f-protect-oop-paired", "PairedBoard"], ["f-protect-oop-cancheckstrong", "CanCheckStrong"]),
-    words("Calling range", ["f-call-range-wide", "Wide"], ["f-call-range-tight", "Tight"], ["f-call-range-ltp", "<TP"], ["f-call-range-nut", "Nut"]),
+    words("Calling range", ["f-call-range-wide", "Wide"], ["f-call-range-tp", "TP+"], ["f-call-range-draws", "Draws"], ["f-call-range-tight", "Tight"], ["f-call-range-ltp", "<TP"], ["f-call-range-nut", "Nut"]),
     words("Cbet", ["f-cbet-light", "Light"]),
   ] }] }] },
   { title: "Turn", subs: [{ rows: [{ lines: true, ids: [
@@ -167,6 +167,7 @@ const READ_LAYOUT = [
   { title: "River", subs: [{ rows: [{ lines: true, ids: [
     words("Bet Vol", ["r-bet-vol-high", "High"], ["r-bet-vol-low", "Low"]),
     words("xR", ["xr-value-r", "Strong"], ["xr-bluff-r", "Bluff"]),
+    words("Bluff", ["r-bluff-bal-overbluff", "Overbluff"], ["r-bluff-bal-underbluff", "Underbluff"]),
     words("Bluff hands", ["r-bh-fd", "FD"], ["r-bh-sd", "SD"], ["r-bh-air", "Air"], ["r-bh-mwp", "MWP"], ["r-bh-thtb", "THTB"]),
     words("Bluff Rivers", ["r-rcard-3str", "3Str"], ["r-rcard-4str", "4Str"], ["r-rcard-3flush", "3Flush"], ["r-rcard-4flush", "4Flush"], ["r-rcard-blank", "Blanks"], ["r-rcard-paired", "Paired"]),
     words("Bluff Type", ["r-bluff-type-hit", "DrawsHit"], ["r-bluff-type-miss", "DrawsMiss"]),
